@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import {
-  PhoneCall,
+  Phone,
   PhoneOff,
+  PhoneCall,
   Mic,
   MicOff,
   Volume2,
@@ -13,29 +14,20 @@ import {
   Calendar,
   X,
   CheckCircle2,
-  Sparkles,
-  Phone,
-  FileText,
-  Grid,
-  Radio,
   Wifi,
   Headphones,
+  RotateCcw,
+  Sparkles,
+  ExternalLink,
+  Sliders,
 } from "lucide-react";
 import { useCRM } from "@/context/CRMContext";
-import {
-  startRingbackTone,
-  stopRingbackTone,
-  playDTMFTone,
-  playConnectedTone,
-  playDisconnectTone,
-} from "@/utils/telephonyAudio";
 
 export const LiveCallModal: React.FC = () => {
   const {
     activeCallLead,
     isCallModalOpen,
     isCallConnected,
-    setIsCallConnected,
     callDuration,
     endCallSession,
     closeCallModal,
@@ -43,44 +35,43 @@ export const LiveCallModal: React.FC = () => {
     updateLeadStatus,
     addNewFollowUp,
     addToast,
+    initiateCall,
   } = useCRM();
 
-  // Call Lifecycle: 'dialing' -> 'ringing' -> 'connected' -> 'ended'
-  const [callPhase, setCallPhase] = useState<"dialing" | "ringing" | "connected" | "ended">("dialing");
+  // Audio Device & Mic State (Real Browser MediaStream)
+  const [micGranted, setMicGranted] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
-  const [isSpeaker, setIsSpeaker] = useState(true);
-  const [showKeypad, setShowKeypad] = useState(false);
-  const [keypadInput, setKeypadInput] = useState("");
-  const [micActive, setMicActive] = useState(false);
-  const [audioLevel, setAudioLevel] = useState(15);
+  const [audioLevel, setAudioLevel] = useState(0);
+  const [micDeviceName, setMicDeviceName] = useState("Default Microphone / Headset");
+  const [speakerTested, setSpeakerTested] = useState(false);
 
   // Disposition Form State
   const [outcome, setOutcome] = useState("Interested");
   const [remarks, setRemarks] = useState("");
   const [nextFollowUpDate, setNextFollowUpDate] = useState("");
   const [nextFollowUpTime, setNextFollowUpTime] = useState("11:00 AM");
+  const [isDialing, setIsDialing] = useState(false);
 
-  // Web Audio & Media Stream References
+  // Audio stream references
   const micStreamRef = useRef<MediaStream | null>(null);
   const animFrameRef = useRef<number | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
-  // Initialize call sequence when modal opens
+  // Format seconds to mm:ss
+  const formatTimer = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  };
+
+  // 1. Initialize Real Microphone on Modal Open
   useEffect(() => {
     if (!isCallModalOpen || !activeCallLead) {
-      stopRingbackTone();
       stopMic();
       return;
     }
 
-    // Reset state
-    setCallPhase("dialing");
-    setIsMuted(false);
-    setShowKeypad(false);
-    setKeypadInput("");
-    setRemarks("");
-    setOutcome("Interested");
-
-    // Tomorrow default date
+    // Default follow-up date: Tomorrow
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     const yyyy = tomorrow.getFullYear();
@@ -88,40 +79,39 @@ export const LiveCallModal: React.FC = () => {
     const dd = String(tomorrow.getDate()).padStart(2, "0");
     setNextFollowUpDate(`${yyyy}-${mm}-${dd}`);
 
-    // Step 1: Dialing (0.7s) -> Ringing
-    const dialingTimer = setTimeout(() => {
-      setCallPhase("ringing");
-      startRingbackTone();
-    }, 700);
+    setIsMuted(false);
+    setRemarks("");
+    setOutcome("Interested");
 
-    // Step 2: Auto-connect student after 3.2s of ringing
-    const connectTimer = setTimeout(() => {
-      stopRingbackTone();
-      playConnectedTone();
-      setCallPhase("connected");
-      setIsCallConnected(true);
-      startMic();
-    }, 3600);
+    // Request real browser microphone
+    startRealMic();
 
     return () => {
-      clearTimeout(dialingTimer);
-      clearTimeout(connectTimer);
-      stopRingbackTone();
       stopMic();
     };
   }, [isCallModalOpen, activeCallLead]);
 
-  // Request & capture user's browser microphone for realistic visualizer
-  const startMic = async () => {
+  // Request actual user microphone & visualize live audio volume
+  const startRealMic = async () => {
     try {
       if (typeof navigator !== "undefined" && navigator.mediaDevices?.getUserMedia) {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true },
+        });
         micStreamRef.current = stream;
-        setMicActive(true);
+        setMicGranted(true);
 
+        // Fetch mic device label
+        const track = stream.getAudioTracks()[0];
+        if (track && track.label) {
+          setMicDeviceName(track.label);
+        }
+
+        // Web Audio Analyzer for Live Volume Meter
         const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
         if (AudioCtx) {
           const ctx = new AudioCtx();
+          audioContextRef.current = ctx;
           const source = ctx.createMediaStreamSource(stream);
           const analyser = ctx.createAnalyser();
           analyser.fftSize = 64;
@@ -129,23 +119,23 @@ export const LiveCallModal: React.FC = () => {
 
           const dataArray = new Uint8Array(analyser.frequencyBinCount);
           const updateAudioMeter = () => {
+            if (!micStreamRef.current) return;
             analyser.getByteFrequencyData(dataArray);
             let sum = 0;
             for (let i = 0; i < dataArray.length; i++) {
               sum += dataArray[i];
             }
             const avg = sum / dataArray.length;
-            // Scale to 10 - 95
-            const level = Math.min(95, Math.max(12, Math.round((avg / 255) * 100)));
+            const level = Math.min(100, Math.round((avg / 255) * 160));
             setAudioLevel(level);
             animFrameRef.current = requestAnimationFrame(updateAudioMeter);
           };
           updateAudioMeter();
         }
       }
-    } catch {
-      // Permission not granted or unsupported - fallback to ambient pulse
-      setMicActive(false);
+    } catch (err) {
+      console.warn("Microphone access denied or not available:", err);
+      setMicGranted(false);
     }
   };
 
@@ -158,9 +148,15 @@ export const LiveCallModal: React.FC = () => {
       micStreamRef.current.getTracks().forEach((track) => track.stop());
       micStreamRef.current = null;
     }
-    setMicActive(false);
+    if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
+    }
+    setMicGranted(false);
+    setAudioLevel(0);
   };
 
+  // Toggle real mic mute
   const toggleMute = () => {
     const nextState = !isMuted;
     setIsMuted(nextState);
@@ -169,44 +165,77 @@ export const LiveCallModal: React.FC = () => {
         track.enabled = !nextState;
       });
     }
+    addToast(nextState ? "Microphone Muted" : "Microphone Unmuted", "info");
   };
 
-  const handleKeypadPress = (digit: string) => {
-    playDTMFTone(digit);
-    setKeypadInput((prev) => prev + digit);
+  // Real Speaker / Headset Audio Test (Plays a pleasant confirmation tone)
+  const testSpeaker = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioCtx) {
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+        osc.frequency.setValueAtTime(880.0, ctx.currentTime + 0.15); // A5
+
+        gain.gain.setValueAtTime(0.12, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.5);
+
+        setSpeakerTested(true);
+        addToast("Played speaker test chime through your headset/speakers", "success");
+        setTimeout(() => setSpeakerTested(false), 2500);
+      }
+    } catch (err) {
+      console.warn("Speaker test failed:", err);
+    }
   };
 
-  const handleEndCall = () => {
-    stopRingbackTone();
-    playDisconnectTone();
-    stopMic();
-    setCallPhase("ended");
-    endCallSession();
+  // Redial number in MicroSIP
+  const handleRedial = async () => {
+    if (!activeCallLead) return;
+    setIsDialing(true);
+    initiateCall(activeCallLead);
+    setTimeout(() => setIsDialing(false), 1500);
   };
 
-  const formatTimer = (secs: number) => {
-    const m = Math.floor(secs / 60);
-    const s = secs % 60;
-    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  // Real Hangup in MicroSIP
+  const handleHangup = async () => {
+    try {
+      await fetch("/api/microsip/hangup", { method: "POST" });
+      endCallSession();
+      addToast("MicroSIP call ended", "info");
+    } catch (e) {
+      endCallSession();
+    }
   };
 
+  // Save Call Record to CRM
   const handleSaveCallRecord = (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeCallLead) return;
 
-    const durationFormatted = formatTimer(callDuration || 35);
+    const durationFormatted = callDuration > 0 ? formatTimer(callDuration) : "01:25";
 
     // 1. Add Call Record in CRM
     addCallRecord(activeCallLead.id, {
-      callerName: "Priya Sharma",
+      callerName: activeCallLead.assignedCaller || "Priya Sharma",
       outcome: outcome,
       duration: durationFormatted,
-      remarks: remarks || `Telecalling outcome logged as ${outcome}. In-browser call completed.`,
+      remarks: remarks || `Telecalling outcome logged as ${outcome} via MicroSIP`,
       nextFollowUpDate: nextFollowUpDate,
       nextFollowUpTime: nextFollowUpTime,
     });
 
-    // 2. Automatically update lead status based on outcome
+    // 2. Automatically update lead status based on disposition
     if (outcome === "Admitted") {
       updateLeadStatus(activeCallLead.id, "Admitted", "Admitted");
     } else if (outcome === "Interested") {
@@ -217,9 +246,11 @@ export const LiveCallModal: React.FC = () => {
       updateLeadStatus(activeCallLead.id, "Fee Discussion", "Fee Discussion");
     } else if (outcome === "Busy" || outcome === "Call Tomorrow") {
       updateLeadStatus(activeCallLead.id, "Call Later");
+    } else if (outcome === "Not Interested") {
+      updateLeadStatus(activeCallLead.id, "Lost", "Student Not Interested");
     }
 
-    // 3. Add follow up task if scheduled
+    // 3. Add follow-up task if date scheduled
     if (nextFollowUpDate) {
       addNewFollowUp({
         leadId: activeCallLead.id,
@@ -232,11 +263,11 @@ export const LiveCallModal: React.FC = () => {
         followUpTime: nextFollowUpTime,
         status: "Tomorrow",
         priority: activeCallLead.priority,
-        remarks: remarks || `Follow up scheduled after in-browser call (${outcome})`,
+        remarks: remarks || `Follow up scheduled after JioFiber call (${outcome})`,
       });
     }
 
-    addToast(`Call record for ${activeCallLead.studentName} (${durationFormatted}) saved!`, "success");
+    addToast(`Call record for ${activeCallLead.studentName} saved to CRM!`, "success");
     closeCallModal();
   };
 
@@ -247,43 +278,28 @@ export const LiveCallModal: React.FC = () => {
   const cleanPhone = activeCallLead.phone.replace(/[^0-9+]/g, "");
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-150 flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-150">
+      <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-150 flex flex-col max-h-[94vh]">
         
         {/* Softphone Header */}
-        <div className="bg-gradient-to-b from-[#142B52] to-[#0D1D3A] text-white p-5 text-center relative overflow-hidden select-none">
+        <div className="bg-gradient-to-b from-[#142B52] to-[#0D1D3A] text-white p-5 text-center relative select-none">
           <button
-            onClick={() => {
-              handleEndCall();
-              closeCallModal();
-            }}
+            onClick={closeCallModal}
             className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-lg transition-colors"
-            title="Close Softphone"
+            title="Close Assistant"
           >
             <X className="w-5 h-5" />
           </button>
 
-          {/* JioFiber MicroSIP Status Banner */}
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 mb-3">
+          {/* Real JioFiber SIP Status Banner */}
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 mb-3 shadow-xs">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
             <span>JioFiber MicroSIP Connected (+91 4562 355214)</span>
           </div>
 
-          {/* Avatar with Status Wave */}
-          <div className="relative w-20 h-20 mx-auto mb-2 flex items-center justify-center">
-            {callPhase === "ringing" && (
-              <span className="absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-60 animate-ping" />
-            )}
-            {callPhase === "connected" && (
-              <span
-                className="absolute inline-flex rounded-full bg-emerald-400 opacity-40 transition-all duration-75"
-                style={{
-                  width: `${60 + audioLevel * 0.4}px`,
-                  height: `${60 + audioLevel * 0.4}px`,
-                }}
-              />
-            )}
-            <div className="relative w-16 h-16 rounded-full bg-gradient-to-tr from-[#D5A52B] to-[#F3C856] text-[#142B52] font-black text-2xl flex items-center justify-center shadow-xl border-2 border-white/20">
+          {/* Student Profile Avatar */}
+          <div className="relative w-16 h-16 mx-auto mb-2 flex items-center justify-center">
+            <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-[#D5A52B] to-[#F3C856] text-[#142B52] font-black text-2xl flex items-center justify-center shadow-lg border-2 border-white/30">
               {activeCallLead.studentName.charAt(0)}
             </div>
           </div>
@@ -295,262 +311,180 @@ export const LiveCallModal: React.FC = () => {
             {cleanPhone} • {activeCallLead.courseInterested}
           </p>
 
-          {/* Live Status Indicator */}
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold mt-3 bg-black/30 backdrop-blur-md border border-white/15">
-            {callPhase === "dialing" && (
-              <>
-                <span className="w-2.5 h-2.5 rounded-full bg-blue-400 animate-pulse" />
-                <span className="text-blue-200">Dialing VoIP Line...</span>
-              </>
-            )}
-            {callPhase === "ringing" && (
-              <>
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
-                <span className="text-amber-200">Ringing Student Device (Synthesized)...</span>
-              </>
-            )}
-            {callPhase === "connected" && (
-              <>
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-emerald-300 font-mono tracking-wider">
-                  Live: {formatTimer(callDuration)}
-                </span>
-              </>
-            )}
-            {callPhase === "ended" && (
-              <>
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-400" />
-                <span className="text-rose-200">Call Ended • {formatTimer(callDuration)}</span>
-              </>
-            )}
+          {/* Live MicroSIP Call Actions Bar */}
+          <div className="mt-4 flex items-center justify-center gap-2">
+            <button
+              type="button"
+              onClick={handleRedial}
+              disabled={isDialing}
+              className="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white/10 hover:bg-white/20 text-white border border-white/20 transition-all flex items-center gap-1.5"
+              title="Send call command again to MicroSIP"
+            >
+              <RotateCcw className={`w-3.5 h-3.5 ${isDialing ? "animate-spin" : ""}`} />
+              <span>Redial in MicroSIP</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleHangup}
+              className="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white transition-all flex items-center gap-1.5 shadow-sm"
+              title="Hang up call in MicroSIP"
+            >
+              <PhoneOff className="w-3.5 h-3.5" />
+              <span>End Call</span>
+            </button>
           </div>
         </div>
 
-        {/* Live Audio Visualizer Bar (when Connected) */}
-        {callPhase === "connected" && (
-          <div className="bg-[#0B172E] px-5 py-2.5 border-t border-b border-blue-900/40 flex items-center justify-between text-xs">
-            <div className="flex items-center gap-2 text-slate-300">
-              <Headphones className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="text-[11px]">
-                {micActive ? "Microphone Live & Streaming" : "Simulated Audio Channel Active"}
-              </span>
-            </div>
+        {/* Real Microphone & Speaker Status Bar */}
+        <div className="bg-[#0B172E] px-4 py-2.5 border-t border-b border-blue-900/50 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-300">
+          {/* Real Mic Indicator with Live Level */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={toggleMute}
+              className={`p-1.5 rounded-lg border transition-all flex items-center gap-1.5 ${
+                isMuted
+                  ? "bg-rose-500/30 text-rose-300 border-rose-500/50"
+                  : "bg-white/10 text-emerald-300 border-emerald-400/30"
+              }`}
+              title={isMuted ? "Click to Unmute Mic" : "Click to Mute Mic"}
+            >
+              {isMuted ? <MicOff className="w-3.5 h-3.5 text-rose-400" /> : <Mic className="w-3.5 h-3.5 text-emerald-400" />}
+              <span className="text-[11px] font-semibold">{isMuted ? "Muted" : "Mic Live"}</span>
+            </button>
 
-            {/* Equalizer Bars */}
-            <div className="flex items-end gap-1 h-4">
-              {[40, 70, 30, 90, 60, 85, 45, 100, 50, 75].map((h, i) => (
+            {/* Live Audio Decibel Bars */}
+            <div className="flex items-end gap-1 h-3.5 px-1 bg-black/40 rounded-md">
+              {[25, 60, 35, 90, 50, 75, 40].map((h, i) => (
                 <span
                   key={i}
-                  className="w-1 bg-emerald-400 rounded-full transition-all duration-100"
+                  className={`w-0.5 rounded-full transition-all duration-75 ${
+                    isMuted ? "bg-slate-600 h-1" : "bg-emerald-400"
+                  }`}
                   style={{
-                    height: isMuted
-                      ? "3px"
-                      : `${Math.max(3, (h * (audioLevel || 20)) / 100)}px`,
+                    height: isMuted ? "2px" : `${Math.max(2, (h * audioLevel) / 100)}px`,
                   }}
                 />
               ))}
             </div>
           </div>
-        )}
 
-        {/* Content Body */}
-        <div className="p-5 overflow-y-auto space-y-4 text-xs flex-1">
-          {/* Active Call Controls */}
-          {(callPhase === "dialing" || callPhase === "ringing" || callPhase === "connected") && (
-            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/90 text-center space-y-3">
-              <div className="flex items-center justify-center gap-3 sm:gap-4">
-                {/* Mute */}
-                <button
-                  type="button"
-                  onClick={toggleMute}
-                  className={`p-3 rounded-full border transition-all ${
-                    isMuted
-                      ? "bg-rose-100 text-rose-700 border-rose-300 shadow-sm"
-                      : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100 shadow-xs"
-                  }`}
-                  title={isMuted ? "Unmute Mic" : "Mute Mic"}
-                >
-                  {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                </button>
+          {/* Real Speaker Test Button */}
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={testSpeaker}
+              className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-all flex items-center gap-1.5 ${
+                speakerTested
+                  ? "bg-emerald-500/20 text-emerald-300 border-emerald-400/40"
+                  : "bg-white/10 hover:bg-white/20 text-slate-200 border-white/20"
+              }`}
+              title="Play test tone to verify headset/speaker audio"
+            >
+              <Volume2 className="w-3.5 h-3.5 text-blue-300" />
+              <span>{speakerTested ? "Chime Played!" : "Test Headset / Speaker"}</span>
+            </button>
+          </div>
+        </div>
 
-                {/* Speaker */}
+        {/* Content Body: Real Post-Call Disposition Form */}
+        <form onSubmit={handleSaveCallRecord} className="p-5 overflow-y-auto space-y-4 text-xs flex-1">
+          {/* Call Outcome (Disposition) */}
+          <div>
+            <label className="block text-xs font-bold text-slate-800 mb-2">
+              Call Outcome (Disposition) *
+            </label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {[
+                "Interested",
+                "Busy",
+                "Call Tomorrow",
+                "Counselling Scheduled",
+                "Fee Discussion",
+                "Not Answered",
+                "Not Interested",
+                "Admitted",
+              ].map((opt) => (
                 <button
+                  key={opt}
                   type="button"
-                  onClick={() => setIsSpeaker(!isSpeaker)}
-                  className={`p-3 rounded-full border transition-all ${
-                    isSpeaker
-                      ? "bg-blue-50 text-blue-700 border-blue-200 shadow-sm"
-                      : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100 shadow-xs"
-                  }`}
-                  title={isSpeaker ? "Speaker On" : "Speaker Off"}
-                >
-                  {isSpeaker ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
-                </button>
-
-                {/* Keypad Toggle */}
-                <button
-                  type="button"
-                  onClick={() => setShowKeypad(!showKeypad)}
-                  className={`p-3 rounded-full border transition-all ${
-                    showKeypad
+                  onClick={() => setOutcome(opt)}
+                  className={`p-2.5 rounded-xl border text-center font-bold text-[11px] transition-all ${
+                    outcome === opt
                       ? "bg-[#142B52] text-white border-[#142B52] shadow-sm"
-                      : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100 shadow-xs"
+                      : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
                   }`}
-                  title="DTMF Keypad"
                 >
-                  <Grid className="w-5 h-5" />
+                  {opt}
                 </button>
-
-                {/* End Call */}
-                <button
-                  type="button"
-                  onClick={handleEndCall}
-                  className="px-5 py-2.5 rounded-full bg-rose-600 hover:bg-rose-700 text-white font-bold flex items-center gap-2 shadow-md hover:shadow transition-all"
-                >
-                  <PhoneOff className="w-4 h-4" />
-                  <span>End Call</span>
-                </button>
-              </div>
-
-              {/* In-Call Keypad (Plays real DTMF tones) */}
-              {showKeypad && (
-                <div className="pt-3 border-t border-slate-200 animate-in fade-in duration-150">
-                  <div className="text-center font-mono text-base font-bold text-slate-800 mb-2 h-6">
-                    {keypadInput || "Touch Tones"}
-                  </div>
-                  <div className="grid grid-cols-3 gap-2 max-w-xs mx-auto">
-                    {["1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#"].map((key) => (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => handleKeypadPress(key)}
-                        className="p-2.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 hover:bg-blue-50 hover:border-blue-300 active:scale-95 transition-all text-sm shadow-xs"
-                      >
-                        {key}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
+              ))}
             </div>
-          )}
+          </div>
 
-          {/* Ended Call Banner */}
-          {callPhase === "ended" && (
-            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3 flex items-center justify-between text-emerald-950">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                <span className="font-semibold text-xs">
-                  In-Browser Call Completed ({formatTimer(callDuration)})
-                </span>
-              </div>
-              <span className="text-[11px] text-emerald-700 font-medium">
-                Log disposition below
-              </span>
-            </div>
-          )}
-
-          {/* Call Outcome Disposition Form */}
-          <form onSubmit={handleSaveCallRecord} className="space-y-4">
+          {/* Follow-up Scheduling */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
             <div>
-              <label className="block font-bold text-slate-800 mb-1.5">
-                Call Outcome (Disposition) *
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Next Follow-up Date
               </label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-                {[
-                  "Interested",
-                  "Busy",
-                  "Call Tomorrow",
-                  "Counselling Scheduled",
-                  "Fee Discussion",
-                  "Not Answered",
-                  "Not Interested",
-                  "Admitted",
-                ].map((opt) => (
-                  <button
-                    key={opt}
-                    type="button"
-                    onClick={() => setOutcome(opt)}
-                    className={`py-2 px-2 rounded-xl text-[11px] font-bold border transition-all ${
-                      outcome === opt
-                        ? "bg-[#142B52] text-white border-[#142B52] shadow-sm"
-                        : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
-                    }`}
-                  >
-                    {opt}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Next Follow-up Scheduling */}
-            <div className="grid grid-cols-2 gap-3 bg-slate-50/70 p-3 rounded-2xl border border-slate-200/80">
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1 text-[11px]">
-                  Next Follow-up Date
-                </label>
-                <input
-                  type="date"
-                  value={nextFollowUpDate}
-                  onChange={(e) => setNextFollowUpDate(e.target.value)}
-                  className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#142B52]"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1 text-[11px]">
-                  Next Follow-up Time
-                </label>
-                <select
-                  value={nextFollowUpTime}
-                  onChange={(e) => setNextFollowUpTime(e.target.value)}
-                  className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#142B52]"
-                >
-                  <option value="10:00 AM">10:00 AM</option>
-                  <option value="11:00 AM">11:00 AM</option>
-                  <option value="02:00 PM">02:00 PM</option>
-                  <option value="04:00 PM">04:00 PM</option>
-                  <option value="06:00 PM">06:00 PM</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Remarks */}
-            <div>
-              <label className="block font-bold text-slate-800 mb-1">
-                Call Remarks & Discussion Notes
-              </label>
-              <textarea
-                rows={2}
-                value={remarks}
-                onChange={(e) => setRemarks(e.target.value)}
-                placeholder="Student expressed interest in Full Stack course, demo scheduled tomorrow morning..."
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#142B52]/20 focus:border-[#142B52]"
+              <input
+                type="date"
+                value={nextFollowUpDate}
+                onChange={(e) => setNextFollowUpDate(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#142B52]/20"
               />
             </div>
-
-            {/* Actions */}
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => {
-                  handleEndCall();
-                  closeCallModal();
-                }}
-                className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Next Follow-up Time
+              </label>
+              <select
+                value={nextFollowUpTime}
+                onChange={(e) => setNextFollowUpTime(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#142B52]/20"
               >
-                Discard
-              </button>
-              <button
-                type="submit"
-                className="px-5 py-2.5 bg-[#142B52] hover:bg-[#1E3B6E] text-white rounded-xl text-xs font-bold transition-all shadow-sm shadow-[#142B52]/20 flex items-center gap-1.5"
-              >
-                <CheckCircle2 className="w-4 h-4 text-[#D5A52B]" />
-                <span>Save Call to CRM</span>
-              </button>
+                <option value="10:00 AM">10:00 AM (Morning Slot)</option>
+                <option value="11:30 AM">11:30 AM</option>
+                <option value="02:30 PM">02:30 PM (Afternoon)</option>
+                <option value="04:00 PM">04:00 PM</option>
+                <option value="06:00 PM">06:00 PM (Evening)</option>
+              </select>
             </div>
-          </form>
-        </div>
+          </div>
+
+          {/* Discussion Notes */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Call Remarks & Discussion Notes
+            </label>
+            <textarea
+              rows={3}
+              value={remarks}
+              onChange={(e) => setRemarks(e.target.value)}
+              placeholder="Summary of student response, doubts discussed, batch preference, or pricing discussed..."
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#142B52]/20 resize-none"
+            />
+          </div>
+
+          {/* Action Footer */}
+          <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={closeCallModal}
+              className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 font-semibold text-xs transition-colors"
+            >
+              Discard
+            </button>
+            <button
+              type="submit"
+              className="px-5 py-2.5 rounded-xl bg-[#142B52] hover:bg-[#1E3B6E] text-white font-bold text-xs transition-all shadow-md shadow-[#142B52]/20 flex items-center gap-1.5"
+            >
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <span>Save Call to CRM</span>
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

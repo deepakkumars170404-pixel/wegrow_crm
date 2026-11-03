@@ -419,8 +419,12 @@ export default function CallManagementPage() {
                 <div>
                   <h4 className="text-base font-bold text-white">{selectedLead?.studentName}</h4>
                   <p className="text-xs text-slate-300 font-mono mt-0.5">{selectedLead?.phone}</p>
-                  <p className="text-lg font-mono font-bold text-[#D5A52B] mt-2">
-                    {formatTimer(callTimer)}
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 mt-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                    <span>MicroSIP Calling on JioFiber (+91 4562 355214)</span>
+                  </div>
+                  <p className="text-sm font-mono text-slate-300 mt-1">
+                    Call Duration: <span className="text-[#D5A52B] font-bold">{formatTimer(callTimer)}</span>
                   </p>
                 </div>
 
@@ -497,7 +501,7 @@ export default function CallManagementPage() {
                       {selectedLead?.phone} • {selectedLead?.courseInterested}
                     </p>
                     <span className="text-[10px] text-emerald-700 font-semibold mt-0.5 block">
-                      ⚡ Free Device Dialing Active
+                      ⚡ Real JioFiber MicroSIP Dialing Active
                     </span>
                   </div>
                 </div>
@@ -508,7 +512,7 @@ export default function CallManagementPage() {
                   className="w-full sm:w-auto px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2"
                 >
                   <PhoneCall className="w-4 h-4 text-white" />
-                  <span>In-Browser Web Call ({selectedLead?.phone})</span>
+                  <span>Call via JioFiber MicroSIP ({selectedLead?.phone})</span>
                 </button>
               </div>
             )}
