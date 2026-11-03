@@ -248,6 +248,7 @@ export const PhoneBridgeWidget: React.FC = () => {
       };
 
     initiateCall(currentLead);
+    setIsDialpadOpen(false);
   };
 
   const handleHangup = () => {

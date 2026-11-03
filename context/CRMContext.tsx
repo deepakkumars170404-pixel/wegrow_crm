@@ -135,7 +135,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     addToast(`Dialing ${lead.studentName} (${cleanPhone}) via JioFiber MicroSIP...`, "info");
 
-    // 1. Trigger MicroSIP directly via local Next.js PC Telephony API
+    // Exclusively trigger local MicroSIP (Zero browser dialogs, zero default app prompts)
     fetch("/api/microsip/call", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -143,19 +143,11 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }).catch((err) => {
       console.warn("Direct MicroSIP API call:", err);
     });
-
-    // 2. Fallback to tel: link handler
-    try {
-      window.location.href = `tel:${cleanPhone}`;
-    } catch (e) {
-      // Browser protocol handler fallback
-    }
   };
 
   const endCallSession = () => {
     setIsCallConnected(false);
     fetch("/api/microsip/hangup", { method: "POST" }).catch(() => {});
-    setIsCallModalOpen(true); // Automatically open disposition modal on call end
   };
 
   const openCallModal = () => {

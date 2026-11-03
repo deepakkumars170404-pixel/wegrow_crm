@@ -404,119 +404,61 @@ export default function CallManagementPage() {
             </div>
           </div>
 
-          {/* Simulated Calling Interface */}
+          {/* MicroSIP Telephony Control */}
           <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-soft">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">
-              Simulated Telecaller Softphone
-            </h4>
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                JioFiber MicroSIP Telephony
+              </h4>
+              <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Line: +91 4562 355214 (Online)
+              </span>
+            </div>
 
-            {isCallActive ? (
-              /* Active Call Box */
-              <div className="bg-[#142B52] text-white rounded-2xl p-6 text-center space-y-4">
-                <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-[#D5A52B] to-[#FAF1D6] text-[#142B52] font-black text-2xl flex items-center justify-center mx-auto shadow-lg calling-pulse">
-                  {selectedLead?.studentName.charAt(0)}
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center font-bold">
+                  <Phone className="w-6 h-6" />
                 </div>
-
                 <div>
-                  <h4 className="text-base font-bold text-white">{selectedLead?.studentName}</h4>
-                  <p className="text-xs text-slate-300 font-mono mt-0.5">{selectedLead?.phone}</p>
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 mt-2">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                    <span>MicroSIP Calling on JioFiber (+91 4562 355214)</span>
-                  </div>
-                  <p className="text-sm font-mono text-slate-300 mt-1">
-                    Call Duration: <span className="text-[#D5A52B] font-bold">{formatTimer(callTimer)}</span>
+                  <p className="text-xs font-bold text-slate-900">
+                    Call {selectedLead?.studentName} via MicroSIP
                   </p>
+                  <p className="text-[11px] text-slate-500 font-mono">
+                    {selectedLead?.phone} • {selectedLead?.courseInterested}
+                  </p>
+                  <span className="text-[10px] text-emerald-700 font-semibold mt-0.5 block">
+                    {isCallConnected
+                      ? `⚡ MicroSIP Call Active (${formatTimer(callTimer || callDuration)})`
+                      : "⚡ Direct PC Dialing via MicroSIP (+91 prefix enforced)"}
+                  </span>
                 </div>
-
-                {/* Softphone Control Buttons */}
-                <div className="flex items-center justify-center gap-3 pt-2">
-                  <button
-                    onClick={() => setIsMuted(!isMuted)}
-                    className={`p-3 rounded-full transition-all ${
-                      isMuted ? "bg-rose-500 text-white" : "bg-white/10 hover:bg-white/20 text-white"
-                    }`}
-                    title={isMuted ? "Unmute" : "Mute"}
-                  >
-                    {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                  </button>
-
-                  <button
-                    onClick={() => setShowKeypad(!showKeypad)}
-                    className="p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all"
-                    title="Keypad"
-                  >
-                    <Grid className="w-5 h-5" />
-                  </button>
-
-                  <button
-                    onClick={() => setIsSpeaker(!isSpeaker)}
-                    className={`p-3 rounded-full transition-all ${
-                      isSpeaker ? "bg-white/10 hover:bg-white/20 text-white" : "bg-slate-700 text-slate-400"
-                    }`}
-                    title="Speaker"
-                  >
-                    {isSpeaker ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
-                  </button>
-
-                  <button
-                    onClick={handleEndCall}
-                    className="px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-full font-bold text-xs shadow-lg transition-transform active:scale-95"
-                  >
-                    End Call
-                  </button>
-                </div>
-
-                {/* Simulated DTMF Keypad */}
-                {showKeypad && (
-                  <div className="bg-[#0E1E38] p-3 rounded-xl max-w-xs mx-auto text-center border border-white/10 mt-3">
-                    <p className="text-xs font-mono text-[#D5A52B] mb-2 h-4">
-                      {keypadInput || "Dialpad"}
-                    </p>
-                    <div className="grid grid-cols-3 gap-2">
-                      {["1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#"].map((btn) => (
-                        <button
-                          key={btn}
-                          onClick={() => setKeypadInput((p) => p + btn)}
-                          className="py-1.5 bg-white/5 hover:bg-white/15 rounded-lg text-xs font-bold text-slate-200"
-                        >
-                          {btn}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
-            ) : (
-              /* Idle Dialer State */
-              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center font-bold">
-                    <Phone className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-slate-900">
-                      Call {selectedLead?.studentName} via Device SIM
-                    </p>
-                    <p className="text-[11px] text-slate-500 font-mono">
-                      {selectedLead?.phone} • {selectedLead?.courseInterested}
-                    </p>
-                    <span className="text-[10px] text-emerald-700 font-semibold mt-0.5 block">
-                      ⚡ Real JioFiber MicroSIP Dialing Active
-                    </span>
-                  </div>
-                </div>
 
+              <div className="flex items-center gap-2 w-full sm:w-auto">
                 <button
                   type="button"
                   onClick={handleStartCall}
-                  className="w-full sm:w-auto px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2"
+                  className="flex-1 sm:flex-initial px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2"
                 >
                   <PhoneCall className="w-4 h-4 text-white" />
-                  <span>Call via JioFiber MicroSIP ({selectedLead?.phone})</span>
+                  <span>Call in MicroSIP ({selectedLead?.phone})</span>
                 </button>
+
+                {isCallConnected && (
+                  <button
+                    type="button"
+                    onClick={handleEndCall}
+                    className="px-4 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-rose-600/20 flex items-center justify-center gap-1.5"
+                    title="End Call in MicroSIP"
+                  >
+                    <PhoneOff className="w-4 h-4" />
+                    <span>Hangup</span>
+                  </button>
+                )}
               </div>
-            )}
+            </div>
 
             {/* Call Outcome Disposition Buttons */}
             <div className="mt-5 space-y-3">
