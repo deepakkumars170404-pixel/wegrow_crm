@@ -50,6 +50,8 @@ interface CRMContextType {
   isCallConnected: boolean;
   setIsCallConnected: (connected: boolean) => void;
   callDuration: number;
+  lastCallDuration: string | null;
+  setLastCallDuration: (dur: string | null) => void;
   initiateCall: (lead: Lead) => void;
   endCallSession: () => void;
   closeCallModal: () => void;
@@ -103,6 +105,13 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isCallModalOpen, setIsCallModalOpen] = useState(false);
   const [isCallConnected, setIsCallConnected] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
+  const [lastCallDuration, setLastCallDuration] = useState<string | null>(null);
+
+  const formatTimer = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  };
 
   useEffect(() => {
     let timer: any = null;
@@ -119,6 +128,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsCallConnected(true);
     setIsCallModalOpen(false); // Dock softphone handles active call
     setCallDuration(0);
+    setLastCallDuration(null);
 
     // Format phone with mandatory +91 or 0 for JioFiber SIP (+91XXXXXXXXXX)
     const rawDigits = lead.phone.replace(/\D/g, "");
@@ -146,6 +156,8 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const endCallSession = () => {
+    const formatted = formatTimer(callDuration > 0 ? callDuration : 1);
+    setLastCallDuration(formatted);
     setIsCallConnected(false);
     fetch("/api/microsip/hangup", { method: "POST" }).catch(() => {});
   };
@@ -475,6 +487,8 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isCallConnected,
         setIsCallConnected,
         callDuration,
+        lastCallDuration,
+        setLastCallDuration,
         initiateCall,
         endCallSession,
         closeCallModal,

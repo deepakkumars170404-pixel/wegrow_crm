@@ -37,8 +37,10 @@ export default function CallManagementPage() {
     endCallSession,
     isCallConnected,
     callDuration,
+    lastCallDuration,
     openCallModal,
     updateLeadStatus,
+    activeCallLead,
   } = useCRM();
 
   // Calling Interface Type Switcher: "station" (Image 3) or "modal" (Image 2)
@@ -439,6 +441,29 @@ export default function CallManagementPage() {
               </div>
 
               <div className="flex items-center gap-2">
+                {/* Direct Call & End Call Button in Lead Banner */}
+                {isCallConnected || isCallActive ? (
+                  <button
+                    type="button"
+                    onClick={handleEndCall}
+                    className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-transform active:scale-95"
+                    title="End Call in MicroSIP"
+                  >
+                    <PhoneOff className="w-3.5 h-3.5" />
+                    <span>End Call ({formatTimer(callTimer || callDuration)})</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleStartCall}
+                    className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-transform active:scale-95"
+                    title="Call via MicroSIP in Background"
+                  >
+                    <Phone className="w-3.5 h-3.5 fill-white" />
+                    <span>Call Lead</span>
+                  </button>
+                )}
+
                 <Link
                   href={`/leads/${selectedLead?.id}`}
                   className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold"
@@ -507,8 +532,8 @@ export default function CallManagementPage() {
               <div className="text-sm font-mono font-bold text-[#E5B842] tracking-wider pt-0.5">
                 {isCallActive || isCallConnected
                   ? formatTimer(callTimer || callDuration)
-                  : callEndedDuration
-                  ? `Call Ended • ${callEndedDuration}`
+                  : lastCallDuration || callEndedDuration
+                  ? `Call Ended • ${lastCallDuration || callEndedDuration}`
                   : "00:00"}
               </div>
 

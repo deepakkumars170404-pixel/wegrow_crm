@@ -70,6 +70,7 @@ export const PhoneBridgeWidget: React.FC = () => {
     setActiveCallLead,
     isCallConnected,
     callDuration,
+    lastCallDuration,
     initiateCall,
     endCallSession,
     openCallModal,
@@ -415,23 +416,36 @@ export const PhoneBridgeWidget: React.FC = () => {
 
           {/* Action Row: Call via MicroSIP & Hangup */}
           <div className="px-5 py-3 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => handleCall()}
-              className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 active:scale-98 text-white rounded-2xl font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40 transition-all"
-            >
-              <Phone className="w-4 h-4 fill-white" />
-              <span>Call in Background</span>
-            </button>
-            <button
-              type="button"
-              onClick={handleHangup}
-              className="py-3 px-4 bg-rose-600 hover:bg-rose-500 active:scale-98 text-white rounded-2xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-rose-950/40 transition-all"
-              title="End Call in MicroSIP"
-            >
-              <PhoneOff className="w-4 h-4" />
-              <span>Hangup</span>
-            </button>
+            {isCallConnected ? (
+              <button
+                type="button"
+                onClick={handleHangup}
+                className="w-full py-3 bg-rose-600 hover:bg-rose-500 active:scale-98 text-white rounded-2xl font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-rose-950/40 transition-all"
+              >
+                <PhoneOff className="w-4 h-4" />
+                <span>Hangup Call ({formatTimer(callDuration)})</span>
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => handleCall()}
+                  className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 active:scale-98 text-white rounded-2xl font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40 transition-all"
+                >
+                  <Phone className="w-4 h-4 fill-white" />
+                  <span>Call in Background</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleHangup}
+                  className="py-3 px-4 bg-rose-600 hover:bg-rose-500 active:scale-98 text-white rounded-2xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-rose-950/40 transition-all"
+                  title="End Call in MicroSIP"
+                >
+                  <PhoneOff className="w-4 h-4" />
+                  <span>Hangup</span>
+                </button>
+              </>
+            )}
           </div>
 
           {/* Audio Sliders & Status Strip (Like MicroSIP in user image) */}
@@ -537,9 +551,9 @@ export const PhoneBridgeWidget: React.FC = () => {
             <span className="text-sm font-mono font-bold text-[#E5B842] tracking-wider">
               {isCallConnected
                 ? formatTimer(callDuration)
-                : callDuration > 0
-                ? formatTimer(callDuration)
-                : "01:35"}
+                : lastCallDuration
+                ? `Ended • ${lastCallDuration}`
+                : "00:00"}
             </span>
           </div>
 
@@ -590,6 +604,7 @@ export const PhoneBridgeWidget: React.FC = () => {
                 onClick={handleHangup}
                 className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-full shadow-md shadow-rose-950/40 transition-transform active:scale-95 flex items-center gap-1.5"
               >
+                <PhoneOff className="w-3.5 h-3.5" />
                 <span>End Call</span>
               </button>
             ) : (
