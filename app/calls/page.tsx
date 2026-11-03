@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   PhoneCall,
   Phone,
+  PhoneOff,
   PhoneForwarded,
   PhoneMissed,
   CheckCircle2,
@@ -29,7 +30,19 @@ import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Lead } from "@/types";
 
 export default function CallManagementPage() {
-  const { leads, addCallRecord, initiateCall, endCallSession, isCallConnected, callDuration } = useCRM();
+  const {
+    leads,
+    addCallRecord,
+    initiateCall,
+    endCallSession,
+    isCallConnected,
+    callDuration,
+    openCallModal,
+    updateLeadStatus,
+  } = useCRM();
+
+  // Calling Interface Type Switcher: "station" (Image 3) or "modal" (Image 2)
+  const [callingMode, setCallingMode] = useState<"station" | "modal">("station");
 
   // Selected lead in call queue
   const [selectedLeadId, setSelectedLeadId] = useState<string>(leads[0]?.id || "LD-1001");
@@ -95,6 +108,9 @@ export default function CallManagementPage() {
     setCallRemarks("");
     if (selectedLead) {
       initiateCall(selectedLead);
+      if (callingMode === "modal") {
+        openCallModal();
+      }
     }
   };
 
@@ -103,21 +119,38 @@ export default function CallManagementPage() {
     endCallSession();
   };
 
-  const handleSaveCall = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveCall = (e?: React.FormEvent) => {
+    if (e && e.preventDefault) e.preventDefault();
     if (!selectedLead) return;
 
     addCallRecord(selectedLead.id, {
       callerName: selectedLead.assignedCaller || "Priya Sharma",
       outcome: selectedOutcome,
-      duration: isCallActive ? formatTimer(callTimer) : "03m 12s",
+      duration: isCallActive || isCallConnected ? formatTimer(callTimer || callDuration) : "00:09",
       remarks: callRemarks || `Call logged as ${selectedOutcome}`,
       nextFollowUpDate: nextFollowUpDate || undefined,
       nextFollowUpTime: nextFollowUpTime || undefined,
     });
 
+    if (selectedOutcome === "Interested") {
+      updateLeadStatus(selectedLead.id, "Interested", "Interested");
+    } else if (selectedOutcome === "Lost") {
+      updateLeadStatus(selectedLead.id, "Lost", "Lost");
+    } else if (selectedOutcome === "Counselling") {
+      updateLeadStatus(selectedLead.id, "Counselling Scheduled", "Counselling Scheduled");
+    } else if (selectedOutcome === "Busy" || selectedOutcome === "Call Later") {
+      updateLeadStatus(selectedLead.id, "Call Later");
+    }
+
     setIsCallActive(false);
+    endCallSession();
     setCallRemarks("");
+
+    // Advance to next lead in queue automatically (Advance Queue)
+    const currentIndex = queueLeads.findIndex((l) => l.id === selectedLead.id);
+    if (currentIndex >= 0 && currentIndex < queueLeads.length - 1) {
+      setSelectedLeadId(queueLeads[currentIndex + 1].id);
+    }
   };
 
   return (
@@ -139,7 +172,37 @@ export default function CallManagementPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Calling Interface Mode Switcher: In-Page Station (Image 3) vs In-Browser Modal (Image 2) */}
+          <div className="bg-slate-100 p-1 rounded-xl flex items-center text-xs font-bold text-slate-600 border border-slate-200">
+            <button
+              type="button"
+              onClick={() => setCallingMode("station")}
+              className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+                callingMode === "station"
+                  ? "bg-[#142B52] text-white shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+              title="Calling Station directly on page (Image 3)"
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${callingMode === "station" ? "bg-emerald-400" : "bg-slate-400"}`} />
+              <span>In-Page Station</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setCallingMode("modal")}
+              className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+                callingMode === "modal"
+                  ? "bg-[#142B52] text-white shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+              title="Softphone Modal Popup (Image 2)"
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${callingMode === "modal" ? "bg-emerald-400" : "bg-slate-400"}`} />
+              <span>In-Browser Modal</span>
+            </button>
+          </div>
+
           <Link
             href="/whatsapp"
             className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-semibold"
@@ -404,149 +467,113 @@ export default function CallManagementPage() {
             </div>
           </div>
 
-          {/* MicroSIP Telephony Control */}
-          <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-soft">
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                JioFiber MicroSIP Telephony
-              </h4>
-              <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Line: +91 4562 355214 (Online)
-              </span>
+          {/* Softphone Calling Station (Exact Replica of Image 3) */}
+          <div className="bg-white rounded-2xl p-6 border border-slate-200/90 shadow-soft">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 tracking-tight">
+                  Softphone Calling Station
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Live dialer with call outcome logging
+                </p>
+              </div>
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm" />
             </div>
 
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center font-bold">
-                  <Phone className="w-6 h-6" />
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-slate-900">
-                    Call {selectedLead?.studentName} via MicroSIP
-                  </p>
-                  <p className="text-[11px] text-slate-500 font-mono">
-                    {selectedLead?.phone} • {selectedLead?.courseInterested}
-                  </p>
-                  <span className="text-[10px] text-emerald-700 font-semibold mt-0.5 block">
-                    {isCallConnected
-                      ? `⚡ MicroSIP Call Active (${formatTimer(callTimer || callDuration)})`
-                      : "⚡ Direct PC Dialing via MicroSIP (+91 prefix enforced)"}
-                  </span>
-                </div>
+            {/* Black Calling Station Card */}
+            <div className="bg-[#142B52] text-white rounded-3xl p-6 text-center space-y-3 shadow-md">
+              <div className="w-16 h-16 rounded-full bg-[#E5B842] text-[#142B52] font-black text-2xl flex items-center justify-center mx-auto shadow-md">
+                {selectedLead?.studentName.charAt(0) || "V"}
               </div>
 
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <button
-                  type="button"
-                  onClick={handleStartCall}
-                  className="flex-1 sm:flex-initial px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2"
-                >
-                  <PhoneCall className="w-4 h-4 text-white" />
-                  <span>Call in MicroSIP ({selectedLead?.phone})</span>
-                </button>
+              <div>
+                <h4 className="text-base font-bold text-white tracking-tight">
+                  {selectedLead?.studentName}
+                </h4>
+                <p className="text-xs text-slate-300 font-mono mt-0.5">
+                  {selectedLead?.phone}
+                </p>
+              </div>
 
-                {isCallConnected && (
+              <div className="text-sm font-mono font-bold text-[#E5B842] tracking-wider pt-0.5">
+                {isCallConnected
+                  ? formatTimer(callTimer || callDuration)
+                  : callTimer > 0
+                  ? formatTimer(callTimer)
+                  : "00:09"}
+              </div>
+
+              <div className="pt-1 flex items-center justify-center gap-2">
+                {isCallConnected ? (
                   <button
                     type="button"
                     onClick={handleEndCall}
-                    className="px-4 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-rose-600/20 flex items-center justify-center gap-1.5"
-                    title="End Call in MicroSIP"
+                    className="px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-full font-bold text-xs shadow-md transition-transform active:scale-95"
                   >
-                    <PhoneOff className="w-4 h-4" />
-                    <span>Hangup</span>
+                    End Call
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleStartCall}
+                    className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full font-bold text-xs shadow-md transition-transform active:scale-95 flex items-center justify-center gap-2"
+                  >
+                    <Phone className="w-4 h-4 fill-white" />
+                    <span>Call via MicroSIP</span>
                   </button>
                 )}
               </div>
             </div>
 
-            {/* Call Outcome Disposition Buttons */}
-            <div className="mt-5 space-y-3">
+            {/* Call Outcome Disposition: */}
+            <div className="mt-5 space-y-2.5">
               <label className="block text-xs font-bold text-slate-800">
-                Quick Disposition Outcomes:
+                Call Outcome Disposition:
               </label>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-                {[
-                  { name: "Interested", color: "hover:border-emerald-500 hover:text-emerald-700" },
-                  { name: "Busy", color: "hover:border-amber-500 hover:text-amber-700" },
-                  { name: "Call Tomorrow", color: "hover:border-blue-500 hover:text-blue-700" },
-                  { name: "Call Later", color: "hover:border-indigo-500 hover:text-indigo-700" },
-                  { name: "Not Answered", color: "hover:border-slate-500 hover:text-slate-700" },
-                  { name: "Not Interested", color: "hover:border-rose-500 hover:text-rose-700" },
-                ].map((item) => (
+              <div className="grid grid-cols-3 gap-2">
+                {["Interested", "Busy", "Call Later", "Not Answered", "Counselling", "Lost"].map((opt) => (
                   <button
-                    key={item.name}
+                    key={opt}
                     type="button"
-                    onClick={() => setSelectedOutcome(item.name)}
-                    className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all text-center ${
-                      selectedOutcome === item.name
+                    onClick={() => setSelectedOutcome(opt)}
+                    className={`py-2 px-3 rounded-xl text-xs font-semibold border transition-all text-center ${
+                      selectedOutcome === opt
                         ? "bg-[#142B52] text-white border-[#142B52] shadow-xs"
-                        : `bg-slate-50 text-slate-700 border-slate-200 ${item.color}`
+                        : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
                     }`}
                   >
-                    {item.name}
+                    {opt}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Post-Call Form: Remarks & Next Follow-up */}
-            <form onSubmit={handleSaveCall} className="mt-5 pt-4 border-t border-slate-100 space-y-3 text-xs">
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Call Remarks & Student Response *
-                </label>
-                <textarea
-                  rows={3}
-                  required
-                  placeholder="e.g. Student inquired regarding weekend batches, placement support, and fee structure. Requested syllabus brochure on WhatsApp..."
-                  value={callRemarks}
-                  onChange={(e) => setCallRemarks(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#142B52]/20 focus:border-[#142B52]"
-                />
-              </div>
+            {/* Remarks / Callback Notes: */}
+            <div className="mt-4">
+              <label className="block text-xs font-bold text-slate-800 mb-1">
+                Remarks / Callback Notes:
+              </label>
+              <textarea
+                rows={3}
+                value={callRemarks}
+                onChange={(e) => setCallRemarks(e.target.value)}
+                placeholder="e.g. Student interested in weekend GenAI batch..."
+                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#142B52]/20 resize-none"
+              />
+            </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Next Follow-up Date
-                  </label>
-                  <input
-                    type="date"
-                    value={nextFollowUpDate}
-                    onChange={(e) => setNextFollowUpDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs text-slate-800"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Next Follow-up Time
-                  </label>
-                  <select
-                    value={nextFollowUpTime}
-                    onChange={(e) => setNextFollowUpTime(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs text-slate-800 bg-white"
-                  >
-                    <option value="10:30 AM">10:30 AM (Morning)</option>
-                    <option value="12:00 PM">12:00 PM (Noon)</option>
-                    <option value="02:30 PM">02:30 PM (Early Afternoon)</option>
-                    <option value="04:00 PM">04:00 PM (Afternoon)</option>
-                    <option value="05:30 PM">05:30 PM (Evening)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-2">
-                <button
-                  type="submit"
-                  className="px-6 py-2.5 bg-[#142B52] hover:bg-[#1E3B6E] text-white rounded-xl font-bold transition-all shadow-md shadow-[#142B52]/20 flex items-center gap-1.5"
-                >
-                  <CheckCircle2 className="w-4 h-4 text-[#D5A52B]" />
-                  <span>Save Call Update</span>
-                </button>
-              </div>
-            </form>
+            {/* Save Disposition & Advance Queue Button */}
+            <div className="mt-5">
+              <button
+                type="button"
+                onClick={handleSaveCall}
+                className="w-full py-3 bg-[#142B52] hover:bg-[#1E3B6E] text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-[#142B52]/20 text-center"
+              >
+                Save Disposition & Advance Queue
+              </button>
+            </div>
           </div>
         </div>
       </div>

@@ -11,6 +11,8 @@ import {
   Calendar,
   Clock,
   RotateCcw,
+  Headphones,
+  Grid,
 } from "lucide-react";
 import { useCRM } from "@/context/CRMContext";
 
@@ -212,7 +214,7 @@ export const LiveCallModal: React.FC = () => {
     } else if (outcome === "Busy" || outcome === "Call Tomorrow") {
       updateLeadStatus(activeCallLead.id, "Call Later");
     } else if (outcome === "Not Interested") {
-      updateLeadStatus(activeCallLead.id, "Lost", "Student Not Interested");
+      updateLeadStatus(activeCallLead.id, "Lost", "Lost");
     }
 
     if (nextFollowUpDate) {
@@ -275,10 +277,71 @@ export const LiveCallModal: React.FC = () => {
             {cleanPhone} • {activeCallLead.courseInterested}
           </p>
 
-          {/* Status Badge (Matches "Call Ended • 01:21" or "Calling MicroSIP • Live") */}
-          <div className="mt-3 inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-[#2B1118] text-rose-300 border border-rose-500/30 shadow-xs">
-            <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
-            <span>Call Ended • {callDuration > 0 ? formatTimer(callDuration) : "01:21"}</span>
+          {/* Status Badge (Matches "Call Ended • 01:21" or "Live • 00:32") */}
+          <div className="mt-2.5 inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-[#0B3B30] text-emerald-300 border border-emerald-500/30 shadow-xs">
+            <span className={`w-2 h-2 rounded-full ${isCallConnected ? "bg-emerald-400 animate-pulse" : "bg-rose-500"}`} />
+            <span>{isCallConnected ? `Live • ${formatTimer(callDuration)}` : `Call Ended • ${callDuration > 0 ? formatTimer(callDuration) : "01:21"}`}</span>
+          </div>
+
+          {/* Audio Equalizer Channel (Image 2) */}
+          <div className="mt-3 px-3 py-1.5 bg-black/30 rounded-xl max-w-xs mx-auto flex items-center justify-between text-[11px] text-slate-300 border border-white/5">
+            <div className="flex items-center gap-1.5 text-slate-400 text-[10px] font-medium">
+              <Headphones className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Simulated Audio Channel Active</span>
+            </div>
+            <div className="flex items-end gap-1 h-3">
+              {[25, 60, 40, 85, 55, 95, 45, 70, 35].map((h, i) => (
+                <span
+                  key={i}
+                  className="w-1 rounded-full bg-emerald-400 transition-all duration-75"
+                  style={{ height: `${Math.max(3, (h * (audioLevel || (isCallConnected ? 65 : 20))) / 100)}px` }}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Softphone Control Row (Mic, Speaker, Keypad, End Call) - Image 2 */}
+          <div className="mt-3.5 flex items-center justify-center gap-2.5 pt-2 border-t border-white/10">
+            <button
+              type="button"
+              onClick={toggleMute}
+              className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${
+                isMuted
+                  ? "bg-rose-500/30 text-rose-300 border border-rose-500/50"
+                  : "bg-white/10 hover:bg-white/20 text-white"
+              }`}
+              title={isMuted ? "Unmute Mic" : "Mute Mic"}
+            >
+              {isMuted ? <MicOff className="w-4 h-4 text-rose-400" /> : <Mic className="w-4 h-4 text-white" />}
+            </button>
+
+            <button
+              type="button"
+              onClick={testSpeaker}
+              className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all"
+              title="Test Headset Speaker Audio"
+            >
+              <Volume2 className="w-4 h-4" />
+            </button>
+
+            <button
+              type="button"
+              onClick={handleRedial}
+              disabled={isDialing}
+              className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all"
+              title="Redial via MicroSIP"
+            >
+              <RotateCcw className={`w-4 h-4 ${isDialing ? "animate-spin" : ""}`} />
+            </button>
+
+            <button
+              type="button"
+              onClick={handleHangup}
+              className="px-5 py-2 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white text-xs font-bold rounded-full shadow-md flex items-center gap-1.5 transition-all"
+            >
+              <PhoneOff className="w-3.5 h-3.5" />
+              <span>End Call</span>
+            </button>
           </div>
         </div>
 
