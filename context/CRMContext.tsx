@@ -44,7 +44,9 @@ interface CRMContextType {
 
   // Global Live Calling state
   activeCallLead: Lead | null;
+  setActiveCallLead: (lead: Lead | null) => void;
   isCallModalOpen: boolean;
+  openCallModal: () => void;
   isCallConnected: boolean;
   setIsCallConnected: (connected: boolean) => void;
   callDuration: number;
@@ -114,8 +116,8 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const initiateCall = (lead: Lead) => {
     setActiveCallLead(lead);
-    setIsCallModalOpen(true);
-    setIsCallConnected(false); // starts in dialing/ringing phase
+    setIsCallConnected(true);
+    setIsCallModalOpen(false); // Dock softphone handles active call
     setCallDuration(0);
 
     // Format phone with mandatory +91 or 0 for JioFiber SIP (+91XXXXXXXXXX)
@@ -153,12 +155,16 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const endCallSession = () => {
     setIsCallConnected(false);
     fetch("/api/microsip/hangup", { method: "POST" }).catch(() => {});
+    setIsCallModalOpen(true); // Automatically open disposition modal on call end
+  };
+
+  const openCallModal = () => {
+    setIsCallModalOpen(true);
   };
 
   const closeCallModal = () => {
     setIsCallConnected(false);
     setIsCallModalOpen(false);
-    setActiveCallLead(null);
   };
 
   const showToast = (toast: Omit<ToastMessage, "id">) => {
@@ -471,7 +477,9 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addToast,
         dismissToast,
         activeCallLead,
+        setActiveCallLead,
         isCallModalOpen,
+        openCallModal,
         isCallConnected,
         setIsCallConnected,
         callDuration,

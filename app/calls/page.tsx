@@ -29,7 +29,7 @@ import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Lead } from "@/types";
 
 export default function CallManagementPage() {
-  const { leads, addCallRecord, initiateCall } = useCRM();
+  const { leads, addCallRecord, initiateCall, endCallSession, isCallConnected, callDuration } = useCRM();
 
   // Selected lead in call queue
   const [selectedLeadId, setSelectedLeadId] = useState<string>(leads[0]?.id || "LD-1001");
@@ -100,6 +100,7 @@ export default function CallManagementPage() {
 
   const handleEndCall = () => {
     setIsCallActive(false);
+    endCallSession();
   };
 
   const handleSaveCall = (e: React.FormEvent) => {
