@@ -28,6 +28,18 @@ export interface ToastMessage {
   message?: string;
 }
 
+export interface TelephonyStatus {
+  connected: boolean;
+  status: "online" | "wifi_disconnected" | "connecting" | "offline";
+  message: string;
+  wifiSSID: string;
+  wifiState: string;
+  gatewayReachable: boolean;
+  microsipRunning: boolean;
+  account: string;
+  checkedAt?: string;
+}
+
 interface CRMContextType {
   leads: Lead[];
   followUps: FollowUpTask[];
@@ -55,6 +67,8 @@ interface CRMContextType {
   initiateCall: (lead: Lead) => void;
   endCallSession: () => void;
   closeCallModal: () => void;
+  telephonyStatus: TelephonyStatus;
+  refreshTelephonyStatus: () => Promise<void>;
   
   // Leads actions
   addLead: (lead: Omit<Lead, "id" | "callCount">) => void;
@@ -107,6 +121,41 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [callDuration, setCallDuration] = useState(0);
   const [lastCallDuration, setLastCallDuration] = useState<string | null>(null);
 
+  // Live MicroSIP Telephony & Wi-Fi Network Presence
+  const [telephonyStatus, setTelephonyStatus] = useState<TelephonyStatus>({
+    connected: false,
+    status: "connecting",
+    message: "Checking JioFiber Wi-Fi & MicroSIP status...",
+    wifiSSID: "Detecting...",
+    wifiState: "unknown",
+    gatewayReachable: false,
+    microsipRunning: false,
+    account: "+914562355214@tn.wln.ims.jio.com",
+  });
+
+  const refreshTelephonyStatus = async () => {
+    try {
+      const res = await fetch("/api/microsip/status");
+      if (res.ok) {
+        const data = await res.json();
+        setTelephonyStatus(data);
+      }
+    } catch {
+      setTelephonyStatus((prev) => ({
+        ...prev,
+        connected: false,
+        status: "offline",
+        message: "MicroSIP Telephony Offline",
+      }));
+    }
+  };
+
+  useEffect(() => {
+    refreshTelephonyStatus();
+    const interval = setInterval(refreshTelephonyStatus, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
   const formatTimer = (secs: number) => {
     const m = Math.floor(secs / 60);
     const s = secs % 60;
@@ -143,23 +192,34 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       cleanPhone = lead.phone.trim().startsWith("+") ? lead.phone.trim() : `+91${rawDigits}`;
     }
 
-    addToast(`Dialing ${lead.studentName} (${cleanPhone}) via JioFiber MicroSIP...`, "info");
+    if (!telephonyStatus.connected && telephonyStatus.status === "wifi_disconnected") {
+      addToast(
+        "Warning: Wi-Fi disconnected from JioFiber. Please connect to your registered Wi-Fi to call.",
+        "warning"
+      );
+    } else {
+      addToast(`Dialing ${lead.studentName} (${cleanPhone}) via JioFiber MicroSIP...`, "info");
+    }
 
-    // Exclusively trigger local MicroSIP (Zero browser dialogs, zero default app prompts)
+    // Exclusively trigger local MicroSIP Bridge (100% background, zero visible window)
     fetch("/api/microsip/call", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ phone: cleanPhone }),
-    }).catch((err) => {
-      console.warn("Direct MicroSIP API call:", err);
-    });
+    })
+      .then(() => refreshTelephonyStatus())
+      .catch((err) => {
+        console.warn("Direct MicroSIP API call error:", err);
+      });
   };
 
   const endCallSession = () => {
     const formatted = formatTimer(callDuration > 0 ? callDuration : 1);
     setLastCallDuration(formatted);
     setIsCallConnected(false);
-    fetch("/api/microsip/hangup", { method: "POST" }).catch(() => {});
+    fetch("/api/microsip/hangup", { method: "POST" })
+      .then(() => refreshTelephonyStatus())
+      .catch(() => {});
   };
 
   const openCallModal = () => {
@@ -492,6 +552,8 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         initiateCall,
         endCallSession,
         closeCallModal,
+        telephonyStatus,
+        refreshTelephonyStatus,
         addLead,
         updateLead,
         updateLeadStatus,
