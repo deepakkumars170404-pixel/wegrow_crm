@@ -52,9 +52,10 @@ export default function CallManagementPage() {
   const [queueFilter, setQueueFilter] = useState<"All" | "Hot" | "Today" | "Pending">("All");
   const [queueSearch, setQueueSearch] = useState("");
 
-  // Simulated Call State
+  // Simulated Call State & Persistent Duration
   const [isCallActive, setIsCallActive] = useState(false);
   const [callTimer, setCallTimer] = useState(0);
+  const [callEndedDuration, setCallEndedDuration] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeaker, setIsSpeaker] = useState(true);
   const [showKeypad, setShowKeypad] = useState(false);
@@ -69,15 +70,13 @@ export default function CallManagementPage() {
   // Timer interval simulation
   React.useEffect(() => {
     let interval: any = null;
-    if (isCallActive) {
+    if (isCallActive || isCallConnected) {
       interval = setInterval(() => {
         setCallTimer((prev) => prev + 1);
       }, 1000);
-    } else {
-      setCallTimer(0);
     }
     return () => clearInterval(interval);
-  }, [isCallActive]);
+  }, [isCallActive, isCallConnected]);
 
   const formatTimer = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -103,6 +102,8 @@ export default function CallManagementPage() {
 
   const handleStartCall = () => {
     setIsCallActive(true);
+    setCallEndedDuration(null); // Clear previous ended call duration
+    setCallTimer(0);
     setIsMuted(false);
     setKeypadInput("");
     setCallRemarks("");
@@ -115,6 +116,9 @@ export default function CallManagementPage() {
   };
 
   const handleEndCall = () => {
+    const finalSeconds = callTimer > 0 ? callTimer : (callDuration > 0 ? callDuration : 1);
+    const finalFormatted = formatTimer(finalSeconds);
+    setCallEndedDuration(finalFormatted); // Preserve the exact call time!
     setIsCallActive(false);
     endCallSession();
   };
@@ -123,10 +127,12 @@ export default function CallManagementPage() {
     if (e && e.preventDefault) e.preventDefault();
     if (!selectedLead) return;
 
+    const finalDuration = callEndedDuration || formatTimer(callTimer || callDuration || 1);
+
     addCallRecord(selectedLead.id, {
       callerName: selectedLead.assignedCaller || "Priya Sharma",
       outcome: selectedOutcome,
-      duration: isCallActive || isCallConnected ? formatTimer(callTimer || callDuration) : "00:09",
+      duration: finalDuration,
       remarks: callRemarks || `Call logged as ${selectedOutcome}`,
       nextFollowUpDate: nextFollowUpDate || undefined,
       nextFollowUpTime: nextFollowUpTime || undefined,
@@ -144,6 +150,8 @@ export default function CallManagementPage() {
 
     setIsCallActive(false);
     endCallSession();
+    setCallEndedDuration(null);
+    setCallTimer(0);
     setCallRemarks("");
 
     // Advance to next lead in queue automatically (Advance Queue)
@@ -497,21 +505,22 @@ export default function CallManagementPage() {
               </div>
 
               <div className="text-sm font-mono font-bold text-[#E5B842] tracking-wider pt-0.5">
-                {isCallConnected
+                {isCallActive || isCallConnected
                   ? formatTimer(callTimer || callDuration)
-                  : callTimer > 0
-                  ? formatTimer(callTimer)
-                  : "00:09"}
+                  : callEndedDuration
+                  ? `Call Ended • ${callEndedDuration}`
+                  : "00:00"}
               </div>
 
               <div className="pt-1 flex items-center justify-center gap-2">
-                {isCallConnected ? (
+                {isCallActive || isCallConnected ? (
                   <button
                     type="button"
                     onClick={handleEndCall}
-                    className="px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-full font-bold text-xs shadow-md transition-transform active:scale-95"
+                    className="px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-full font-bold text-xs shadow-md transition-transform active:scale-95 flex items-center gap-1.5"
                   >
-                    End Call
+                    <PhoneOff className="w-4 h-4" />
+                    <span>End Call</span>
                   </button>
                 ) : (
                   <button

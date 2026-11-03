@@ -13,6 +13,8 @@ export async function POST() {
       const child = spawn(exeToRun, ["/hangup"], {
         detached: true,
         stdio: "ignore",
+        cwd: "D:\\WEGROW\\MicroSIP",
+        windowsHide: true,
       });
       child.unref();
     }

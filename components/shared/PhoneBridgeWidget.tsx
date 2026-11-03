@@ -266,7 +266,7 @@ export const PhoneBridgeWidget: React.FC = () => {
     <>
       {/* 1. In-Page MicroSIP Calling Dialpad Drawer (Opens above the dock bar) */}
       {isDialpadOpen && (
-        <div className="fixed bottom-24 right-5 z-40 w-80 sm:w-96 bg-[#0F1E36] text-white rounded-3xl shadow-2xl border border-[#244B7A]/80 overflow-hidden animate-in slide-in-from-bottom-5 duration-200 select-none">
+        <div className="fixed bottom-24 right-5 z-40 w-84 sm:w-[380px] bg-gradient-to-b from-[#112340] via-[#0E1E38] to-[#081220] text-white rounded-[28px] shadow-2xl border border-[#244B7A] overflow-hidden animate-in slide-in-from-bottom-5 duration-200 select-none">
           {/* MicroSIP Title Header */}
           <div className="bg-[#142B52] p-4 flex items-center justify-between border-b border-white/10">
             <div className="flex items-center gap-2.5">
@@ -275,11 +275,11 @@ export const PhoneBridgeWidget: React.FC = () => {
               </div>
               <div>
                 <h4 className="text-xs font-bold tracking-tight text-white flex items-center gap-1.5">
-                  MicroSIP - JioFiber SIP
+                  MicroSIP Executive Dialer
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                 </h4>
                 <p className="text-[10px] text-emerald-300 font-mono font-medium">
-                  +914562355214@tn.wln.ims.jio.com
+                  JioFiber SIP: +91 4562 355214 (Online)
                 </p>
               </div>
             </div>
@@ -303,7 +303,7 @@ export const PhoneBridgeWidget: React.FC = () => {
                 Select Lead:
               </span>
               <select
-                className="flex-1 text-[11px] font-semibold px-2 py-1 bg-white/10 border border-white/15 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-[#E5B842]"
+                className="flex-1 text-[11px] font-semibold px-2.5 py-1.5 bg-white/10 border border-white/15 rounded-xl text-white focus:outline-none focus:ring-1 focus:ring-[#E5B842]"
                 value={selectedLead?.id}
                 onChange={(e) => {
                   const lead = leads.find((l) => l.id === e.target.value);
@@ -323,20 +323,20 @@ export const PhoneBridgeWidget: React.FC = () => {
           </div>
 
           {/* Number Display Screen with Backspace & Clear */}
-          <div className="p-4 bg-[#0B1728]/90">
-            <div className="flex items-center justify-between bg-black/40 border border-white/10 rounded-2xl px-3 py-2.5">
+          <div className="p-4 bg-[#081220]/80">
+            <div className="flex items-center justify-between bg-black/60 border border-white/10 rounded-2xl px-4 py-3 shadow-inner">
               <input
                 type="text"
                 value={dialerNumber}
                 onChange={(e) => setDialerNumber(e.target.value)}
                 placeholder="+91..."
-                className="w-full bg-transparent text-lg font-mono font-bold text-[#E5B842] focus:outline-none tracking-wider"
+                className="w-full bg-transparent text-xl font-mono font-bold text-[#E5B842] focus:outline-none tracking-widest"
               />
-              <div className="flex items-center gap-1 ml-2">
+              <div className="flex items-center gap-1.5 ml-2">
                 <button
                   type="button"
                   onClick={handleBackspace}
-                  className="p-1 text-slate-400 hover:text-white rounded"
+                  className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors"
                   title="Backspace"
                 >
                   <Delete className="w-4 h-4" />
@@ -344,7 +344,7 @@ export const PhoneBridgeWidget: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleClear}
-                  className="px-1.5 py-0.5 text-[10px] font-bold text-slate-400 hover:text-white bg-white/10 rounded"
+                  className="px-2 py-1 text-[10px] font-bold text-slate-400 hover:text-white bg-white/10 rounded-lg hover:bg-white/20 transition-colors"
                   title="Clear"
                 >
                   C
@@ -353,8 +353,8 @@ export const PhoneBridgeWidget: React.FC = () => {
             </div>
           </div>
 
-          {/* Dialpad 3x4 Grid (Exact MicroSIP Layout with Gold & Navy styling) */}
-          <div className="p-4 pt-1 grid grid-cols-3 gap-2">
+          {/* Circular Luxury Softphone Keypad Grid */}
+          <div className="px-5 py-2 grid grid-cols-3 gap-3 justify-items-center">
             {[
               { num: "1", sub: "" },
               { num: "2", sub: "ABC" },
@@ -373,13 +373,13 @@ export const PhoneBridgeWidget: React.FC = () => {
                 key={key.num}
                 type="button"
                 onClick={() => handleKeyClick(key.num)}
-                className="h-12 bg-white/5 hover:bg-white/15 active:scale-95 border border-white/10 rounded-2xl flex flex-col items-center justify-center transition-all duration-100 group shadow-xs"
+                className="w-16 h-14 bg-white/5 hover:bg-white/15 active:scale-90 border border-white/10 hover:border-[#E5B842]/50 rounded-2xl flex flex-col items-center justify-center transition-all duration-100 group shadow-md"
               >
-                <span className="text-base font-bold text-white group-hover:text-[#E5B842] leading-none">
+                <span className="text-xl font-bold text-white group-hover:text-[#E5B842] leading-none transition-colors">
                   {key.num}
                 </span>
                 {key.sub && (
-                  <span className="text-[9px] font-semibold text-slate-400 group-hover:text-slate-200 tracking-wider mt-0.5 leading-none">
+                  <span className="text-[9px] font-semibold text-[#E5B842] tracking-wider mt-0.5 leading-none">
                     {key.sub}
                   </span>
                 )}
@@ -392,7 +392,7 @@ export const PhoneBridgeWidget: React.FC = () => {
               onClick={() => {
                 if (selectedLead) handleCall(selectedLead.phone);
               }}
-              className="h-9 bg-white/5 hover:bg-white/15 active:scale-95 border border-white/10 rounded-xl flex items-center justify-center text-xs font-bold text-slate-300"
+              className="w-16 h-10 bg-white/5 hover:bg-white/15 active:scale-95 border border-white/10 rounded-xl flex items-center justify-center text-xs font-bold text-slate-300"
               title="Redial Selected Lead"
             >
               R
@@ -400,28 +400,28 @@ export const PhoneBridgeWidget: React.FC = () => {
             <button
               type="button"
               onClick={() => handleKeyClick("+")}
-              className="h-9 bg-white/5 hover:bg-white/15 active:scale-95 border border-white/10 rounded-xl flex items-center justify-center text-sm font-bold text-[#E5B842]"
+              className="w-16 h-10 bg-white/5 hover:bg-white/15 active:scale-95 border border-white/10 rounded-xl flex items-center justify-center text-base font-bold text-[#E5B842]"
             >
               +
             </button>
             <button
               type="button"
               onClick={handleClear}
-              className="h-9 bg-white/5 hover:bg-white/15 active:scale-95 border border-white/10 rounded-xl flex items-center justify-center text-xs font-bold text-rose-300"
+              className="w-16 h-10 bg-white/5 hover:bg-white/15 active:scale-95 border border-white/10 rounded-xl flex items-center justify-center text-xs font-bold text-rose-300"
             >
               C
             </button>
           </div>
 
           {/* Action Row: Call via MicroSIP & Hangup */}
-          <div className="px-4 pb-3 flex items-center gap-2">
+          <div className="px-5 py-3 flex items-center gap-2">
             <button
               type="button"
               onClick={() => handleCall()}
               className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 active:scale-98 text-white rounded-2xl font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40 transition-all"
             >
               <Phone className="w-4 h-4 fill-white" />
-              <span>Call via JioFiber MicroSIP</span>
+              <span>Call in Background</span>
             </button>
             <button
               type="button"

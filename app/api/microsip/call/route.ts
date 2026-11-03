@@ -37,10 +37,12 @@ export async function POST(request: Request) {
       );
     }
 
-    // Execute MicroSIP with the destination number
+    // Execute MicroSIP in background with the destination number
     const child = spawn(exeToRun, [formattedPhone], {
       detached: true,
       stdio: "ignore",
+      cwd: "D:\\WEGROW\\MicroSIP",
+      windowsHide: true,
     });
     child.unref();
 
