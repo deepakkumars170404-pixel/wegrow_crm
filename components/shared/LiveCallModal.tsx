@@ -263,10 +263,10 @@ export const LiveCallModal: React.FC = () => {
             <X className="w-5 h-5" />
           </button>
 
-          {/* In-Browser VoIP Banner */}
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-white/10 text-emerald-300 border border-emerald-400/20 mb-3">
-            <Wifi className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-            <span>CRM In-Browser WebRTC Softphone</span>
+          {/* JioFiber MicroSIP Status Banner */}
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 mb-3">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+            <span>JioFiber MicroSIP Connected (+91 4562 355214)</span>
           </div>
 
           {/* Avatar with Status Wave */}

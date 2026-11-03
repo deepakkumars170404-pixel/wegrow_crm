@@ -63,6 +63,7 @@ export const PhoneBridgeWidget: React.FC = () => {
 
   const handleEndCall = () => {
     setIsCallActive(false);
+    fetch('/api/microsip/hangup', { method: 'POST' }).catch(() => {});
   };
 
   const handleSaveCall = () => {

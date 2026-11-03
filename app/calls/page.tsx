@@ -29,7 +29,7 @@ import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Lead } from "@/types";
 
 export default function CallManagementPage() {
-  const { leads, addCallRecord } = useCRM();
+  const { leads, addCallRecord, initiateCall } = useCRM();
 
   // Selected lead in call queue
   const [selectedLeadId, setSelectedLeadId] = useState<string>(leads[0]?.id || "LD-1001");
@@ -93,6 +93,9 @@ export default function CallManagementPage() {
     setIsMuted(false);
     setKeypadInput("");
     setCallRemarks("");
+    if (selectedLead) {
+      initiateCall(selectedLead);
+    }
   };
 
   const handleEndCall = () => {

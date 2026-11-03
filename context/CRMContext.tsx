@@ -118,12 +118,41 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsCallConnected(false); // starts in dialing/ringing phase
     setCallDuration(0);
 
-    const cleanPhone = lead.phone.replace(/[^0-9+]/g, "");
-    addToast(`Connecting CRM In-Browser Call with ${lead.studentName} (${cleanPhone})...`, "info");
+    // Format phone with mandatory +91 or 0 for JioFiber SIP (+91XXXXXXXXXX)
+    const rawDigits = lead.phone.replace(/\D/g, "");
+    let cleanPhone = "";
+    if (rawDigits.length === 10) {
+      cleanPhone = `+91${rawDigits}`;
+    } else if (rawDigits.length === 12 && rawDigits.startsWith("91")) {
+      cleanPhone = `+${rawDigits}`;
+    } else if (rawDigits.length === 11 && rawDigits.startsWith("0")) {
+      cleanPhone = `+91${rawDigits.substring(1)}`;
+    } else {
+      cleanPhone = lead.phone.trim().startsWith("+") ? lead.phone.trim() : `+91${rawDigits}`;
+    }
+
+    addToast(`Dialing ${lead.studentName} (${cleanPhone}) via JioFiber MicroSIP...`, "info");
+
+    // 1. Trigger MicroSIP directly via local Next.js PC Telephony API
+    fetch("/api/microsip/call", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone: cleanPhone }),
+    }).catch((err) => {
+      console.warn("Direct MicroSIP API call:", err);
+    });
+
+    // 2. Fallback to tel: link handler
+    try {
+      window.location.href = `tel:${cleanPhone}`;
+    } catch (e) {
+      // Browser protocol handler fallback
+    }
   };
 
   const endCallSession = () => {
     setIsCallConnected(false);
+    fetch("/api/microsip/hangup", { method: "POST" }).catch(() => {});
   };
 
   const closeCallModal = () => {
