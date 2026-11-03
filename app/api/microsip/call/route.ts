@@ -26,9 +26,12 @@ export async function POST(request: Request) {
     }
 
     // Path to MicroSIP in D:\WEGROW\MicroSIP
+    const bridgeExePath = "D:\\WEGROW\\MicroSIP\\MicroSIPBridge.exe";
     const microsipExePath = "D:\\WEGROW\\MicroSIP\\microsip.exe";
     const jfcExePath = "D:\\WEGROW\\MicroSIP\\JFC-MicroSIP.exe";
-    const exeToRun = fs.existsSync(microsipExePath) ? microsipExePath : jfcExePath;
+    const exeToRun = fs.existsSync(bridgeExePath)
+      ? bridgeExePath
+      : (fs.existsSync(microsipExePath) ? microsipExePath : jfcExePath);
 
     if (!fs.existsSync(exeToRun)) {
       return NextResponse.json(
@@ -37,7 +40,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Execute MicroSIP in background with the destination number
+    // Execute MicroSIP Bridge to dial strictly in background with zero window display
     const child = spawn(exeToRun, [formattedPhone], {
       detached: true,
       stdio: "ignore",
