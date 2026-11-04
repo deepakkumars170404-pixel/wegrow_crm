@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import net from "net";
 import os from "os";
+import dns from "dns";
 import { exec } from "child_process";
 import util from "util";
 import fs from "fs";
 
 const execPromise = util.promisify(exec);
 
+// Test TCP port reachability with a short timeout
 function checkPortReachable(host: string, port: number, timeoutMs = 800): Promise<boolean> {
   return new Promise((resolve) => {
     const socket = net.createConnection({ host, port, timeout: timeoutMs }, () => {
@@ -24,40 +26,68 @@ function checkPortReachable(host: string, port: number, timeoutMs = 800): Promis
   });
 }
 
+// Dynamically discover JioFiber router gateway IP
+async function discoverJioGateway(): Promise<{ reachable: boolean; gatewayIp: string }> {
+  // 1. Try resolving jiofiber.local.html (works dynamically on all JioFiber firmware)
+  try {
+    const resolvedIps = await dns.promises.resolve4("jiofiber.local.html");
+    if (resolvedIps && resolvedIps.length > 0) {
+      const candidateIp = resolvedIps[0];
+      const isReachable = await checkPortReachable(candidateIp, 80, 800);
+      if (isReachable) {
+        return { reachable: true, gatewayIp: candidateIp };
+      }
+    }
+  } catch {
+    // DNS resolution failed or timed out, continue to fallback checks
+  }
+
+  // 2. Parallel fallback check on standard JioFiber gateway IPs (192.168.29.1 and 192.168.1.1)
+  const candidateIps = ["192.168.29.1", "192.168.1.1"];
+  const checks = await Promise.all(
+    candidateIps.map(async (ip) => ({
+      ip,
+      reachable: await checkPortReachable(ip, 80, 800),
+    }))
+  );
+
+  const active = checks.find((c) => c.reachable);
+  if (active) {
+    return { reachable: true, gatewayIp: active.ip };
+  }
+
+  return { reachable: false, gatewayIp: "" };
+}
+
 export async function GET() {
   try {
-    // 1. Check local network interfaces for JioFiber subnet (192.168.1.x)
+    // 1. Dynamically check JioFiber Gateway reachability
+    const { reachable: gatewayReachable, gatewayIp } = await discoverJioGateway();
+
+    // 2. Inspect active local network interfaces
     const interfaces = os.networkInterfaces();
-    let hasJioSubnet = false;
     let localIp = "";
+    let hasPrivateIp = false;
 
     for (const name of Object.keys(interfaces)) {
       for (const addr of interfaces[name] || []) {
-        if (addr.family === "IPv4" && !addr.internal && addr.address.startsWith("192.168.1.")) {
-          hasJioSubnet = true;
-          localIp = addr.address;
-          break;
+        if (addr.family === "IPv4" && !addr.internal) {
+          // Check for private subnet
+          if (
+            addr.address.startsWith("192.168.") ||
+            addr.address.startsWith("10.") ||
+            addr.address.startsWith("172.")
+          ) {
+            hasPrivateIp = true;
+            localIp = addr.address;
+            break;
+          }
         }
       }
-      if (hasJioSubnet) break;
+      if (hasPrivateIp) break;
     }
 
-    // 2. Check if JioFiber Gateway (192.168.1.1) is actually reachable
-    let gatewayReachable = false;
-    if (hasJioSubnet) {
-      gatewayReachable = await checkPortReachable("192.168.1.1", 80, 800);
-    }
-
-    // 3. Check if MicroSIP is currently running
-    let microsipRunning = false;
-    try {
-      const { stdout } = await execPromise('tasklist /FI "IMAGENAME eq microsip.exe" /NH');
-      microsipRunning = stdout.toLowerCase().includes("microsip.exe");
-    } catch {
-      microsipRunning = false;
-    }
-
-    // 4. Retrieve current Wi-Fi SSID
+    // 3. Retrieve current Wi-Fi SSID & State via netsh
     let wifiSSID = "";
     let wifiState = "disconnected";
     try {
@@ -67,24 +97,36 @@ export async function GET() {
       if (ssidMatch) wifiSSID = ssidMatch[1].trim();
       if (stateMatch) wifiState = stateMatch[1].trim();
     } catch {
-      // Ignore netsh errors
+      // Ignore netsh error
     }
 
-    // 5. If Wi-Fi is reachable but MicroSIP is not running, auto-launch it in background
+    // 4. Check if MicroSIP is currently running
+    let microsipRunning = false;
+    try {
+      const { stdout } = await execPromise('tasklist /FI "IMAGENAME eq microsip.exe" /NH');
+      microsipRunning = stdout.toLowerCase().includes("microsip.exe");
+    } catch {
+      microsipRunning = false;
+    }
+
+    // 5. If Wi-Fi is connected and JioFiber Gateway is reachable but MicroSIP is not running, auto-launch in background
     if (gatewayReachable && !microsipRunning) {
       const bridgeExe = "D:\\WEGROW\\MicroSIP\\MicroSIPBridge.exe";
       if (fs.existsSync(bridgeExe)) {
-        exec(`"${bridgeExe}"`);
-        microsipRunning = true; // Auto-started
+        try {
+          exec(`"${bridgeExe}" /start`);
+          microsipRunning = true;
+        } catch {}
       }
     }
 
-    // 6. Formulate clear status
+    // 6. Formulate live status
+    const isWifiConnected = wifiState.toLowerCase() === "connected" || gatewayReachable;
     let status: "online" | "wifi_disconnected" | "connecting" | "offline" = "offline";
     let message = "";
     let connected = false;
 
-    if (!hasJioSubnet || !gatewayReachable || wifiState.toLowerCase() !== "connected") {
+    if (!isWifiConnected || !gatewayReachable) {
       status = "wifi_disconnected";
       connected = false;
       message = "Wi-Fi Disconnected • Reconnect to registered JioFiber Wi-Fi to make calls";
@@ -94,7 +136,7 @@ export async function GET() {
       message = "JioFiber SIP Online (+91 4562 355214) • Ready to Call";
     } else {
       status = "connecting";
-      connected = false;
+      connected = true; // Gateway reachable, telephony starting up
       message = "MicroSIP Telephony Connecting...";
     }
 
@@ -103,10 +145,11 @@ export async function GET() {
       status,
       message,
       gatewayReachable,
-      hasJioSubnet,
+      gatewayIp: gatewayIp || (gatewayReachable ? "192.168.29.1" : ""),
+      hasJioSubnet: hasPrivateIp,
       localIp,
       wifiSSID: wifiSSID || (connected ? "JioFiber Wi-Fi" : "Disconnected"),
-      wifiState,
+      wifiState: isWifiConnected ? "connected" : wifiState,
       microsipRunning,
       account: "+914562355214@tn.wln.ims.jio.com",
       checkedAt: new Date().toISOString(),
