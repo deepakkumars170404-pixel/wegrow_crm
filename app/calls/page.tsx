@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   PhoneCall,
@@ -45,29 +45,24 @@ export default function CallManagementPage() {
     openCallModal,
     updateLeadStatus,
     activeCallLead,
+    setActiveCallLead,
     telephonyStatus,
     refreshTelephonyStatus,
+    reconnectTelephony,
   } = useCRM();
 
   // Calling Interface Type Switcher: "station" (Image 3) or "modal" (Image 2)
   const [callingMode, setCallingMode] = useState<"station" | "modal">("station");
 
   // Selected lead in call queue
-  const [selectedLeadId, setSelectedLeadId] = useState<string>(leads[0]?.id || "LD-1001");
-  const selectedLead = leads.find((l) => l.id === selectedLeadId) || leads[0];
+  const [selectedLeadId, setSelectedLeadId] = useState<string>(
+    activeCallLead?.id || leads[0]?.id || "LD-1001"
+  );
+  const selectedLead = leads.find((l) => l.id === selectedLeadId) || activeCallLead || leads[0];
 
   // Queue Filter
   const [queueFilter, setQueueFilter] = useState<"All" | "Hot" | "Today" | "Pending">("All");
   const [queueSearch, setQueueSearch] = useState("");
-
-  // Simulated Call State & Persistent Duration
-  const [isCallActive, setIsCallActive] = useState(false);
-  const [callTimer, setCallTimer] = useState(0);
-  const [callEndedDuration, setCallEndedDuration] = useState<string | null>(null);
-  const [isMuted, setIsMuted] = useState(false);
-  const [isSpeaker, setIsSpeaker] = useState(true);
-  const [showKeypad, setShowKeypad] = useState(false);
-  const [keypadInput, setKeypadInput] = useState("");
 
   // Call Result Form State
   const [selectedOutcome, setSelectedOutcome] = useState("Interested");
@@ -75,22 +70,19 @@ export default function CallManagementPage() {
   const [nextFollowUpDate, setNextFollowUpDate] = useState("");
   const [nextFollowUpTime, setNextFollowUpTime] = useState("03:30 PM");
 
-  // Timer interval simulation
-  React.useEffect(() => {
-    let interval: any = null;
-    if (isCallActive || isCallConnected) {
-      interval = setInterval(() => {
-        setCallTimer((prev) => prev + 1);
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [isCallActive, isCallConnected]);
-
+  // Format mm:ss
   const formatTimer = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
+
+  // Sync selected lead when activeCallLead changes elsewhere (e.g. from dock or search)
+  useEffect(() => {
+    if (activeCallLead && activeCallLead.id !== selectedLeadId) {
+      setSelectedLeadId(activeCallLead.id);
+    }
+  }, [activeCallLead]);
 
   // Filtered Queue
   const queueLeads = leads.filter((l) => {
@@ -109,13 +101,9 @@ export default function CallManagementPage() {
   });
 
   const handleStartCall = () => {
-    setIsCallActive(true);
-    setCallEndedDuration(null); // Clear previous ended call duration
-    setCallTimer(0);
-    setIsMuted(false);
-    setKeypadInput("");
     setCallRemarks("");
     if (selectedLead) {
+      setActiveCallLead(selectedLead);
       initiateCall(selectedLead);
       if (callingMode === "modal") {
         openCallModal();
@@ -124,10 +112,6 @@ export default function CallManagementPage() {
   };
 
   const handleEndCall = () => {
-    const finalSeconds = callTimer > 0 ? callTimer : (callDuration > 0 ? callDuration : 1);
-    const finalFormatted = formatTimer(finalSeconds);
-    setCallEndedDuration(finalFormatted); // Preserve the exact call time!
-    setIsCallActive(false);
     endCallSession();
   };
 
@@ -135,7 +119,7 @@ export default function CallManagementPage() {
     if (e && e.preventDefault) e.preventDefault();
     if (!selectedLead) return;
 
-    const finalDuration = callEndedDuration || formatTimer(callTimer || callDuration || 1);
+    const finalDuration = lastCallDuration || formatTimer(callDuration || 1);
 
     addCallRecord(selectedLead.id, {
       callerName: selectedLead.assignedCaller || "Priya Sharma",
@@ -148,24 +132,23 @@ export default function CallManagementPage() {
 
     if (selectedOutcome === "Interested") {
       updateLeadStatus(selectedLead.id, "Interested", "Interested");
-    } else if (selectedOutcome === "Lost") {
-      updateLeadStatus(selectedLead.id, "Lost", "Lost");
     } else if (selectedOutcome === "Counselling") {
       updateLeadStatus(selectedLead.id, "Counselling Scheduled", "Counselling Scheduled");
     } else if (selectedOutcome === "Busy" || selectedOutcome === "Call Later") {
       updateLeadStatus(selectedLead.id, "Call Later");
+    } else if (selectedOutcome === "Lost") {
+      updateLeadStatus(selectedLead.id, "Lost", "Lost");
     }
 
-    setIsCallActive(false);
     endCallSession();
-    setCallEndedDuration(null);
-    setCallTimer(0);
     setCallRemarks("");
 
     // Advance to next lead in queue automatically (Advance Queue)
     const currentIndex = queueLeads.findIndex((l) => l.id === selectedLead.id);
     if (currentIndex >= 0 && currentIndex < queueLeads.length - 1) {
-      setSelectedLeadId(queueLeads[currentIndex + 1].id);
+      const nextLead = queueLeads[currentIndex + 1];
+      setSelectedLeadId(nextLead.id);
+      setActiveCallLead(nextLead);
     }
   };
 
@@ -207,14 +190,15 @@ export default function CallManagementPage() {
               <span>{telephonyStatus.wifiSSID}</span>
             </span>
 
-            {/* Manual Refresh Button */}
+            {/* Office Reconnect & Sync Button */}
             <button
               type="button"
-              onClick={() => refreshTelephonyStatus()}
-              title="Refresh connection status"
-              className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
+              onClick={() => reconnectTelephony()}
+              title="Connect or Reconnect to Office JioFiber Wi-Fi"
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#142B52] hover:bg-[#1E3B6E] text-white transition-all shadow-xs active:scale-95"
             >
               <RefreshCw className="w-3.5 h-3.5" />
+              <span>Sync Office JioFiber</span>
             </button>
           </div>
           <p className="text-xs text-slate-500 mt-1">
@@ -282,149 +266,40 @@ export default function CallManagementPage() {
                 </span>
               </div>
               <p className="text-xs text-rose-800 mt-0.5">
-                JioFiber landline calls cannot be initiated because your PC is disconnected from your registered Wi-Fi. Please turn on Wi-Fi and reconnect to <strong>{telephonyStatus.wifiSSID || "Deepakkumar-5G"}</strong> to enable telecalling.
+                JioFiber landline calls cannot be initiated because your PC is disconnected from your office Wi-Fi. Please connect to <strong>WegrowskillCampus</strong> to enable telecalling.
               </p>
             </div>
           </div>
 
           <button
             type="button"
-            onClick={() => refreshTelephonyStatus()}
+            onClick={() => reconnectTelephony()}
             className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shrink-0 flex items-center gap-2 shadow-sm transition-all active:scale-95"
           >
             <RefreshCw className="w-4 h-4" />
-            <span>Re-check Connection</span>
+            <span>Sync Office JioFiber</span>
           </button>
         </div>
       )}
 
-      {/* How it Works / 4-Step Caller Workflow Guide */}
-      <div className="bg-[#142B52]/5 border border-[#142B52]/15 rounded-2xl p-4">
-        <div className="flex items-center gap-2 mb-2 text-[#142B52]">
-          <Sparkles className="w-4 h-4 text-[#D5A52B]" />
-          <span className="text-xs font-bold uppercase tracking-wider">
-            Telecaller Workflow Guide (Quick 4 Steps)
-          </span>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-          <div className="flex items-start gap-2.5 bg-white p-2.5 rounded-xl border border-slate-200">
-            <span className="w-5 h-5 rounded-full bg-[#142B52] text-[#D5A52B] font-bold text-[10px] flex items-center justify-center flex-shrink-0 mt-0.5">
-              1
-            </span>
-            <div>
-              <p className="font-bold text-slate-800">Select Student</p>
-              <p className="text-[11px] text-slate-500">Pick next lead from priority queue on the left</p>
-            </div>
-          </div>
-
-          <div className="flex items-start gap-2.5 bg-white p-2.5 rounded-xl border border-slate-200">
-            <span className="w-5 h-5 rounded-full bg-[#142B52] text-[#D5A52B] font-bold text-[10px] flex items-center justify-center flex-shrink-0 mt-0.5">
-              2
-            </span>
-            <div>
-              <p className="font-bold text-slate-800">Click Call Now</p>
-              <p className="text-[11px] text-slate-500">Initiate live softphone conversation</p>
-            </div>
-          </div>
-
-          <div className="flex items-start gap-2.5 bg-white p-2.5 rounded-xl border border-slate-200">
-            <span className="w-5 h-5 rounded-full bg-[#142B52] text-[#D5A52B] font-bold text-[10px] flex items-center justify-center flex-shrink-0 mt-0.5">
-              3
-            </span>
-            <div>
-              <p className="font-bold text-slate-800">Pick Disposition</p>
-              <p className="text-[11px] text-slate-500">Select Interested, Busy, Call Later, etc.</p>
-            </div>
-          </div>
-
-          <div className="flex items-start gap-2.5 bg-white p-2.5 rounded-xl border border-slate-200">
-            <span className="w-5 h-5 rounded-full bg-[#D5A52B] text-[#142B52] font-bold text-[10px] flex items-center justify-center flex-shrink-0 mt-0.5">
-              4
-            </span>
-            <div>
-              <p className="font-bold text-slate-800">Save & Follow-up</p>
-              <p className="text-[11px] text-slate-500">Enter remarks and schedule callback</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Top 4 KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-soft">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase">My Assigned Leads</p>
-              <h3 className="text-2xl font-bold text-slate-900 mt-1">84</h3>
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-blue-50 text-[#142B52] flex items-center justify-center">
-              <UserCheck className="w-5 h-5" />
-            </div>
-          </div>
-          <p className="text-[11px] text-slate-400 mt-2">Active queue under Priya Sharma</p>
-        </div>
-
-        <div className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-soft">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase">Calls Completed Today</p>
-              <h3 className="text-2xl font-bold text-slate-900 mt-1">58 <span className="text-sm font-normal text-slate-400">/ 60</span></h3>
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <CheckCircle2 className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="w-full bg-slate-100 h-1.5 rounded-full mt-2 overflow-hidden">
-            <div className="bg-emerald-500 h-full rounded-full" style={{ width: "96%" }} />
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-soft">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase">Connected Calls</p>
-              <h3 className="text-2xl font-bold text-indigo-700 mt-1">44</h3>
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-              <PhoneCall className="w-5 h-5" />
-            </div>
-          </div>
-          <p className="text-[11px] text-emerald-600 font-semibold mt-2">75.8% connection rate</p>
-        </div>
-
-        <div className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-soft">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase">Pending Queue</p>
-              <h3 className="text-2xl font-bold text-amber-700 mt-1">26</h3>
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-              <Clock className="w-5 h-5" />
-            </div>
-          </div>
-          <p className="text-[11px] text-amber-600 font-medium mt-2">12 scheduled for this afternoon</p>
-        </div>
-      </div>
-
-      {/* Main Calling Workspace Grid */}
+      {/* Main Calling Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Side: Call Queue (5 Cols) */}
-        <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200/90 shadow-soft overflow-hidden flex flex-col h-[700px]">
-          {/* Queue Header & Filters */}
-          <div className="p-4 border-b border-slate-100 space-y-3 bg-slate-50/50">
+        {/* Left Side: Telecaller Queue (5 Cols) */}
+        <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200/90 shadow-soft overflow-hidden flex flex-col h-[680px]">
+          <div className="p-4 border-b border-slate-100 bg-slate-50/50 space-y-3">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <h3 className="font-bold text-sm text-slate-900">Today's Call Queue</h3>
-                <span className="bg-[#142B52] text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-                  {queueLeads.length}
-                </span>
+              <div>
+                <h3 className="font-bold text-sm text-slate-900">Calling Queue</h3>
+                <p className="text-xs text-slate-500">{queueLeads.length} students waiting</p>
               </div>
-              <span className="text-[11px] text-slate-400">Auto-prioritized</span>
+              <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[11px] font-bold">
+                Auto-prioritized
+              </span>
             </div>
 
-            {/* Search Queue */}
+            {/* Queue Search */}
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
                 placeholder="Search lead in queue..."
@@ -461,7 +336,8 @@ export default function CallManagementPage() {
                   key={lead.id}
                   onClick={() => {
                     setSelectedLeadId(lead.id);
-                    if (isCallActive) setIsCallActive(false);
+                    setActiveCallLead(lead);
+                    if (isCallConnected) handleEndCall();
                   }}
                   className={`p-3.5 cursor-pointer transition-all ${
                     isSelected
@@ -490,7 +366,7 @@ export default function CallManagementPage() {
                       <Clock className="w-3 h-3 text-[#D5A52B]" />
                       Follow-up: {lead.nextFollowUpTime || "11:00 AM"}
                     </span>
-                    <StatusBadge status={lead.status} />
+                    <span className="text-slate-500 font-semibold">{lead.status}</span>
                   </div>
                 </div>
               );
@@ -516,32 +392,32 @@ export default function CallManagementPage() {
               </div>
 
               <div className="flex items-center gap-2">
-                {/* Direct Call & End Call Button in Lead Banner */}
-                {isCallConnected || isCallActive ? (
+                {/* Direct Call & End Call Button in Lead Banner: Strictly Green when idle, Strictly Red when in call */}
+                {isCallConnected ? (
                   <button
                     type="button"
                     onClick={handleEndCall}
-                    className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-transform active:scale-95"
+                    className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-transform active:scale-95 animate-pulse"
                     title="End Call in MicroSIP (Cut Call)"
                   >
                     <PhoneOff className="w-3.5 h-3.5" />
-                    <span>End Call ({formatTimer(callTimer || callDuration)})</span>
+                    <span>End Call ({formatTimer(callDuration)})</span>
                   </button>
                 ) : !telephonyStatus.connected && telephonyStatus.status === "wifi_disconnected" ? (
                   <button
                     type="button"
-                    onClick={handleStartCall}
-                    className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-transform active:scale-95"
-                    title="JioFiber Wi-Fi disconnected. Connect to Wi-Fi to call."
+                    onClick={() => reconnectTelephony()}
+                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-transform active:scale-95"
+                    title="JioFiber Wi-Fi disconnected. Click to sync."
                   >
                     <WifiOff className="w-3.5 h-3.5" />
-                    <span>Connect Wi-Fi to Call</span>
+                    <span>Sync Office Wi-Fi</span>
                   </button>
                 ) : (
                   <button
                     type="button"
                     onClick={handleStartCall}
-                    className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-transform active:scale-95"
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-transform active:scale-95"
                     title="Call via MicroSIP in Background"
                   >
                     <Phone className="w-3.5 h-3.5 fill-white" />
@@ -580,7 +456,7 @@ export default function CallManagementPage() {
               </div>
               <div className="bg-slate-50 p-2.5 rounded-xl">
                 <span className="text-slate-400 block text-[10px]">City / Location</span>
-                <span className="font-semibold text-slate-800">{selectedLead?.city || "Bangalore"}</span>
+                <span className="font-semibold text-slate-800">{selectedLead?.city || "Tamil Nadu"}</span>
               </div>
             </div>
           </div>
@@ -599,15 +475,25 @@ export default function CallManagementPage() {
 
               {/* Dynamic Telephony & Wi-Fi Presence Badge */}
               {telephonyStatus.connected ? (
-                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold shadow-xs">
+                <button
+                  type="button"
+                  onClick={() => reconnectTelephony()}
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold shadow-xs hover:bg-emerald-100 transition-all"
+                  title="Click to refresh connection"
+                >
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-sm" />
                   <span>JioFiber Online</span>
-                </div>
+                </button>
               ) : telephonyStatus.status === "wifi_disconnected" ? (
-                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold shadow-xs animate-pulse">
+                <button
+                  type="button"
+                  onClick={() => reconnectTelephony()}
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold shadow-xs animate-pulse hover:bg-rose-100 transition-all"
+                  title="Click to sync office Wi-Fi"
+                >
                   <WifiOff className="w-3 h-3 text-rose-600" />
-                  <span>Wi-Fi Disconnected</span>
-                </div>
+                  <span>Sync Office Wi-Fi</span>
+                </button>
               ) : (
                 <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-xs font-bold shadow-xs">
                   <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
@@ -632,19 +518,20 @@ export default function CallManagementPage() {
               </div>
 
               <div className="text-sm font-mono font-bold text-[#E5B842] tracking-wider pt-0.5">
-                {isCallActive || isCallConnected
-                  ? formatTimer(callTimer || callDuration)
-                  : lastCallDuration || callEndedDuration
-                  ? `Call Ended • ${lastCallDuration || callEndedDuration}`
+                {isCallConnected
+                  ? formatTimer(callDuration)
+                  : lastCallDuration
+                  ? `Call Ended • ${lastCallDuration}`
                   : "00:00"}
               </div>
 
+              {/* Station Call & Cut Button: Strictly Green when idle, Strictly Red when in call */}
               <div className="pt-1 flex items-center justify-center gap-2">
-                {isCallActive || isCallConnected ? (
+                {isCallConnected ? (
                   <button
                     type="button"
                     onClick={handleEndCall}
-                    className="px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-full font-bold text-xs shadow-md transition-transform active:scale-95 flex items-center gap-2"
+                    className="px-8 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-full font-bold text-sm shadow-md transition-transform active:scale-95 flex items-center gap-2 animate-pulse"
                     title="End Call / Cut Call in MicroSIP"
                   >
                     <PhoneOff className="w-4 h-4" />
@@ -653,18 +540,18 @@ export default function CallManagementPage() {
                 ) : !telephonyStatus.connected && telephonyStatus.status === "wifi_disconnected" ? (
                   <button
                     type="button"
-                    onClick={handleStartCall}
-                    className="px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-full font-bold text-xs shadow-md transition-transform active:scale-95 flex items-center justify-center gap-2"
-                    title="JioFiber Wi-Fi is disconnected. Please reconnect Wi-Fi to call."
+                    onClick={() => reconnectTelephony()}
+                    className="px-8 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-full font-bold text-sm shadow-md transition-transform active:scale-95 flex items-center justify-center gap-2"
+                    title="JioFiber Wi-Fi is disconnected. Click to sync."
                   >
                     <WifiOff className="w-4 h-4" />
-                    <span>Connect Wi-Fi to Call</span>
+                    <span>Sync Office Jio Wi-Fi</span>
                   </button>
                 ) : (
                   <button
                     type="button"
                     onClick={handleStartCall}
-                    className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full font-bold text-xs shadow-md transition-transform active:scale-95 flex items-center justify-center gap-2"
+                    className="px-8 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full font-bold text-sm shadow-md transition-transform active:scale-95 flex items-center justify-center gap-2"
                     title="Call via JioFiber MicroSIP in Background"
                   >
                     <Phone className="w-4 h-4 fill-white" />
@@ -728,4 +615,3 @@ export default function CallManagementPage() {
     </div>
   );
 }
-

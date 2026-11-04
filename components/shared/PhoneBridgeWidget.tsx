@@ -20,6 +20,7 @@ import {
   User,
   Wifi,
   WifiOff,
+  RefreshCw,
 } from "lucide-react";
 import { useCRM } from "@/context/CRMContext";
 import { Lead } from "@/types";
@@ -79,6 +80,7 @@ export const PhoneBridgeWidget: React.FC = () => {
     addToast,
     telephonyStatus,
     refreshTelephonyStatus,
+    reconnectTelephony,
   } = useCRM();
 
   // Selected lead for dialer (defaults to active lead or first lead)
@@ -223,6 +225,7 @@ export const PhoneBridgeWidget: React.FC = () => {
     setDialerNumber("");
   };
 
+  // Dynamic Call Handler: Always resolves the accurate lead
   const handleCall = (numberToCall?: string) => {
     const num = (numberToCall || dialerNumber).trim();
     if (!num) {
@@ -230,33 +233,49 @@ export const PhoneBridgeWidget: React.FC = () => {
       return;
     }
 
-    const currentLead =
-      selectedLead ||
-      leads.find((l) => l.phone.replace(/\D/g, "") === num.replace(/\D/g, "")) || {
-        id: `LD-CUSTOM`,
-        studentName: "Direct Dial",
-        phone: num,
-        email: "direct@dial.local",
-        courseInterested: "Direct Calling",
-        leadSource: "Phone" as const,
-        enquiryDate: new Date().toISOString().split("T")[0],
-        nextFollowUpDate: "",
-        nextFollowUpTime: "",
-        assignedCaller: "Priya Sharma",
-        status: "New" as const,
-        priority: "Hot" as const,
-        stage: "New Enquiry" as const,
-        leadScore: 70,
-        tags: ["MicroSIP"],
-        timeline: [],
-        notes: [],
-        callHistory: [],
-        createdDate: new Date().toISOString().split("T")[0],
-        lastContacted: "Just now",
-        callCount: 1,
-      };
+    const cleanDigits = num.replace(/\D/g, "");
+    let currentLead: Lead | undefined;
 
-    initiateCall(currentLead);
+    // 1. Check if number matches any lead in database
+    if (cleanDigits.length >= 7) {
+      currentLead = leads.find((l) => {
+        const leadDigits = l.phone.replace(/\D/g, "");
+        return leadDigits.endsWith(cleanDigits) || cleanDigits.endsWith(leadDigits);
+      });
+    }
+
+    // 2. If not found by phone, check activeCallLead or selectedLead
+    if (!currentLead) {
+      if (activeCallLead && (!numberToCall || activeCallLead.phone.replace(/\D/g, "") === cleanDigits)) {
+        currentLead = activeCallLead;
+      } else if (selectedLead && (!numberToCall || selectedLead.phone.replace(/\D/g, "") === cleanDigits)) {
+        currentLead = selectedLead;
+      }
+    }
+
+    // 3. Fallback: create dynamic direct dial lead
+    const validLead: Lead = currentLead || {
+      id: `LD-DIRECT-${Date.now()}`,
+      studentName: `Student (${num})`,
+      phone: num,
+      email: "direct@dial.local",
+      courseInterested: "Direct Calling",
+      leadSource: "Phone" as const,
+      enquiryDate: new Date().toISOString().split("T")[0],
+      nextFollowUpDate: "",
+      nextFollowUpTime: "",
+      assignedCaller: "Priya Sharma",
+      status: "New" as const,
+      priority: "Hot" as const,
+      stage: "New Enquiry" as const,
+      notes: [],
+      callHistory: [],
+      callCount: 1,
+    };
+
+    setSelectedLead(validLead);
+    setActiveCallLead(validLead);
+    initiateCall(validLead);
     setIsDialpadOpen(false);
   };
 
@@ -309,7 +328,15 @@ export const PhoneBridgeWidget: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => reconnectTelephony()}
+                className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 transition-colors"
+                title="Sync / Reconnect Office JioFiber Wi-Fi"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+              </button>
               <button
                 type="button"
                 onClick={() => setIsDialpadOpen(false)}
@@ -334,6 +361,7 @@ export const PhoneBridgeWidget: React.FC = () => {
                   const lead = leads.find((l) => l.id === e.target.value);
                   if (lead) {
                     setSelectedLead(lead);
+                    setActiveCallLead(lead);
                     setDialerNumber(lead.phone.replace(/[^0-9+]/g, ""));
                   }
                 }}
@@ -378,8 +406,8 @@ export const PhoneBridgeWidget: React.FC = () => {
             </div>
           </div>
 
-          {/* Circular Luxury Softphone Keypad Grid */}
-          <div className="px-5 py-2 grid grid-cols-3 gap-3 justify-items-center">
+          {/* Dialpad Matrix 3x4 */}
+          <div className="p-4 pt-1 grid grid-cols-3 gap-2.5">
             {[
               { num: "1", sub: "" },
               { num: "2", sub: "ABC" },
@@ -398,91 +426,56 @@ export const PhoneBridgeWidget: React.FC = () => {
                 key={key.num}
                 type="button"
                 onClick={() => handleKeyClick(key.num)}
-                className="w-16 h-14 bg-white/5 hover:bg-white/15 active:scale-90 border border-white/10 hover:border-[#E5B842]/50 rounded-2xl flex flex-col items-center justify-center transition-all duration-100 group shadow-md"
+                className="flex flex-col items-center justify-center py-2.5 rounded-2xl bg-white/[0.07] hover:bg-white/[0.16] active:bg-[#E5B842]/30 border border-white/5 active:scale-95 transition-all text-white group"
               >
-                <span className="text-xl font-bold text-white group-hover:text-[#E5B842] leading-none transition-colors">
+                <span className="text-lg font-bold group-hover:text-[#E5B842] leading-tight">
                   {key.num}
                 </span>
                 {key.sub && (
-                  <span className="text-[9px] font-semibold text-[#E5B842] tracking-wider mt-0.5 leading-none">
+                  <span className="text-[9px] font-bold text-slate-400 group-hover:text-white tracking-widest">
                     {key.sub}
                   </span>
                 )}
               </button>
             ))}
-
-            {/* Utility Row: Redial (R), Plus (+), and Clear (C) */}
-            <button
-              type="button"
-              onClick={() => {
-                if (selectedLead) handleCall(selectedLead.phone);
-              }}
-              className="w-16 h-10 bg-white/5 hover:bg-white/15 active:scale-95 border border-white/10 rounded-xl flex items-center justify-center text-xs font-bold text-slate-300"
-              title="Redial Selected Lead"
-            >
-              R
-            </button>
-            <button
-              type="button"
-              onClick={() => handleKeyClick("+")}
-              className="w-16 h-10 bg-white/5 hover:bg-white/15 active:scale-95 border border-white/10 rounded-xl flex items-center justify-center text-base font-bold text-[#E5B842]"
-            >
-              +
-            </button>
-            <button
-              type="button"
-              onClick={handleClear}
-              className="w-16 h-10 bg-white/5 hover:bg-white/15 active:scale-95 border border-white/10 rounded-xl flex items-center justify-center text-xs font-bold text-rose-300"
-            >
-              C
-            </button>
           </div>
 
-          {/* Action Row: Call via MicroSIP & Hangup */}
-          <div className="px-5 py-3 flex items-center gap-2">
+          {/* Action Call & Hangup Button: Strictly Green when idle, Strictly Red when in call */}
+          <div className="p-3 bg-[#0B1728] flex items-center">
             {isCallConnected ? (
               <button
                 type="button"
                 onClick={handleHangup}
-                className="w-full py-3 bg-rose-600 hover:bg-rose-500 active:scale-98 text-white rounded-2xl font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-rose-950/40 transition-all"
+                className="w-full py-3.5 bg-rose-600 hover:bg-rose-500 active:scale-98 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-rose-950/40 transition-all animate-pulse"
+                title="Cut Call / End Call"
               >
                 <PhoneOff className="w-4 h-4" />
-                <span>Hangup Call ({formatTimer(callDuration)})</span>
+                <span>Hangup Call (Cut) • {formatTimer(callDuration)}</span>
               </button>
             ) : !telephonyStatus.connected && telephonyStatus.status === "wifi_disconnected" ? (
               <button
                 type="button"
-                onClick={() => handleCall()}
-                className="w-full py-3 bg-amber-600 hover:bg-amber-500 active:scale-98 text-white rounded-2xl font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-950/40 transition-all"
-                title="JioFiber Wi-Fi is disconnected. Please connect to Wi-Fi to call."
+                onClick={() => reconnectTelephony()}
+                className="w-full py-3.5 bg-amber-600 hover:bg-amber-500 active:scale-98 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-amber-950/40 transition-all"
+                title="JioFiber Wi-Fi is disconnected. Click to sync."
               >
                 <WifiOff className="w-4 h-4" />
-                <span>Connect Wi-Fi to Call</span>
+                <span>Sync Office Jio Wi-Fi</span>
               </button>
             ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={() => handleCall()}
-                  className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 active:scale-98 text-white rounded-2xl font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40 transition-all"
-                >
-                  <Phone className="w-4 h-4 fill-white" />
-                  <span>Call via MicroSIP</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleHangup}
-                  className="py-3 px-4 bg-rose-600 hover:bg-rose-500 active:scale-98 text-white rounded-2xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-rose-950/40 transition-all"
-                  title="Cut Call / End Call"
-                >
-                  <PhoneOff className="w-4 h-4" />
-                  <span>Hangup</span>
-                </button>
-              </>
+              <button
+                type="button"
+                onClick={() => handleCall()}
+                className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 active:scale-98 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40 transition-all"
+                title="Call via JioFiber MicroSIP in Background"
+              >
+                <Phone className="w-4 h-4 fill-white" />
+                <span>Call via MicroSIP</span>
+              </button>
             )}
           </div>
 
-          {/* Audio Sliders & Status Strip (Like MicroSIP in user image) */}
+          {/* Audio Sliders & Status Strip */}
           <div className="p-3 bg-[#0B1728] border-t border-white/10 space-y-2">
             <div className="flex items-center justify-between text-[10px] text-slate-400">
               <div className="flex items-center gap-1.5">
@@ -554,7 +547,7 @@ export const PhoneBridgeWidget: React.FC = () => {
         </div>
       )}
 
-      {/* 2. Sleek Floating Softphone Dock Bar (Exact match to user's picture) */}
+      {/* 2. Sleek Floating Softphone Dock Bar */}
       <div className="fixed bottom-4 right-5 z-40 select-none">
         <div className="bg-[#0F1E36] text-white rounded-2xl shadow-2xl border border-[#244B7A]/80 px-4 py-2.5 flex items-center gap-3.5 backdrop-blur-md">
           {/* Avatar Letter Circle */}
@@ -631,12 +624,12 @@ export const PhoneBridgeWidget: React.FC = () => {
               <Volume2 className="w-4 h-4" />
             </button>
 
-            {/* End Call Button / Start Call Button */}
+            {/* End Call Button / Start Call Button: Strictly Green when idle, Strictly Red when in call */}
             {isCallConnected ? (
               <button
                 type="button"
                 onClick={handleHangup}
-                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-full shadow-md shadow-rose-950/40 transition-transform active:scale-95 flex items-center gap-1.5"
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-full shadow-md shadow-rose-950/40 transition-transform active:scale-95 flex items-center gap-1.5 animate-pulse"
                 title="End Active Call"
               >
                 <PhoneOff className="w-3.5 h-3.5" />
@@ -645,14 +638,12 @@ export const PhoneBridgeWidget: React.FC = () => {
             ) : !telephonyStatus.connected && telephonyStatus.status === "wifi_disconnected" ? (
               <button
                 type="button"
-                onClick={() => {
-                  if (currentDisplayLead) handleCall(currentDisplayLead.phone);
-                }}
+                onClick={() => reconnectTelephony()}
                 className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded-full shadow-md shadow-amber-950/40 transition-transform active:scale-95 flex items-center gap-1.5"
-                title="JioFiber Wi-Fi is disconnected"
+                title="JioFiber Wi-Fi is disconnected. Click to sync."
               >
                 <WifiOff className="w-3.5 h-3.5" />
-                <span>Wi-Fi Offline</span>
+                <span>Sync Wi-Fi</span>
               </button>
             ) : (
               <button
@@ -661,6 +652,7 @@ export const PhoneBridgeWidget: React.FC = () => {
                   if (currentDisplayLead) handleCall(currentDisplayLead.phone);
                 }}
                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-full shadow-md shadow-emerald-950/40 transition-transform active:scale-95 flex items-center gap-1.5"
+                title="Start Call via MicroSIP"
               >
                 <Phone className="w-3.5 h-3.5 fill-white" />
                 <span>Call Lead</span>
@@ -668,17 +660,29 @@ export const PhoneBridgeWidget: React.FC = () => {
             )}
           </div>
 
-          {/* MicroSIP JioFiber Presence Indicator */}
+          {/* MicroSIP JioFiber Presence Indicator & Quick Sync */}
           {telephonyStatus.connected ? (
-            <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-[11px] font-semibold text-emerald-300">
+            <button
+              type="button"
+              onClick={() => reconnectTelephony()}
+              className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-[11px] font-semibold text-emerald-300 hover:bg-emerald-500/20 transition-all"
+              title="Click to Refresh JioFiber connection"
+            >
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               <span>JioFiber Online ({telephonyStatus.wifiSSID})</span>
-            </div>
+              <RefreshCw className="w-2.5 h-2.5 text-emerald-400 ml-0.5" />
+            </button>
           ) : telephonyStatus.status === "wifi_disconnected" ? (
-            <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-500/15 border border-rose-500/40 text-[11px] font-semibold text-rose-300 animate-pulse">
+            <button
+              type="button"
+              onClick={() => reconnectTelephony()}
+              className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-500/15 border border-rose-500/40 text-[11px] font-semibold text-rose-300 animate-pulse hover:bg-rose-500/25 transition-all"
+              title="Click to Connect Office JioFiber Wi-Fi"
+            >
               <WifiOff className="w-3 h-3 text-rose-400" />
-              <span>Wi-Fi Disconnected</span>
-            </div>
+              <span>Sync Office Wi-Fi</span>
+              <RefreshCw className="w-2.5 h-2.5 text-rose-400 ml-0.5" />
+            </button>
           ) : (
             <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-[11px] font-semibold text-amber-300">
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />

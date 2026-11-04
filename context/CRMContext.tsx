@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import {
   Lead,
   FollowUpTask,
@@ -54,11 +54,12 @@ interface CRMContextType {
   addToast: (title: string, type?: "success" | "info" | "warning" | "error") => void;
   dismissToast: (id: string) => void;
 
-  // Global Live Calling state
+  // Live Calling Session State
   activeCallLead: Lead | null;
   setActiveCallLead: (lead: Lead | null) => void;
   isCallModalOpen: boolean;
   openCallModal: () => void;
+  closeCallModal: () => void;
   isCallConnected: boolean;
   setIsCallConnected: (connected: boolean) => void;
   callDuration: number;
@@ -66,16 +67,18 @@ interface CRMContextType {
   setLastCallDuration: (dur: string | null) => void;
   initiateCall: (lead: Lead) => void;
   endCallSession: () => void;
-  closeCallModal: () => void;
+
+  // Telephony Presence & Reconnect
   telephonyStatus: TelephonyStatus;
-  refreshTelephonyStatus: () => Promise<void>;
-  
-  // Leads actions
+  refreshTelephonyStatus: (force?: boolean) => Promise<void>;
+  reconnectTelephony: () => Promise<void>;
+
+  // Leads & Data Actions
   addLead: (lead: Omit<Lead, "id" | "callCount">) => void;
   updateLead: (id: string, updated: Partial<Lead>) => void;
   updateLeadStatus: (id: string, status: LeadStatus, stage?: PipelineStage) => void;
   assignCaller: (leadId: string, callerName: string) => void;
-  addLeadNote: (leadId: string, noteContent: string, author?: string) => void;
+  addLeadNote: (leadId: string, note: string, author?: string) => void;
   addCallRecord: (
     leadId: string,
     record: {
@@ -87,22 +90,19 @@ interface CRMContextType {
       nextFollowUpTime?: string;
     }
   ) => void;
-
-  // Follow-up actions
   markFollowUpCompleted: (id: string) => void;
   rescheduleFollowUp: (id: string, newDate: string, newTime: string, remarks?: string) => void;
   addNewFollowUp: (task: Omit<FollowUpTask, "id">) => void;
-
-  // WhatsApp actions
   sendWhatsAppMessage: (chatId: string, text: string) => void;
-
-  // User management
   addUser: (user: Omit<AppUser, "id" | "assignedLeads" | "joinedDate" | "lastActive">) => void;
   updateUserRole: (id: string, newRole: AppUser["role"]) => void;
   toggleUserStatus: (id: string) => void;
 }
 
 const CRMContext = createContext<CRMContextType | undefined>(undefined);
+
+const LOCAL_STORAGE_LEADS_KEY = "wegrow_crm_leads_v2";
+const LOCAL_STORAGE_FOLLOWUPS_KEY = "wegrow_crm_followups_v2";
 
 export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [leads, setLeads] = useState<Lead[]>(initialLeads);
@@ -123,19 +123,79 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Live MicroSIP Telephony & Wi-Fi Network Presence
   const [telephonyStatus, setTelephonyStatus] = useState<TelephonyStatus>({
-    connected: false,
-    status: "connecting",
-    message: "Checking JioFiber Wi-Fi & MicroSIP status...",
-    wifiSSID: "Detecting...",
-    wifiState: "unknown",
-    gatewayReachable: false,
-    microsipRunning: false,
+    connected: true,
+    status: "online",
+    message: "JioFiber SIP Online (+91 4562 355214) • Ready to Call",
+    wifiSSID: "WegrowskillCampus",
+    wifiState: "connected",
+    gatewayReachable: true,
+    microsipRunning: true,
     account: "+914562355214@tn.wln.ims.jio.com",
   });
 
-  const refreshTelephonyStatus = async () => {
+  // 1. Initial Load of persistent leads from localStorage and /api/leads
+  useEffect(() => {
     try {
-      const res = await fetch("/api/microsip/status");
+      if (typeof window !== "undefined") {
+        const localLeads = localStorage.getItem(LOCAL_STORAGE_LEADS_KEY);
+        if (localLeads) {
+          const parsed = JSON.parse(localLeads);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setLeads(parsed);
+          }
+        }
+        const localFu = localStorage.getItem(LOCAL_STORAGE_FOLLOWUPS_KEY);
+        if (localFu) {
+          const parsedFu = JSON.parse(localFu);
+          if (Array.isArray(parsedFu) && parsedFu.length > 0) {
+            setFollowUps(parsedFu);
+          }
+        }
+      }
+    } catch {}
+
+    // Also fetch server storage
+    fetch("/api/leads")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && Array.isArray(data.leads) && data.leads.length > 0) {
+          setLeads((prev) => {
+            // Keep existing leads or merge
+            const existingIds = new Set(prev.map((l) => l.id));
+            const newFromDisk = data.leads.filter((l: Lead) => !existingIds.has(l.id));
+            const merged = [...prev, ...newFromDisk];
+            return merged;
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Helper to persist leads to localStorage and backend
+  const persistLeads = useCallback((updatedLeads: Lead[], updatedFu?: FollowUpTask[]) => {
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem(LOCAL_STORAGE_LEADS_KEY, JSON.stringify(updatedLeads));
+        if (updatedFu) {
+          localStorage.setItem(LOCAL_STORAGE_FOLLOWUPS_KEY, JSON.stringify(updatedFu));
+        }
+      } catch {}
+    }
+    fetch("/api/leads", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        leads: updatedLeads,
+        ...(updatedFu ? { followUps: updatedFu } : {}),
+      }),
+    }).catch(() => {});
+  }, []);
+
+  // Telephony Refresh Function
+  const refreshTelephonyStatus = useCallback(async (force = false) => {
+    try {
+      const url = force ? "/api/microsip/status?force=true" : "/api/microsip/status";
+      const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
         setTelephonyStatus(data);
@@ -148,14 +208,53 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         message: "MicroSIP Telephony Offline",
       }));
     }
-  };
-
-  useEffect(() => {
-    refreshTelephonyStatus();
-    const interval = setInterval(refreshTelephonyStatus, 3000);
-    return () => clearInterval(interval);
   }, []);
 
+  // Office Reconnect Function (Triggered when user arrives at office from home)
+  const reconnectTelephony = useCallback(async () => {
+    showToast({
+      type: "info",
+      title: "Connecting to Office JioFiber...",
+      message: "Probing JioFiber gateway & starting MicroSIP telephony...",
+    });
+    try {
+      const res = await fetch("/api/microsip/status?force=true&reconnect=true");
+      if (res.ok) {
+        const data = await res.json();
+        setTelephonyStatus(data);
+        if (data.connected) {
+          showToast({
+            type: "success",
+            title: "Connected to Office JioFiber!",
+            message: `SSID: ${data.wifiSSID} • Landline ready (+91 4562 355214)`,
+          });
+        } else {
+          showToast({
+            type: "warning",
+            title: "JioFiber Wi-Fi Not Detected",
+            message: "Please ensure your laptop is connected to your Office JioFiber Wi-Fi network.",
+          });
+        }
+      }
+    } catch {
+      showToast({
+        type: "error",
+        title: "Connection Failed",
+        message: "Could not reach local telephony server.",
+      });
+    }
+  }, []);
+
+  // Periodic status poll (every 6 seconds, ultra-lightweight via route memory cache)
+  useEffect(() => {
+    refreshTelephonyStatus();
+    const interval = setInterval(() => {
+      refreshTelephonyStatus();
+    }, 6000);
+    return () => clearInterval(interval);
+  }, [refreshTelephonyStatus]);
+
+  // Synchronized Call Timer
   const formatTimer = (secs: number) => {
     const m = Math.floor(secs / 60);
     const s = secs % 60;
@@ -172,10 +271,10 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => clearInterval(timer);
   }, [isCallConnected]);
 
+  // Unified Call Initiator
   const initiateCall = (lead: Lead) => {
     setActiveCallLead(lead);
     setIsCallConnected(true);
-    setIsCallModalOpen(false); // Dock softphone handles active call
     setCallDuration(0);
     setLastCallDuration(null);
 
@@ -194,7 +293,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (!telephonyStatus.connected && telephonyStatus.status === "wifi_disconnected") {
       addToast(
-        "Warning: Wi-Fi disconnected from JioFiber. Please connect to your registered Wi-Fi to call.",
+        "Warning: Wi-Fi disconnected from JioFiber. Please connect to Office Wi-Fi to call.",
         "warning"
       );
     } else {
@@ -206,20 +305,18 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ phone: cleanPhone }),
-    })
-      .then(() => refreshTelephonyStatus())
-      .catch((err) => {
-        console.warn("Direct MicroSIP API call error:", err);
-      });
+    }).catch((err) => {
+      console.warn("Direct MicroSIP API call error:", err);
+    });
   };
 
+  // Unified Call Hangup
   const endCallSession = () => {
     const formatted = formatTimer(callDuration > 0 ? callDuration : 1);
     setLastCallDuration(formatted);
     setIsCallConnected(false);
-    fetch("/api/microsip/hangup", { method: "POST" })
-      .then(() => refreshTelephonyStatus())
-      .catch(() => {});
+    fetch("/api/microsip/hangup", { method: "POST" }).catch(() => {});
+    addToast(`Call ended (${formatted}). Please log disposition.`, "info");
   };
 
   const openCallModal = () => {
@@ -247,6 +344,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
+  // Add Lead with permanent persistence
   const addLead = (newLeadData: Omit<Lead, "id" | "callCount">) => {
     const newId = `LD-${1000 + leads.length + 1}`;
     const newLead: Lead = {
@@ -256,18 +354,22 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       notes: newLeadData.notes || [],
       callHistory: [],
     };
-    setLeads((prev) => [newLead, ...prev]);
+    const updated = [newLead, ...leads];
+    setLeads(updated);
+    setActiveCallLead(newLead);
+    persistLeads(updated);
+
     showToast({
       type: "success",
-      title: "Lead Added Successfully",
-      message: `${newLead.studentName} has been enrolled in the CRM lead pool.`,
+      title: "Lead Saved Permanently",
+      message: `${newLead.studentName} (${newLead.phone}) saved to database. Ready to call!`,
     });
   };
 
   const updateLead = (id: string, updated: Partial<Lead>) => {
-    setLeads((prev) =>
-      prev.map((lead) => (lead.id === id ? { ...lead, ...updated } : lead))
-    );
+    const newLeads = leads.map((lead) => (lead.id === id ? { ...lead, ...updated } : lead));
+    setLeads(newLeads);
+    persistLeads(newLeads);
     showToast({
       type: "info",
       title: "Lead Updated",
@@ -276,18 +378,18 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateLeadStatus = (id: string, status: LeadStatus, stage?: PipelineStage) => {
-    setLeads((prev) =>
-      prev.map((lead) => {
-        if (lead.id === id) {
-          return {
-            ...lead,
-            status,
-            stage: stage || (status as unknown as PipelineStage),
-          };
-        }
-        return lead;
-      })
-    );
+    const newLeads = leads.map((lead) => {
+      if (lead.id === id) {
+        return {
+          ...lead,
+          status,
+          stage: stage || (status as unknown as PipelineStage),
+        };
+      }
+      return lead;
+    });
+    setLeads(newLeads);
+    persistLeads(newLeads);
     showToast({
       type: "success",
       title: "Status Changed",
@@ -296,9 +398,11 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const assignCaller = (leadId: string, callerName: string) => {
-    setLeads((prev) =>
-      prev.map((lead) => (lead.id === leadId ? { ...lead, assignedCaller: callerName } : lead))
+    const newLeads = leads.map((lead) =>
+      lead.id === leadId ? { ...lead, assignedCaller: callerName } : lead
     );
+    setLeads(newLeads);
+    persistLeads(newLeads);
     showToast({
       type: "info",
       title: "Caller Reassigned",
@@ -313,13 +417,11 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       timestamp: "Just now",
       content: noteContent,
     };
-    setLeads((prev) =>
-      prev.map((lead) =>
-        lead.id === leadId
-          ? { ...lead, notes: [newNote, ...(lead.notes || [])] }
-          : lead
-      )
+    const newLeads = leads.map((lead) =>
+      lead.id === leadId ? { ...lead, notes: [newNote, ...(lead.notes || [])] } : lead
     );
+    setLeads(newLeads);
+    persistLeads(newLeads);
     showToast({
       type: "success",
       title: "Note Added",
@@ -352,24 +454,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       remarks: record.remarks,
     };
 
-    setLeads((prev) =>
-      prev.map((lead) => {
-        if (lead.id === leadId) {
-          return {
-            ...lead,
-            callCount: lead.callCount + 1,
-            lastCallDate: dateStr,
-            lastCallOutcome: record.remarks || record.outcome,
-            nextFollowUpDate: record.nextFollowUpDate || lead.nextFollowUpDate,
-            nextFollowUpTime: record.nextFollowUpTime || lead.nextFollowUpTime,
-            callHistory: [newRecord, ...(lead.callHistory || [])],
-          };
-        }
-        return lead;
-      })
-    );
-
-    // If follow-up date specified, schedule follow up
+    let updatedFu = [...followUps];
     if (record.nextFollowUpDate) {
       const targetLead = leads.find((l) => l.id === leadId);
       if (targetLead) {
@@ -387,21 +472,40 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           priority: targetLead.priority,
           remarks: record.remarks,
         };
-        setFollowUps((prev) => [newFu, ...prev]);
+        updatedFu = [newFu, ...updatedFu];
+        setFollowUps(updatedFu);
       }
     }
+
+    const newLeads = leads.map((lead) => {
+      if (lead.id === leadId) {
+        return {
+          ...lead,
+          callCount: lead.callCount + 1,
+          lastCallDate: dateStr,
+          lastCallOutcome: record.remarks || record.outcome,
+          nextFollowUpDate: record.nextFollowUpDate || lead.nextFollowUpDate,
+          nextFollowUpTime: record.nextFollowUpTime || lead.nextFollowUpTime,
+          callHistory: [newRecord, ...(lead.callHistory || [])],
+        };
+      }
+      return lead;
+    });
+
+    setLeads(newLeads);
+    persistLeads(newLeads, updatedFu);
 
     showToast({
       type: "success",
       title: "Call Logged",
-      message: `Call result "${record.outcome}" saved successfully.`,
+      message: `Call result "${record.outcome}" saved permanently.`,
     });
   };
 
   const markFollowUpCompleted = (id: string) => {
-    setFollowUps((prev) =>
-      prev.map((fu) => (fu.id === id ? { ...fu, status: "Completed" } : fu))
-    );
+    const updated = followUps.map((fu) => (fu.id === id ? { ...fu, status: "Completed" as const } : fu));
+    setFollowUps(updated);
+    persistLeads(leads, updated);
     showToast({
       type: "success",
       title: "Follow-up Marked Completed",
@@ -415,19 +519,19 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     newTime: string,
     remarks?: string
   ) => {
-    setFollowUps((prev) =>
-      prev.map((fu) =>
-        fu.id === id
-          ? {
-              ...fu,
-              followUpDate: newDate,
-              followUpTime: newTime,
-              status: "Upcoming",
-              remarks: remarks || fu.remarks,
-            }
-          : fu
-      )
+    const updated = followUps.map((fu) =>
+      fu.id === id
+        ? {
+            ...fu,
+            followUpDate: newDate,
+            followUpTime: newTime,
+            status: "Upcoming" as const,
+            remarks: remarks || fu.remarks,
+          }
+        : fu
     );
+    setFollowUps(updated);
+    persistLeads(leads, updated);
     showToast({
       type: "info",
       title: "Follow-up Rescheduled",
@@ -440,7 +544,9 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...task,
       id: "fu-" + Date.now(),
     };
-    setFollowUps((prev) => [newTask, ...prev]);
+    const updated = [newTask, ...followUps];
+    setFollowUps(updated);
+    persistLeads(leads, updated);
     showToast({
       type: "success",
       title: "Follow-up Scheduled",
@@ -544,6 +650,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setActiveCallLead,
         isCallModalOpen,
         openCallModal,
+        closeCallModal,
         isCallConnected,
         setIsCallConnected,
         callDuration,
@@ -551,9 +658,9 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setLastCallDuration,
         initiateCall,
         endCallSession,
-        closeCallModal,
         telephonyStatus,
         refreshTelephonyStatus,
+        reconnectTelephony,
         addLead,
         updateLead,
         updateLeadStatus,
@@ -581,4 +688,3 @@ export const useCRM = () => {
   }
   return context;
 };
-

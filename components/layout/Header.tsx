@@ -24,6 +24,9 @@ import {
   CalendarPlus,
   Radio,
   Coffee,
+  Wifi,
+  WifiOff,
+  RefreshCw,
 } from "lucide-react";
 import { useCRM } from "@/context/CRMContext";
 import { recentActivityTimeline } from "@/data/dummy-data";
@@ -39,7 +42,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const pathname = usePathname();
   const router = useRouter();
-  const { leads, activeUserRole, addToast } = useCRM();
+  const { leads, activeUserRole, addToast, telephonyStatus, reconnectTelephony } = useCRM();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
