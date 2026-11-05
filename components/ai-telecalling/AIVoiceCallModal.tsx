@@ -29,6 +29,8 @@ import {
   X,
   Languages,
   Gauge,
+  Play,
+  AlertTriangle,
 } from "lucide-react";
 import { useCRM } from "@/context/CRMContext";
 import { Lead } from "@/types";
@@ -90,6 +92,10 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
 
   // Speaking Speed: Normal Human Speed (1.16x default)
   const [voiceSpeed, setVoiceSpeed] = useState<number>(1.16);
+  const voiceSpeedRef = useRef<number>(1.16);
+  useEffect(() => {
+    voiceSpeedRef.current = voiceSpeed;
+  }, [voiceSpeed]);
 
   // Trilingual Mode: Auto, English, Tanglish, Tamil
   const [languageMode, setLanguageMode] = useState<"auto" | "en" | "tanglish" | "ta">("auto");
@@ -103,6 +109,10 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
   const [isMicListening, setIsMicListening] = useState(false);
   const [isMicActive, setIsMicActive] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
+
+  // Microphone permission state
+  const [micPermissionDenied, setMicPermissionDenied] = useState(false);
+  const [audioNeedsInteraction, setAudioNeedsInteraction] = useState(false);
 
   // Qualification & Demo State
   const [qualification, setQualification] = useState<{
@@ -154,9 +164,14 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
   const startTelephoneRing = useCallback(() => {
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) return;
+      if (!AudioCtx) return () => {};
       const ctx = new AudioCtx();
       ringAudioContextRef.current = ctx;
+
+      // In modern browsers, AudioContext might start suspended until user gesture
+      if (ctx.state === "suspended") {
+        ctx.resume().catch(() => {});
+      }
 
       const playBurst = () => {
         if (!ringAudioContextRef.current || ringAudioContextRef.current.state === "closed") return;
@@ -217,14 +232,37 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
     return "en-IN";
   }, [languageMode]);
 
-  // Initialize Speech Recognition
+  // Request Microphone Permissions explicitly so browser prompts user
+  const requestMicPermission = useCallback(async () => {
+    try {
+      if (typeof navigator !== "undefined" && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        // Release stream tracks immediately (we only wanted user permission)
+        stream.getTracks().forEach((track) => track.stop());
+        setMicPermissionDenied(false);
+        return true;
+      }
+    } catch (err: any) {
+      console.warn("Microphone access prompt error:", err);
+      if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+        setMicPermissionDenied(true);
+      }
+      return false;
+    }
+    return true;
+  }, []);
+
+  // Initialize Speech Recognition with Auto-Restart & Silence Detection
   const initSpeechRecognition = useCallback(() => {
     if (typeof window === "undefined") return;
 
     const SpeechRecognition =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
-    if (!SpeechRecognition) return;
+    if (!SpeechRecognition) {
+      console.warn("SpeechRecognition not supported in this browser.");
+      return;
+    }
 
     try {
       if (recognitionRef.current) {
@@ -240,12 +278,14 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
 
       reco.onstart = () => {
         setIsMicListening(true);
+        setMicPermissionDenied(false);
       };
 
       let recognitionTimer: NodeJS.Timeout | null = null;
       let finalSpeech = "";
 
       reco.onresult = (event: any) => {
+        // Discard any audio picked up while AI is speaking
         if (isAiSpeakingRef.current) return;
 
         let interimText = "";
@@ -261,7 +301,7 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
         if (candidateText) {
           setInputQuery(candidateText);
 
-          // Auto-send when user finishes utterance (1.1s natural pause)
+          // Auto-send when caller stops speaking (1.0s natural pause)
           if (recognitionTimer) clearTimeout(recognitionTimer);
           recognitionTimer = setTimeout(() => {
             if (candidateText && !isAiSpeakingRef.current && isCallActiveRef.current) {
@@ -270,21 +310,26 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
               setInputQuery("");
               handleUserUtterance(toSend);
             }
-          }, 1100);
+          }, 1000);
         }
       };
 
       reco.onerror = (err: any) => {
-        if (err.error !== "no-speech") {
+        if (err.error === "not-allowed" || err.error === "service-not-allowed") {
+          setMicPermissionDenied(true);
+          console.warn("Microphone access denied by browser.");
+        } else if (err.error !== "no-speech") {
           console.warn("Speech recognition event:", err.error);
         }
       };
 
       reco.onend = () => {
         setIsMicListening(false);
+        // Continuous auto-restart loop as long as call is active and AI is silent
         if (isCallActiveRef.current && !isAiSpeakingRef.current && isMicActive && !isMuted) {
           try {
             reco.start();
+            setIsMicListening(true);
           } catch (e) {}
         }
       };
@@ -305,7 +350,10 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
     try {
       recognitionRef.current.start();
       setIsMicListening(true);
-    } catch (e) {}
+    } catch (e: any) {
+      // If already started or active, keep status true
+      setIsMicListening(true);
+    }
   };
 
   const stopMicListening = () => {
@@ -329,13 +377,71 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
       audioRef.current = null;
     }
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
+      try {
+        window.speechSynthesis.cancel();
+      } catch (e) {}
     }
     setIsAiSpeaking(false);
   };
 
-  // Real Fluent Neural Audio Player (Normal Human Conversational Speed, Single-voice only)
-  const speakAI = (audioText: string, ttsLang: "en" | "ta" = "ta") => {
+  // Fallback to Web Speech API if HTML5 audio is blocked or fails
+  const speakViaSpeechSynthesis = (text: string, lang: "en" | "ta") => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+      setIsAiSpeaking(false);
+      startMicListening();
+      return;
+    }
+
+    try {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = lang === "en" ? "en-IN" : "ta-IN";
+      utterance.rate = voiceSpeedRef.current;
+      utterance.pitch = voiceGenderRef.current === "female" ? 1.05 : 0.95;
+
+      // Find best regional voice
+      const voices = window.speechSynthesis.getVoices();
+      if (voices && voices.length) {
+        if (lang === "en") {
+          const v =
+            voices.find(
+              (v) =>
+                v.lang.includes("en-IN") &&
+                (voiceGenderRef.current === "female"
+                  ? v.name.toLowerCase().includes("female") || v.name.includes("Neerja")
+                  : v.name.toLowerCase().includes("male") || v.name.includes("Prabhat"))
+            ) || voices.find((v) => v.lang.includes("en"));
+          if (v) utterance.voice = v;
+        } else {
+          const v = voices.find((v) => v.lang.includes("ta"));
+          if (v) utterance.voice = v;
+        }
+      }
+
+      utterance.onend = () => {
+        setIsAiSpeaking(false);
+        setTimeout(() => {
+          if (isCallActiveRef.current && isMicActive && !isMuted) {
+            startMicListening();
+          }
+        }, 200);
+      };
+
+      utterance.onerror = () => {
+        setIsAiSpeaking(false);
+        startMicListening();
+      };
+
+      window.speechSynthesis.speak(utterance);
+    } catch (e) {
+      console.warn("SpeechSynthesis error:", e);
+      setIsAiSpeaking(false);
+      startMicListening();
+    }
+  };
+
+  // Real Fluent Neural Audio Player (Dual-Engine: Neural MP3 + SpeechSynthesis Fallback)
+  const speakAI = async (audioText: string, ttsLang: "en" | "ta" = "ta") => {
     if (isMuted) return;
 
     // 1. Temporarily pause mic so AI doesn't pick up speaker sound
@@ -346,14 +452,14 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
     stopVoice();
     setIsAiSpeaking(true);
 
-    try {
-      const cleanText = (audioText || "").trim();
-      if (!cleanText) {
-        setIsAiSpeaking(false);
-        startMicListening();
-        return;
-      }
+    const cleanText = (audioText || "").trim();
+    if (!cleanText) {
+      setIsAiSpeaking(false);
+      startMicListening();
+      return;
+    }
 
+    try {
       const ttsUrl = `/api/ai/telecalling/tts?text=${encodeURIComponent(
         cleanText
       )}&lang=${encodeURIComponent(ttsLang)}`;
@@ -361,42 +467,37 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
       const audio = new Audio(ttsUrl);
       audioRef.current = audio;
 
-      // Realistic Human Speaking Cadence (1.14x - 1.18x gives crisp, natural counselor tempo)
+      // Speed Cadence (1.16x gives natural human counselor pace)
       const currentGender = voiceGenderRef.current;
-      const speedMultiplier = currentGender === "female" ? voiceSpeed : voiceSpeed * 0.97;
+      const speedMultiplier = currentGender === "female" ? voiceSpeedRef.current : voiceSpeedRef.current * 0.97;
       audio.playbackRate = Math.max(0.85, Math.min(1.4, speedMultiplier));
 
       audio.onended = () => {
         setIsAiSpeaking(false);
         audioRef.current = null;
-        // Reactivate Mic immediately so student can talk!
+        setAudioNeedsInteraction(false);
         setTimeout(() => {
           if (isCallActiveRef.current && isMicActive && !isMuted) {
             startMicListening();
           }
-        }, 250);
+        }, 200);
       };
 
-      audio.onerror = (e) => {
-        console.warn("TTS audio streaming error:", e);
-        setIsAiSpeaking(false);
+      audio.onerror = () => {
+        console.warn("HTML5 Audio stream failed, falling back to Web Speech Synthesis");
         audioRef.current = null;
-        setTimeout(() => {
-          if (isCallActiveRef.current && isMicActive && !isMuted) {
-            startMicListening();
-          }
-        }, 250);
+        speakViaSpeechSynthesis(cleanText, ttsLang);
       };
 
-      audio.play().catch((playErr) => {
-        if (playErr.name !== "AbortError") {
-          console.warn("Audio play issue:", playErr);
-        }
-      });
-    } catch (e) {
-      console.warn("Audio exception:", e);
-      setIsAiSpeaking(false);
-      startMicListening();
+      // Play audio stream
+      await audio.play();
+      setAudioNeedsInteraction(false);
+    } catch (playErr: any) {
+      console.warn("Audio autoplay blocked by browser, falling back to SpeechSynthesis:", playErr?.message);
+      audioRef.current = null;
+      // If browser blocked HTML5 Audio, fallback to SpeechSynthesis or show unblock button
+      setAudioNeedsInteraction(true);
+      speakViaSpeechSynthesis(cleanText, ttsLang);
     }
   };
 
@@ -407,6 +508,9 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
       stopTelephoneRing();
       return;
     }
+
+    // Request microphone permission when modal opens
+    requestMicPermission();
 
     // Reset Call States
     setCallState(isInbound ? "ringing" : "connected");
@@ -468,7 +572,7 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
       stopTimer();
       stopVoice();
     };
-  }, [isOpen, lead, isInbound, autoAnswerDelaySeconds, startTelephoneRing]);
+  }, [isOpen, lead, isInbound, autoAnswerDelaySeconds, startTelephoneRing, requestMicPermission]);
 
   // Connect Call & Start AI Speaking
   const connectCall = (welcomeSpeech: string, ttsLang: "en" | "ta" = "ta") => {
@@ -1025,6 +1129,52 @@ Reach our Admissions Desk: +91 99523 37331`;
         )}
 
         {/* ========================================================================= */}
+        {/* MIC PERMISSION WARNING BANNER (If browser blocked mic) */}
+        {/* ========================================================================= */}
+        {micPermissionDenied && (
+          <div className="bg-rose-50 border-b border-rose-200 px-6 py-2.5 flex items-center justify-between text-xs text-rose-800">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>
+                <strong>Microphone Blocked:</strong> Please allow microphone access in your browser address bar so AI can hear you!
+              </span>
+            </div>
+            <button
+              onClick={requestMicPermission}
+              className="bg-rose-600 hover:bg-rose-700 text-white px-2.5 py-1 rounded-lg text-[11px] font-bold"
+            >
+              Allow Mic
+            </button>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* AUDIO AUTOPLAY UNLOCK PROMPT (If browser required user interaction) */}
+        {/* ========================================================================= */}
+        {audioNeedsInteraction && (
+          <div className="bg-amber-50 border-b border-amber-200 px-6 py-2 flex items-center justify-between text-xs text-amber-900">
+            <div className="flex items-center gap-2">
+              <Volume2 className="w-4 h-4 text-amber-600" />
+              <span>Browser muted audio playback. Click to unmute and hear AI voice clearly!</span>
+            </div>
+            <button
+              onClick={() => {
+                setAudioNeedsInteraction(false);
+                const currentGender = voiceGenderRef.current;
+                const helloTamil = `வணக்கம்! நான் உங்கள் கவுன்சிலர் ${
+                  currentGender === "female" ? "காவ்யா" : "விக்ரம்"
+                }. உங்களுக்கு என்ன விவரங்கள் வேண்டும்?`;
+                speakAI(helloTamil, "ta");
+              }}
+              className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1"
+            >
+              <Play className="w-3 h-3 fill-current" />
+              <span>Unmute Audio</span>
+            </button>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
         {/* SUBHEADER: Call Timer, Real-time Mic Activity & Waveform */}
         {/* ========================================================================= */}
         <div className="bg-slate-50 border-b border-slate-200 px-6 py-2.5 flex items-center justify-between">
@@ -1298,7 +1448,9 @@ Reach our Admissions Desk: +91 99523 37331`;
                   setIsMicActive(false);
                 } else {
                   setIsMicActive(true);
-                  startMicListening();
+                  requestMicPermission().then(() => {
+                    startMicListening();
+                  });
                 }
               }}
               className={`p-2.5 rounded-xl border font-semibold text-xs flex items-center gap-1.5 transition-all shadow-sm ${

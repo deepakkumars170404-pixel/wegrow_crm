@@ -4,10 +4,10 @@
       "studentName": "Incoming Lead (AI Call)",
       "phone": "+91 99523 37331",
       "email": "enquiry@wegrow.edu",
-      "courseInterested": "General Enquiry",
+      "courseInterested": "Full Stack Web Development (MERN + Next.js)",
       "leadSource": "Phone",
       "status": "Interested",
-      "priority": "Warm",
+      "priority": "Hot",
       "stage": "Interested",
       "assignedCaller": "Priya Sharma",
       "city": "Sivakasi",
@@ -506,6 +506,20 @@
   ],
   "followUps": [
     {
+      "id": "fu-1793865587057",
+      "leadId": "LD-1017",
+      "studentName": "Incoming Lead (AI Call)",
+      "phone": "+91 99523 37331",
+      "course": "General Enquiry",
+      "assignedCaller": "Kavya (AI Voice Agent)",
+      "lastContacted": "2026-11-05 01:29 PM",
+      "followUpDate": "2026-11-05",
+      "followUpTime": "11:00 AM",
+      "status": "Today",
+      "priority": "Warm",
+      "remarks": "[AI Telecaller] Intent: Inquired about Full Stack Web Development course fees | Key Discussion: Provided 55,000 INR fee details and installment options | Next Action: Encourage booking a free demo class at the Sivakasi campus"
+    },
+    {
       "id": "fu-1793864177364",
       "leadId": "LD-1017",
       "studentName": "Incoming Lead (AI Call)",
@@ -744,5 +758,5 @@
       "remarks": "Orientation briefing completed. Admitted."
     }
   ],
-  "savedAt": "2026-11-05T07:36:18.241Z"
+  "savedAt": "2026-11-05T07:59:47.419Z"
 }
