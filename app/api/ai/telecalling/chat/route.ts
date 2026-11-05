@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
     // If Gemini API Key is provided, call Google Gemini 1.5 / 2.0 Flash
     if (geminiKey) {
       try {
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${geminiKey}`;
 
         const contents = [
           {
@@ -414,3 +414,4 @@ function generateIntelligentFallback(
     ],
   };
 }
+
