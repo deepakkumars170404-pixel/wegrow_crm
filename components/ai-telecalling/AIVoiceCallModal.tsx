@@ -326,12 +326,15 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
     setIsAiThinking(true);
 
     try {
+      const savedApiKey = typeof window !== "undefined" ? localStorage.getItem("wegrow_gemini_api_key") || "" : "";
+
       // Call Gemini Telecalling API Route
       const res = await fetch("/api/ai/telecalling/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userMessage: queryText,
+          apiKey: savedApiKey,
           conversationHistory: messages.map((m) => ({
             sender: m.sender,
             text: m.text,
