@@ -28,7 +28,7 @@ import {
   MapPin,
   X,
   Languages,
-  Globe,
+  Gauge,
 } from "lucide-react";
 import { useCRM } from "@/context/CRMContext";
 import { Lead } from "@/types";
@@ -63,7 +63,7 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
   lead,
   phoneNumber = "+91 99523 37331",
   isInbound = false,
-  autoAnswerDelaySeconds = 2,
+  autoAnswerDelaySeconds = 3,
 }) => {
   const {
     leads,
@@ -87,6 +87,9 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
   useEffect(() => {
     voiceGenderRef.current = voiceGender;
   }, [voiceGender]);
+
+  // Speaking Speed: Normal Human Speed (1.16x default)
+  const [voiceSpeed, setVoiceSpeed] = useState<number>(1.16);
 
   // Trilingual Mode: Auto, English, Tanglish, Tamil
   const [languageMode, setLanguageMode] = useState<"auto" | "en" | "tanglish" | "ta">("auto");
@@ -122,17 +125,15 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
     "Next Action: Follow up with course brochure on WhatsApp",
   ]);
 
-  // Audio & Speech Synthesis Refs (Single-source controller)
+  // Audio & Speech Synthesis Refs
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const synthRef = useRef<SpeechSynthesis | null>(null);
   const recognitionRef = useRef<any>(null);
   const transcriptEndRef = useRef<HTMLDivElement | null>(null);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const ringAudioContextRef = useRef<AudioContext | null>(null);
   const isAiSpeakingRef = useRef<boolean>(false);
   const isCallActiveRef = useRef<boolean>(false);
-
-  // Sound Wave Animation Level
-  const [waveLevels, setWaveLevels] = useState<number[]>([15, 25, 40, 60, 30, 75, 45, 20]);
 
   // Format Duration mm:ss
   const formatTimer = (secs: number) => {
@@ -149,25 +150,81 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
     isCallActiveRef.current = callState === "connected";
   }, [callState]);
 
+  // Realistic Telephone Ringtone Generator using Web Audio API
+  const startTelephoneRing = useCallback(() => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      ringAudioContextRef.current = ctx;
+
+      const playBurst = () => {
+        if (!ringAudioContextRef.current || ringAudioContextRef.current.state === "closed") return;
+        try {
+          const now = ctx.currentTime;
+          const osc1 = ctx.createOscillator();
+          const osc2 = ctx.createOscillator();
+          const gain = ctx.createGain();
+
+          osc1.type = "sine";
+          osc2.type = "sine";
+          osc1.frequency.value = 400; // Standard PBX dual-frequency ring tone
+          osc2.frequency.value = 450;
+
+          gain.gain.setValueAtTime(0.08, now);
+          gain.gain.setValueAtTime(0.08, now + 0.4);
+          gain.gain.setValueAtTime(0, now + 0.42);
+          gain.gain.setValueAtTime(0.08, now + 0.65);
+          gain.gain.setValueAtTime(0.08, now + 1.05);
+          gain.gain.setValueAtTime(0, now + 1.07);
+
+          osc1.connect(gain);
+          osc2.connect(gain);
+          gain.connect(ctx.destination);
+
+          osc1.start(now);
+          osc2.start(now);
+          osc1.stop(now + 1.1);
+          osc2.stop(now + 1.1);
+        } catch (e) {}
+      };
+
+      playBurst();
+      const ringTimer = setInterval(playBurst, 2400);
+
+      return () => {
+        clearInterval(ringTimer);
+        stopTelephoneRing();
+      };
+    } catch (e) {
+      return () => {};
+    }
+  }, []);
+
+  const stopTelephoneRing = () => {
+    if (ringAudioContextRef.current) {
+      try {
+        ringAudioContextRef.current.close();
+      } catch (e) {}
+      ringAudioContextRef.current = null;
+    }
+  };
+
   // Speech Recognition Language Mapping
   const getRecognitionLang = useCallback(() => {
     if (languageMode === "ta") return "ta-IN";
     if (languageMode === "en") return "en-IN";
-    // For auto or tanglish, Indian English accurately parses both Tanglish and English
     return "en-IN";
   }, [languageMode]);
 
-  // Initialize Speech Recognition with Auto-Restart Loop
+  // Initialize Speech Recognition
   const initSpeechRecognition = useCallback(() => {
     if (typeof window === "undefined") return;
 
     const SpeechRecognition =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
-    if (!SpeechRecognition) {
-      console.warn("Web SpeechRecognition is not supported on this browser.");
-      return;
-    }
+    if (!SpeechRecognition) return;
 
     try {
       if (recognitionRef.current) {
@@ -189,7 +246,6 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
       let finalSpeech = "";
 
       reco.onresult = (event: any) => {
-        // Discard any sound picked up while AI itself is talking
         if (isAiSpeakingRef.current) return;
 
         let interimText = "";
@@ -205,7 +261,7 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
         if (candidateText) {
           setInputQuery(candidateText);
 
-          // Automatically send after user finishes talking (1.1s silence pause)
+          // Auto-send when user finishes utterance (1.1s natural pause)
           if (recognitionTimer) clearTimeout(recognitionTimer);
           recognitionTimer = setTimeout(() => {
             if (candidateText && !isAiSpeakingRef.current && isCallActiveRef.current) {
@@ -226,7 +282,6 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
 
       reco.onend = () => {
         setIsMicListening(false);
-        // Continuous listening auto-restart loop
         if (isCallActiveRef.current && !isAiSpeakingRef.current && isMicActive && !isMuted) {
           try {
             reco.start();
@@ -244,7 +299,7 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
     initSpeechRecognition();
   }, [initSpeechRecognition]);
 
-  // Start Mic Listening Safely
+  // Start & Stop Mic Safely
   const startMicListening = () => {
     if (!recognitionRef.current || !isMicActive || isMuted || isAiSpeakingRef.current) return;
     try {
@@ -279,15 +334,15 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
     setIsAiSpeaking(false);
   };
 
-  // Real Fluent Neural Audio Player (Strict Single Voice Playback, No Overlapping)
+  // Real Fluent Neural Audio Player (Normal Human Conversational Speed, Single-voice only)
   const speakAI = (audioText: string, ttsLang: "en" | "ta" = "ta") => {
     if (isMuted) return;
 
-    // 1. Temporarily mute mic so AI doesn't pick up its own speaker sound
+    // 1. Temporarily pause mic so AI doesn't pick up speaker sound
     stopMicListening();
     setIsAiSpeaking(true);
 
-    // 2. Terminate any previous audio completely
+    // 2. Kill any previous audio completely
     stopVoice();
     setIsAiSpeaking(true);
 
@@ -306,21 +361,20 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
       const audio = new Audio(ttsUrl);
       audioRef.current = audio;
 
-      // Male vs Female Voice Tone Cadence:
-      // Female (Kavya): 1.02x crisp, bright friendly counselor cadence
-      // Male (Vikram): 0.90x deeper, steady authoritative counseling tone
+      // Realistic Human Speaking Cadence (1.14x - 1.18x gives crisp, natural counselor tempo)
       const currentGender = voiceGenderRef.current;
-      audio.playbackRate = currentGender === "female" ? 1.02 : 0.90;
+      const speedMultiplier = currentGender === "female" ? voiceSpeed : voiceSpeed * 0.97;
+      audio.playbackRate = Math.max(0.85, Math.min(1.4, speedMultiplier));
 
       audio.onended = () => {
         setIsAiSpeaking(false);
         audioRef.current = null;
-        // Reactivate Mic immediately so student can speak next!
+        // Reactivate Mic immediately so student can talk!
         setTimeout(() => {
           if (isCallActiveRef.current && isMicActive && !isMuted) {
             startMicListening();
           }
-        }, 300);
+        }, 250);
       };
 
       audio.onerror = (e) => {
@@ -331,7 +385,7 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
           if (isCallActiveRef.current && isMicActive && !isMuted) {
             startMicListening();
           }
-        }, 300);
+        }, 250);
       };
 
       audio.play().catch((playErr) => {
@@ -346,15 +400,16 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
     }
   };
 
-  // Modal Open Lifecycle (Triggered ONLY when modal opens or lead changes)
+  // Modal Open Lifecycle
   useEffect(() => {
     if (!isOpen) {
       handleEndCall(false);
+      stopTelephoneRing();
       return;
     }
 
     // Reset Call States
-    setCallState("ringing");
+    setCallState(isInbound ? "ringing" : "connected");
     setCallSeconds(0);
     setAutoAnswerTimer(autoAnswerDelaySeconds);
     setDemoBooked(false);
@@ -364,7 +419,6 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
     const currentGender = voiceGenderRef.current;
     const personaName = currentGender === "female" ? "Kavya" : "Vikram";
 
-    // Initial greeting in natural Tanglish + Tamil
     const initialWelcomeTanglish = `Vanakkam! Welcome to WeGrow Skill Campus, Sivakasi. Naan ${personaName}, WeGrow Admissions Counselor. Ungalukku entha course pathi details venum — Full Stack, AI, or Digital Marketing-ah?`;
     const initialWelcomeTamil = `வணக்கம்! வீக்ரோ ஸ்கில் கேம்பஸுக்கு உங்களை அன்போடு வரவேற்கிறோம். நான் உங்கள் கவுன்சிலர் ${
       currentGender === "female" ? "காவ்யா" : "விக்ரம்"
@@ -381,31 +435,66 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
       },
     ]);
 
-    // Handle Auto-Answer Countdown (If staff doesn't answer within 2s, AI picks up automatically!)
-    let countdownInterval: NodeJS.Timeout | null = null;
-    countdownInterval = setInterval(() => {
-      setAutoAnswerTimer((prev) => {
-        if (prev <= 1) {
-          if (countdownInterval) clearInterval(countdownInterval);
-          connectCall(initialWelcomeTamil, "ta");
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    // If inbound call, start realistic telephone ringing tone!
+    let stopRingSound: () => void = () => {};
+    if (isInbound) {
+      stopRingSound = startTelephoneRing() || (() => {});
+    } else {
+      // Outbound call: connect immediately
+      connectCall(initialWelcomeTamil, "ta");
+    }
+
+    // Auto-Answer Countdown: If staff does NOT attend within delay, AI takes over automatically!
+    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+
+    if (isInbound) {
+      countdownIntervalRef.current = setInterval(() => {
+        setAutoAnswerTimer((prev) => {
+          if (prev <= 1) {
+            if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+            stopTelephoneRing();
+            connectCall(initialWelcomeTamil, "ta");
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
 
     return () => {
-      if (countdownInterval) clearInterval(countdownInterval);
+      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+      stopRingSound();
+      stopTelephoneRing();
       stopTimer();
       stopVoice();
     };
-  }, [isOpen, lead]); // Note: voiceGender is intentionally NOT here to prevent restarting the call!
+  }, [isOpen, lead, isInbound, autoAnswerDelaySeconds, startTelephoneRing]);
 
   // Connect Call & Start AI Speaking
   const connectCall = (welcomeSpeech: string, ttsLang: "en" | "ta" = "ta") => {
+    stopTelephoneRing();
     setCallState("connected");
     startTimer();
     speakAI(welcomeSpeech, ttsLang);
+  };
+
+  // Staff Answers Call Manually (Human Takeover)
+  const handleStaffManualAnswer = () => {
+    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+    stopTelephoneRing();
+    triggerHumanTakeover();
+    startTimer();
+  };
+
+  // Force AI to Answer Immediately
+  const handleForceAIAnswer = () => {
+    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+    stopTelephoneRing();
+    const currentGender = voiceGenderRef.current;
+    const initialWelcomeTamil = `வணக்கம்! வீக்ரோ ஸ்கில் கேம்பஸுக்கு உங்களை அன்போடு வரவேற்கிறோம். நான் உங்கள் கவுன்சிலர் ${
+      currentGender === "female" ? "காவ்யா" : "விக்ரம்"
+    }. உங்களுக்கு எந்த கோர்ஸ் பத்தி விவரங்கள் வேணும்?`;
+    connectCall(initialWelcomeTamil, "ta");
   };
 
   // Timer Handlers
@@ -423,25 +512,12 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
     }
   };
 
-  // Waveform Animation Loop
+  // Smooth scroll to latest transcript message
   useEffect(() => {
-    let animId: NodeJS.Timeout;
-    if (isAiSpeaking || isMicListening) {
-      animId = setInterval(() => {
-        setWaveLevels((prev) =>
-          prev.map(() => Math.floor(Math.random() * 65) + 15)
-        );
-      }, 100);
-    } else {
-      setWaveLevels([15, 20, 15, 20, 15, 20, 15, 20]);
-    }
-    return () => clearInterval(animId);
-  }, [isAiSpeaking, isMicListening]);
-
-  // Auto-scroll transcript
-  useEffect(() => {
-    transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isAiThinking]);
+    requestAnimationFrame(() => {
+      transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    });
+  }, [messages.length, isAiThinking]);
 
   // Handle User Message (via Mic or Typed Input)
   const handleUserUtterance = async (queryText: string) => {
@@ -559,12 +635,13 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
   // Trigger Human Takeover
   const triggerHumanTakeover = () => {
     setCallState("human_transferred");
+    stopTelephoneRing();
     stopVoice();
     addToast("📞 Call Handed Over to Human Counselor!", "info");
     const systemMsg: Message = {
       id: `sys-${Date.now()}`,
       sender: "system",
-      text: "⚡ Call Handed Over to Human Counselor. AI is now silently transcribing in the background.",
+      text: "⚡ Call Handed Over to Human Counselor. AI is now transcribing in background.",
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     };
     setMessages((prev) => [...prev, systemMsg]);
@@ -572,6 +649,7 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
 
   // End Call & Synchronize with CRM Database
   const handleEndCall = (shouldSave = true) => {
+    stopTelephoneRing();
     stopTimer();
     stopVoice();
     setCallState("ended");
@@ -694,7 +772,6 @@ Reach our Admissions Desk: +91 99523 37331`;
       "info"
     );
 
-    // Short delay to ensure previous audio stream is fully disposed
     setTimeout(() => {
       speakAI(textToSpeak, ttsLang);
     }, 100);
@@ -716,6 +793,15 @@ Reach our Admissions Desk: +91 99523 37331`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/80 backdrop-blur-md animate-in fade-in duration-200">
+      
+      {/* Pure CSS Keyframe Animation for silky smooth 60fps waveform (Zero React re-renders) */}
+      <style jsx global>{`
+        @keyframes soundWavePulse {
+          0% { height: 18%; opacity: 0.5; }
+          100% { height: 95%; opacity: 1; }
+        }
+      `}</style>
+
       <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-3xl overflow-hidden flex flex-col max-h-[92vh]">
         
         {/* ========================================================================= */}
@@ -804,7 +890,7 @@ Reach our Admissions Desk: +91 99523 37331`;
                 }`}
                 title="English Speech & Audio"
               >
-                English
+                EN
               </button>
               <button
                 type="button"
@@ -832,6 +918,49 @@ Reach our Admissions Desk: +91 99523 37331`;
               </button>
             </div>
 
+            {/* Speed Selector: 1.0x, 1.16x (Normal Human), 1.25x (Brisk) */}
+            <div className="bg-white/15 backdrop-blur border border-white/20 p-0.5 rounded-xl flex items-center text-xs font-semibold text-white">
+              <button
+                type="button"
+                onClick={() => {
+                  setVoiceSpeed(1.0);
+                  addToast("Speed: 1.0x (Slow & Clear)", "info");
+                }}
+                className={`px-1.5 py-1 rounded-lg text-[10px] ${
+                  voiceSpeed === 1.0 ? "bg-white text-slate-900 font-bold" : "text-white/70"
+                }`}
+                title="Normal Speed"
+              >
+                1.0x
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setVoiceSpeed(1.16);
+                  addToast("Speed: 1.16x (Natural Human Conversation Speed)", "info");
+                }}
+                className={`px-1.5 py-1 rounded-lg text-[10px] ${
+                  voiceSpeed === 1.16 ? "bg-white text-slate-900 font-bold" : "text-white/70"
+                }`}
+                title="Natural Human Conversational Speed (Recommended)"
+              >
+                1.16x
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setVoiceSpeed(1.25);
+                  addToast("Speed: 1.25x (Brisk Cadence)", "info");
+                }}
+                className={`px-1.5 py-1 rounded-lg text-[10px] ${
+                  voiceSpeed === 1.25 ? "bg-white text-slate-900 font-bold" : "text-white/70"
+                }`}
+                title="Brisk Speed"
+              >
+                1.25x
+              </button>
+            </div>
+
             {/* Close Button */}
             <button
               onClick={() => {
@@ -844,6 +973,56 @@ Reach our Admissions Desk: +91 99523 37331`;
             </button>
           </div>
         </div>
+
+        {/* ========================================================================= */}
+        {/* REALISTIC INBOUND CALL RINGING ALERT BANNER (If staff is away) */}
+        {/* ========================================================================= */}
+        {callState === "ringing" && (
+          <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 text-white p-4 mx-4 sm:mx-6 my-3 rounded-2xl shadow-lg border border-amber-400/40 animate-in slide-in-from-top-3 duration-200">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-white/20 border border-white/30 flex items-center justify-center animate-bounce shrink-0 shadow-inner">
+                  <Phone className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="bg-white/30 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+                      🔔 Phone Ringing...
+                    </span>
+                    <span className="text-amber-100 text-xs font-bold animate-pulse">
+                      Auto-Transfer to AI in {autoAnswerTimer}s
+                    </span>
+                  </div>
+                  <h4 className="text-sm sm:text-base font-bold text-white mt-0.5">
+                    {lead ? lead.studentName : "Student Enquiry"} ({phoneNumber})
+                  </h4>
+                  <p className="text-[11px] text-white/85">
+                    Staff at desk can click <strong>Staff Pick Up</strong>, or let timer expire for <strong>AI Auto-Answer</strong>!
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleStaffManualAnswer}
+                  className="bg-white hover:bg-slate-100 text-slate-900 px-3 py-2 rounded-xl text-xs font-bold shadow-md transition-all flex items-center gap-1.5"
+                >
+                  <User className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Staff Pick Up</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleForceAIAnswer}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-md transition-all flex items-center gap-1.5 animate-pulse"
+                >
+                  <Bot className="w-3.5 h-3.5 text-emerald-200" />
+                  <span>Let AI Answer Now</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ========================================================================= */}
         {/* SUBHEADER: Call Timer, Real-time Mic Activity & Waveform */}
@@ -885,7 +1064,7 @@ Reach our Admissions Desk: +91 99523 37331`;
                   <>
                     <Volume2 className="w-3 h-3 text-emerald-600 animate-bounce" />
                     <span>
-                      {voiceGender === "female" ? "Kavya Speaking" : "Vikram Speaking"} ({activeCallLang})
+                      {voiceGender === "female" ? "Kavya Speaking" : "Vikram Speaking"} ({activeCallLang} - {voiceSpeed}x)
                     </span>
                   </>
                 ) : isMicListening ? (
@@ -904,21 +1083,28 @@ Reach our Admissions Desk: +91 99523 37331`;
             )}
           </div>
 
-          {/* Sound Wave Animation */}
-          <div className="flex items-center gap-1.5">
+          {/* Sound Wave Animation (Pure CSS GPU Animated - Zero React re-renders) */}
+          <div className="flex items-center gap-2">
             <div className="flex items-end gap-1 h-5 w-20">
-              {waveLevels.map((lvl, idx) => (
+              {[35, 75, 50, 95, 60, 85, 45, 70].map((heightPct, idx) => (
                 <div
                   key={idx}
-                  style={{ height: `${lvl}%` }}
-                  className={`w-1.5 rounded-full transition-all duration-100 ${
+                  style={{
+                    height: isAiSpeaking || isMicListening ? `${heightPct}%` : "20%",
+                    animation: isAiSpeaking
+                      ? `soundWavePulse 0.65s ease-in-out infinite alternate ${idx * 0.08}s`
+                      : isMicListening
+                      ? `soundWavePulse 0.5s ease-in-out infinite alternate ${idx * 0.06}s`
+                      : "none",
+                  }}
+                  className={`w-1.5 rounded-full transition-all duration-150 ${
                     isAiSpeaking
                       ? "bg-emerald-500"
                       : isMicListening
                       ? "bg-indigo-500"
                       : "bg-slate-300"
                   }`}
-                ></div>
+                />
               ))}
             </div>
 
