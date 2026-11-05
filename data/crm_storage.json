@@ -23,8 +23,17 @@
         }
       ],
       "id": "LD-1017",
-      "callCount": 3,
+      "callCount": 4,
       "callHistory": [
+        {
+          "id": "ch-1793866595684",
+          "callDate": "2026-11-05",
+          "callTime": "01:46 PM",
+          "callerName": "Kavya (AI Voice Agent)",
+          "duration": "0m 12s",
+          "outcome": "Enquiry Completed",
+          "remarks": "[AI Telecaller] Intent: Student enquired about WeGrow programs | Key Discussion: Discussed curriculum and Sivakasi campus visit | Next Action: Follow up with course brochure on WhatsApp"
+        },
         {
           "id": "ch-1793863234678",
           "callDate": "2026-11-05",
@@ -54,7 +63,7 @@
         }
       ],
       "lastCallDate": "2026-11-05",
-      "lastCallOutcome": "[AI Telecaller] Intent: Course exploration call | Key Discussion: Introduced top career tracks and offered counseling guidance | Next Action: Qualify student background and career interest"
+      "lastCallOutcome": "[AI Telecaller] Intent: Student enquired about WeGrow programs | Key Discussion: Discussed curriculum and Sivakasi campus visit | Next Action: Follow up with course brochure on WhatsApp"
     },
     {
       "id": "LD-1000",
@@ -506,88 +515,18 @@
   ],
   "followUps": [
     {
-      "id": "fu-1793865587057",
+      "id": "fu-1793866595684",
       "leadId": "LD-1017",
       "studentName": "Incoming Lead (AI Call)",
       "phone": "+91 99523 37331",
-      "course": "General Enquiry",
+      "course": "Full Stack Web Development (MERN + Next.js)",
       "assignedCaller": "Kavya (AI Voice Agent)",
-      "lastContacted": "2026-11-05 01:29 PM",
-      "followUpDate": "2026-11-05",
-      "followUpTime": "11:00 AM",
-      "status": "Today",
-      "priority": "Warm",
-      "remarks": "[AI Telecaller] Intent: Inquired about Full Stack Web Development course fees | Key Discussion: Provided 55,000 INR fee details and installment options | Next Action: Encourage booking a free demo class at the Sivakasi campus"
-    },
-    {
-      "id": "fu-1793864177364",
-      "leadId": "LD-1017",
-      "studentName": "Incoming Lead (AI Call)",
-      "phone": "+91 99523 37331",
-      "course": "General Enquiry",
-      "assignedCaller": "Vikram (AI Voice Agent)",
-      "lastContacted": "2026-11-05 01:06 PM",
+      "lastContacted": "2026-11-05 01:46 PM",
       "followUpDate": "2026-11-05",
       "followUpTime": "11:00 AM",
       "status": "Today",
       "priority": "Hot",
-      "remarks": "[AI Telecaller] Intent: Course exploration call | Key Discussion: Introduced top career tracks and offered counseling guidance | Next Action: Qualify student background and career interest"
-    },
-    {
-      "id": "fu-1793863281929",
-      "leadId": "LD-1017",
-      "studentName": "Incoming Lead (AI Call)",
-      "phone": "+91 99523 37331",
-      "course": "General Enquiry",
-      "assignedCaller": "Kavya (AI Voice Agent)",
-      "lastContacted": "2026-11-05 12:51 PM",
-      "followUpDate": "2026-11-05",
-      "followUpTime": "11:00 AM",
-      "status": "Today",
-      "priority": "Hot",
-      "remarks": "[AI Telecaller] Intent: Course exploration call | Key Discussion: Introduced top career tracks and offered counseling guidance | Next Action: Qualify student background and career interest"
-    },
-    {
-      "id": "fu-1793863234678",
-      "leadId": "LD-1017",
-      "studentName": "Incoming Lead (AI Call)",
-      "phone": "+91 99523 37331",
-      "course": "General Enquiry",
-      "assignedCaller": "Kavya (AI Voice Agent)",
-      "lastContacted": "2026-11-05 12:50 PM",
-      "followUpDate": "2026-11-05",
-      "followUpTime": "11:00 AM",
-      "status": "Today",
-      "priority": "Hot",
-      "remarks": "[AI Telecaller] Intent: Course exploration call | Key Discussion: Introduced top career tracks and offered counseling guidance | Next Action: Qualify student background and career interest"
-    },
-    {
-      "id": "fu-1793863230087",
-      "leadId": "LD-1017",
-      "studentName": "Incoming Lead (AI Call)",
-      "phone": "+91 99523 37331",
-      "course": "General Enquiry",
-      "assignedCaller": "Kavya (AI Voice Agent)",
-      "lastContacted": "2026-11-05 12:50 PM",
-      "followUpDate": "2026-11-05",
-      "followUpTime": "11:00 AM",
-      "status": "Today",
-      "priority": "Hot",
-      "remarks": "[AI Telecaller] Intent: Course exploration call | Key Discussion: Introduced top career tracks and offered counseling guidance | Next Action: Qualify student background and career interest"
-    },
-    {
-      "id": "fu-1793863223069",
-      "leadId": "LD-1017",
-      "studentName": "Incoming Lead (AI Call)",
-      "phone": "+91 99523 37331",
-      "course": "General Enquiry",
-      "assignedCaller": "Kavya (AI Voice Agent)",
-      "lastContacted": "2026-11-05 12:50 PM",
-      "followUpDate": "2026-11-05",
-      "followUpTime": "11:00 AM",
-      "status": "Today",
-      "priority": "Hot",
-      "remarks": "[AI Telecaller] Intent: Course exploration call | Key Discussion: Introduced top career tracks and offered counseling guidance | Next Action: Qualify student background and career interest"
+      "remarks": "[AI Telecaller] Intent: Student enquired about WeGrow programs | Key Discussion: Discussed curriculum and Sivakasi campus visit | Next Action: Follow up with course brochure on WhatsApp"
     },
     {
       "id": "fu-1793772355721",
@@ -758,5 +697,5 @@
       "remarks": "Orientation briefing completed. Admitted."
     }
   ],
-  "savedAt": "2026-11-05T07:59:47.419Z"
+  "savedAt": "2026-11-05T08:16:35.730Z"
 }

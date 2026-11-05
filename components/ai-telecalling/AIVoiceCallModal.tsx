@@ -134,6 +134,8 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isAiSpeakingRef = useRef<boolean>(false);
   const isCallActiveRef = useRef<boolean>(false);
+  const speechTokenRef = useRef<number>(0);
+  const chatAbortControllerRef = useRef<AbortController | null>(null);
 
   // Format Duration mm:ss
   const formatTimer = (secs: number) => {
@@ -176,7 +178,36 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
     return true;
   }, []);
 
-  // Initialize Speech Recognition
+  // Stop ALL voice output completely (Guarantees instant silence and zero overlapping audio)
+  const stopVoice = useCallback(() => {
+    // Invalidate any ongoing/pending speech token
+    speechTokenRef.current++;
+
+    // 1. Forcefully stop and detach HTML5 Audio
+    if (audioRef.current) {
+      try {
+        audioRef.current.onended = null;
+        audioRef.current.onerror = null;
+        audioRef.current.onplay = null;
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        audioRef.current.src = "";
+      } catch (e) {}
+      audioRef.current = null;
+    }
+
+    // 2. Forcefully kill Web SpeechSynthesis in Chromium
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      try {
+        window.speechSynthesis.pause();
+        window.speechSynthesis.cancel();
+      } catch (e) {}
+    }
+
+    setIsAiSpeaking(false);
+  }, []);
+
+  // Initialize Speech Recognition with Real-Time ChatGPT-like Barge-In (Interruption)
   const initSpeechRecognition = useCallback(() => {
     if (typeof window === "undefined") return;
 
@@ -206,8 +237,6 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
       let finalSpeech = "";
 
       reco.onresult = (event: any) => {
-        if (isAiSpeakingRef.current) return;
-
         let interimText = "";
         for (let i = event.resultIndex; i < event.results.length; ++i) {
           if (event.results[i].isFinal) {
@@ -219,12 +248,17 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
 
         const candidateText = (finalSpeech + interimText).trim();
         if (candidateText) {
+          // ChatGPT Barge-In: If user starts speaking while AI is talking, cut AI off instantly!
+          if (isAiSpeakingRef.current) {
+            stopVoice();
+          }
+
           setInputQuery(candidateText);
 
           // Auto-send when caller stops speaking (1.0s natural pause)
           if (recognitionTimer) clearTimeout(recognitionTimer);
           recognitionTimer = setTimeout(() => {
-            if (candidateText && !isAiSpeakingRef.current && isCallActiveRef.current) {
+            if (candidateText && isCallActiveRef.current) {
               const toSend = candidateText;
               finalSpeech = "";
               setInputQuery("");
@@ -256,161 +290,202 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
     } catch (e) {
       console.warn("Recognition init error:", e);
     }
-  }, [getRecognitionLang, isMicActive, isMuted]);
+  }, [getRecognitionLang, isMicActive, isMuted, stopVoice]);
 
   useEffect(() => {
     initSpeechRecognition();
   }, [initSpeechRecognition]);
 
   // Start & Stop Mic Safely
-  const startMicListening = () => {
-    if (!recognitionRef.current || !isMicActive || isMuted || isAiSpeakingRef.current) return;
+  const startMicListening = useCallback(() => {
+    if (!recognitionRef.current || !isMicActive || isMuted || isAiSpeakingRef.current || !isCallActiveRef.current) return;
     try {
       recognitionRef.current.start();
       setIsMicListening(true);
     } catch (e: any) {
       setIsMicListening(true);
     }
-  };
+  }, [isMicActive, isMuted]);
 
-  const stopMicListening = () => {
+  const stopMicListening = useCallback(() => {
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
+        recognitionRef.current.abort();
       } catch (e) {}
     }
     setIsMicListening(false);
-  };
+  }, []);
 
-  // Stop ALL voice output completely (Guarantees zero overlapping audio)
-  const stopVoice = () => {
-    if (audioRef.current) {
-      try {
-        audioRef.current.pause();
-        audioRef.current.onended = null;
-        audioRef.current.onerror = null;
-        audioRef.current.src = "";
-      } catch (e) {}
-      audioRef.current = null;
-    }
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      try {
-        window.speechSynthesis.cancel();
-      } catch (e) {}
-    }
-    setIsAiSpeaking(false);
-  };
-
-  // Fallback to Web Speech API if HTML5 audio is blocked
-  const speakViaSpeechSynthesis = (text: string, lang: "en" | "ta") => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
-      setIsAiSpeaking(false);
-      startMicListening();
-      return;
-    }
-
-    try {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = lang === "en" ? "en-IN" : "ta-IN";
-      utterance.rate = voiceSpeedRef.current;
-      utterance.pitch = voiceGenderRef.current === "female" ? 1.05 : 0.95;
-
-      const voices = window.speechSynthesis.getVoices();
-      if (voices && voices.length) {
-        if (lang === "en") {
-          const v =
-            voices.find(
-              (v) =>
-                v.lang.includes("en-IN") &&
-                (voiceGenderRef.current === "female"
-                  ? v.name.toLowerCase().includes("female") || v.name.includes("Neerja")
-                  : v.name.toLowerCase().includes("male") || v.name.includes("Prabhat"))
-            ) || voices.find((v) => v.lang.includes("en"));
-          if (v) utterance.voice = v;
-        } else {
-          const v = voices.find((v) => v.lang.includes("ta"));
-          if (v) utterance.voice = v;
+  // Web Speech API Voice Player with Genuine Male (Vikram) & Female (Kavya) Persona Voicing
+  const speakViaSpeechSynthesis = useCallback(
+    (text: string, lang: "en" | "ta", gender: "female" | "male", token: number) => {
+      if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+        if (token === speechTokenRef.current) {
+          setIsAiSpeaking(false);
+          startMicListening();
         }
+        return;
       }
 
-      utterance.onend = () => {
-        setIsAiSpeaking(false);
-        setTimeout(() => {
-          if (isCallActiveRef.current && isMicActive && !isMuted) {
+      // Stale or cancelled token check
+      if (token !== speechTokenRef.current || !isCallActiveRef.current) return;
+
+      try {
+        window.speechSynthesis.pause();
+        window.speechSynthesis.cancel();
+
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = lang === "en" ? "en-IN" : "ta-IN";
+        utterance.rate = voiceSpeedRef.current;
+        utterance.pitch = gender === "female" ? 1.08 : 0.82; // Feminine Kavya pitch vs Masculine Vikram deep pitch
+
+        const voices = window.speechSynthesis.getVoices();
+        if (voices && voices.length) {
+          if (gender === "male") {
+            const maleVoice =
+              voices.find(
+                (v) =>
+                  (v.lang.includes("en-IN") || v.lang.includes("ta")) &&
+                  (v.name.toLowerCase().includes("male") ||
+                    v.name.includes("Prabhat") ||
+                    v.name.includes("David") ||
+                    v.name.includes("Ravi"))
+              ) ||
+              voices.find(
+                (v) =>
+                  v.name.toLowerCase().includes("male") ||
+                  v.name.includes("David") ||
+                  v.name.includes("Mark") ||
+                  v.name.includes("George")
+              );
+            if (maleVoice) utterance.voice = maleVoice;
+          } else {
+            const femaleVoice =
+              voices.find(
+                (v) =>
+                  (v.lang.includes("en-IN") || v.lang.includes("ta")) &&
+                  (v.name.toLowerCase().includes("female") ||
+                    v.name.includes("Neerja") ||
+                    v.name.includes("Heera") ||
+                    v.name.includes("Zira"))
+              ) ||
+              voices.find(
+                (v) =>
+                  v.name.toLowerCase().includes("female") ||
+                  v.name.includes("Zira") ||
+                  v.name.includes("Hazel")
+              );
+            if (femaleVoice) utterance.voice = femaleVoice;
+          }
+        }
+
+        utterance.onend = () => {
+          if (token === speechTokenRef.current) {
+            setIsAiSpeaking(false);
+            setTimeout(() => {
+              if (isCallActiveRef.current && isMicActive && !isMuted) {
+                startMicListening();
+              }
+            }, 200);
+          }
+        };
+
+        utterance.onerror = () => {
+          if (token === speechTokenRef.current) {
+            setIsAiSpeaking(false);
             startMicListening();
           }
-        }, 200);
-      };
+        };
 
-      utterance.onerror = () => {
+        window.speechSynthesis.speak(utterance);
+      } catch (e) {
+        console.warn("SpeechSynthesis error:", e);
+        if (token === speechTokenRef.current) {
+          setIsAiSpeaking(false);
+          startMicListening();
+        }
+      }
+    },
+    [isMicActive, isMuted, startMicListening]
+  );
+
+  // Dedicated Single-Stream AI Audio Player (Zero overlaps, Single persona voice)
+  const speakAI = useCallback(
+    async (audioText: string, ttsLang: "en" | "ta" = "ta") => {
+      if (isMuted || !isCallActiveRef.current) return;
+
+      const cleanText = (audioText || "").trim();
+      if (!cleanText) {
         setIsAiSpeaking(false);
         startMicListening();
-      };
+        return;
+      }
 
-      window.speechSynthesis.speak(utterance);
-    } catch (e) {
-      console.warn("SpeechSynthesis error:", e);
-      setIsAiSpeaking(false);
-      startMicListening();
-    }
-  };
+      // Stop any and all previous audio/synthesis immediately
+      stopVoice();
 
-  // Real Fluent Neural Audio Player (Dual-Engine: Neural MP3 + SpeechSynthesis Fallback)
-  const speakAI = async (audioText: string, ttsLang: "en" | "ta" = "ta") => {
-    if (isMuted) return;
-
-    // 1. Temporarily pause mic so AI doesn't hear itself
-    stopMicListening();
-    setIsAiSpeaking(true);
-
-    // 2. Kill any previous audio completely
-    stopVoice();
-    setIsAiSpeaking(true);
-
-    const cleanText = (audioText || "").trim();
-    if (!cleanText) {
-      setIsAiSpeaking(false);
-      startMicListening();
-      return;
-    }
-
-    try {
-      const ttsUrl = `/api/ai/telecalling/tts?text=${encodeURIComponent(
-        cleanText
-      )}&lang=${encodeURIComponent(ttsLang)}`;
-
-      const audio = new Audio(ttsUrl);
-      audioRef.current = audio;
+      // Issue a fresh speech token for this single utterance
+      const myToken = ++speechTokenRef.current;
+      setIsAiSpeaking(true);
 
       const currentGender = voiceGenderRef.current;
-      const speedMultiplier = currentGender === "female" ? voiceSpeedRef.current : voiceSpeedRef.current * 0.97;
-      audio.playbackRate = Math.max(0.85, Math.min(1.4, speedMultiplier));
 
-      audio.onended = () => {
-        setIsAiSpeaking(false);
-        audioRef.current = null;
+      // 👨 Vikram (Male voice): Use male SpeechSynthesis directly with deep masculine pitch!
+      // This completely avoids playing the female Google Translate audio when Male is selected!
+      if (currentGender === "male") {
+        speakViaSpeechSynthesis(cleanText, ttsLang, "male", myToken);
+        return;
+      }
+
+      // 👩 Kavya (Female voice): Use Google Neural TTS with single fallback guarantee
+      let hasFallenBack = false;
+
+      try {
+        const ttsUrl = `/api/ai/telecalling/tts?text=${encodeURIComponent(
+          cleanText
+        )}&lang=${encodeURIComponent(ttsLang)}`;
+
+        const audio = new Audio(ttsUrl);
+        audioRef.current = audio;
+        audio.playbackRate = Math.max(0.85, Math.min(1.4, voiceSpeedRef.current));
+
+        audio.onended = () => {
+          if (myToken !== speechTokenRef.current) return;
+          setIsAiSpeaking(false);
+          audioRef.current = null;
+          setAudioNeedsInteraction(false);
+          setTimeout(() => {
+            if (isCallActiveRef.current && isMicActive && !isMuted) {
+              startMicListening();
+            }
+          }, 200);
+        };
+
+        audio.onerror = () => {
+          if (myToken !== speechTokenRef.current || hasFallenBack) return;
+          hasFallenBack = true;
+          audioRef.current = null;
+          speakViaSpeechSynthesis(cleanText, ttsLang, "female", myToken);
+        };
+
+        await audio.play();
+        if (myToken !== speechTokenRef.current) {
+          // Cancelled during play() promise resolution
+          audio.pause();
+          return;
+        }
         setAudioNeedsInteraction(false);
-        setTimeout(() => {
-          if (isCallActiveRef.current && isMicActive && !isMuted) {
-            startMicListening();
-          }
-        }, 200);
-      };
-
-      audio.onerror = () => {
+      } catch (playErr: any) {
+        if (myToken !== speechTokenRef.current || hasFallenBack) return;
+        hasFallenBack = true;
         audioRef.current = null;
-        speakViaSpeechSynthesis(cleanText, ttsLang);
-      };
-
-      await audio.play();
-      setAudioNeedsInteraction(false);
-    } catch (playErr: any) {
-      audioRef.current = null;
-      setAudioNeedsInteraction(true);
-      speakViaSpeechSynthesis(cleanText, ttsLang);
-    }
-  };
+        setAudioNeedsInteraction(true);
+        speakViaSpeechSynthesis(cleanText, ttsLang, "female", myToken);
+      }
+    },
+    [isMuted, speakViaSpeechSynthesis, stopVoice, startMicListening]
+  );
 
   // Modal Open Lifecycle
   useEffect(() => {
@@ -453,14 +528,22 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
     }
 
     // Auto-Answer Countdown
-    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
 
     if (isInbound) {
       countdownIntervalRef.current = setInterval(() => {
         setAutoAnswerTimer((prev) => {
           if (prev <= 1) {
-            if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-            connectCall(initialWelcomeTamil, "ta");
+            if (countdownIntervalRef.current) {
+              clearInterval(countdownIntervalRef.current);
+              countdownIntervalRef.current = null;
+            }
+            if (!isCallActiveRef.current) {
+              connectCall(initialWelcomeTamil, "ta");
+            }
             return 0;
           }
           return prev - 1;
@@ -469,7 +552,10 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
     }
 
     return () => {
-      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
+      }
       stopTimer();
       stopVoice();
     };
@@ -477,6 +563,7 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
 
   // Connect Call & Start AI Speaking
   const connectCall = (welcomeSpeech: string, ttsLang: "en" | "ta" = "ta") => {
+    isCallActiveRef.current = true;
     setCallState("connected");
     startTimer();
     speakAI(welcomeSpeech, ttsLang);
@@ -484,14 +571,20 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
 
   // Staff Answers Call Manually (Human Takeover)
   const handleStaffManualAnswer = () => {
-    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
     triggerHumanTakeover();
     startTimer();
   };
 
   // Force AI to Answer Immediately
   const handleForceAIAnswer = () => {
-    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
     const currentGender = voiceGenderRef.current;
     const initialWelcomeTamil = `வணக்கம்! வீக்ரோ ஸ்கில் கேம்பஸுக்கு உங்களை அன்போடு வரவேற்கிறோம். நான் உங்கள் கவுன்சிலர் ${
       currentGender === "female" ? "காவ்யா" : "விக்ரம்"
@@ -521,7 +614,16 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
 
   // Handle User Message (via Mic or Typed Input)
   const handleUserUtterance = async (queryText: string) => {
-    if (!queryText.trim() || callState === "ended") return;
+    if (!queryText.trim() || !isCallActiveRef.current) return;
+
+    // Abort any ongoing chat generation
+    if (chatAbortControllerRef.current) {
+      try {
+        chatAbortControllerRef.current.abort();
+      } catch (e) {}
+    }
+    const controller = new AbortController();
+    chatAbortControllerRef.current = controller;
 
     const userMsg: Message = {
       id: `msg-${Date.now()}`,
@@ -540,10 +642,11 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
           ? localStorage.getItem("wegrow_gemini_api_key") || ""
           : "";
 
-      // Call Gemini Telecalling Trilingual Route
+      // Call Gemini Telecalling Trilingual Route with abort signal
       const res = await fetch("/api/ai/telecalling/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           userMessage: queryText,
           apiKey: savedApiKey,
@@ -560,8 +663,15 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
         }),
       });
 
+      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+
       const data = await res.json();
       setIsAiThinking(false);
+
+      // CRITICAL: If the caller hung up while Gemini was generating, exit immediately
+      if (!isCallActiveRef.current) {
+        return;
+      }
 
       if (data && (data.reply || data.spokenAudioText || data.tamilSpeech)) {
         const displayText = data.reply || data.spokenAudioText;
@@ -583,8 +693,10 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
 
         setMessages((prev) => [...prev, aiMsg]);
 
-        // Speak response in matching language audio
-        speakAI(speechAudio, ttsLang);
+        // Speak response ONLY IF call is still active
+        if (isCallActiveRef.current) {
+          speakAI(speechAudio, ttsLang);
+        }
 
         if (data.leadQualification) {
           setQualification(data.leadQualification);
@@ -607,9 +719,15 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
           setCallSummary(data.summaryBullets);
         }
       }
-    } catch (err) {
+    } catch (err: any) {
+      if (err.name === "AbortError") {
+        return; // Caller interrupted or hung up
+      }
       console.error("AI Telecalling chat error:", err);
       setIsAiThinking(false);
+
+      if (!isCallActiveRef.current) return;
+
       const fallbackReply =
         "Kandippa! Ungaloda enquiry note pannitten. Namma Sivakasi counselor ungalukku syllabus & fees WhatsApp-la share pannuvaanga.";
       const fallbackTamil =
@@ -642,11 +760,31 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
     setMessages((prev) => [...prev, systemMsg]);
   };
 
-  // End Call & Synchronize with CRM Database
+  // End Call & Synchronize with CRM Database (Complete Clean Instant Shutdown)
   const handleEndCall = (shouldSave = true) => {
-    stopTimer();
-    stopVoice();
+    isCallActiveRef.current = false;
     setCallState("ended");
+
+    // 1. Instantly abort pending chat API call
+    if (chatAbortControllerRef.current) {
+      try {
+        chatAbortControllerRef.current.abort();
+      } catch (e) {}
+      chatAbortControllerRef.current = null;
+    }
+
+    // 2. Instantly stop all timers and countdown intervals
+    stopTimer();
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
+
+    // 3. Instantly kill all audio output and speech synthesis
+    stopVoice();
+
+    // 4. Instantly abort microphone listener
+    stopMicListening();
 
     if (!shouldSave) return;
 
@@ -746,6 +884,7 @@ Reach our Admissions Desk: +91 99523 37331`;
     if (newGender === voiceGender) return;
     stopVoice();
     setVoiceGender(newGender);
+    voiceGenderRef.current = newGender;
 
     const isEnglish = activeCallLang === "English" || languageMode === "en";
     const textToSpeak = isEnglish
@@ -763,9 +902,13 @@ Reach our Admissions Desk: +91 99523 37331`;
       "info"
     );
 
-    setTimeout(() => {
-      speakAI(textToSpeak, ttsLang);
-    }, 100);
+    if (isCallActiveRef.current) {
+      setTimeout(() => {
+        if (isCallActiveRef.current) {
+          speakAI(textToSpeak, ttsLang);
+        }
+      }, 50);
+    }
   };
 
   // Change Language Mode
