@@ -114,6 +114,7 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
   ]);
 
   // Audio & Speech Synthesis Refs
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const synthRef = useRef<SpeechSynthesis | null>(null);
   const recognitionRef = useRef<any>(null);
   const transcriptEndRef = useRef<HTMLDivElement | null>(null);
@@ -141,7 +142,7 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
     isCallActiveRef.current = callState === "connected";
   }, [callState]);
 
-  // Load voices asynchronously and reliably
+  // Load browser speechSynthesis voices as secondary backup
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
 
   useEffect(() => {
@@ -160,7 +161,7 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
     }
   }, []);
 
-  // Initialize Speech Recognition with Auto-Restart Loop
+  // Initialize Speech Recognition with Auto-Restart Loop & Voice Detection
   const initSpeechRecognition = useCallback(() => {
     if (typeof window === "undefined") return;
 
@@ -188,9 +189,12 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
         setIsMicListening(true);
       };
 
+      let recognitionTimer: NodeJS.Timeout | null = null;
       let finalSpeech = "";
 
       reco.onresult = (event: any) => {
+        if (isAiSpeakingRef.current) return; // Don't transcribe while AI is speaking
+
         let interimText = "";
         for (let i = event.resultIndex; i < event.results.length; ++i) {
           if (event.results[i].isFinal) {
@@ -201,20 +205,23 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
         }
 
         const candidateText = (finalSpeech + interimText).trim();
-        if (candidateText && !isAiSpeakingRef.current) {
+        if (candidateText) {
           setInputQuery(candidateText);
-        }
 
-        // Check if final utterance completed
-        if (finalSpeech.trim() && !isAiSpeakingRef.current) {
-          const toSend = finalSpeech.trim();
-          finalSpeech = "";
-          handleUserUtterance(toSend);
+          // Automatically send after user finishes talking (1.2s silence pause)
+          if (recognitionTimer) clearTimeout(recognitionTimer);
+          recognitionTimer = setTimeout(() => {
+            if (candidateText && !isAiSpeakingRef.current && isCallActiveRef.current) {
+              const toSend = candidateText;
+              finalSpeech = "";
+              setInputQuery("");
+              handleUserUtterance(toSend);
+            }
+          }, 1200);
         }
       };
 
       reco.onerror = (err: any) => {
-        // Ignorable non-critical events
         if (err.error !== "no-speech") {
           console.warn("Speech recognition event:", err.error);
         }
@@ -227,7 +234,7 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
           try {
             reco.start();
           } catch (e) {
-            // Already active
+            // Already active or starting
           }
         }
       };
@@ -244,7 +251,7 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
 
   // Start Mic Listening Safely
   const startMicListening = () => {
-    if (!recognitionRef.current || !isMicActive || isMuted) return;
+    if (!recognitionRef.current || !isMicActive || isMuted || isAiSpeakingRef.current) return;
     try {
       recognitionRef.current.start();
       setIsMicListening(true);
@@ -262,126 +269,125 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
     setIsMicListening(false);
   };
 
-  // High Quality Human-like Speech Synthesizer (Sentence Chunker to prevent stutter)
-  const speakAI = (rawText: string) => {
+  // Fallback to Web Speech API if network TTS stream fails
+  const fallbackToSpeechSynthesis = (text: string) => {
     if (!synthRef.current || isMuted) return;
-
-    // Temporarily pause mic so AI doesn't hear itself
-    stopMicListening();
-    setIsAiSpeaking(true);
 
     try {
       synthRef.current.cancel();
       activeUtterancesRef.current = [];
 
-      // Clean text: strip markdown symbols, asterisks, brackets, and format money
-      const cleanText = rawText
+      const cleanText = text
         .replace(/[\*_~#]/g, "")
-        .replace(/₹\s*(\d+)/g, "$1 rupees")
-        .replace(/Rs\.?\s*(\d+)/gi, "$1 rupees")
-        .replace(/\s+/g, " ")
+        .replace(/₹\s*(\d+)/g, "$1 ரூபாய்")
+        .replace(/Rs\.?\s*(\d+)/gi, "$1 ரூபாய்")
         .trim();
 
-      // Split into short, natural human sentences/clauses (max 15-20 words)
-      // This prevents the Windows Chromium speech synthesis stutter bug!
-      const clauses = cleanText
-        .split(/(?<=[.?!,])\s+/)
-        .filter((c) => c.trim().length > 0);
+      const utterance = new SpeechSynthesisUtterance(cleanText);
 
-      if (!clauses.length) {
-        clauses.push(cleanText);
-      }
+      // Search for Tamil voice or regional voice
+      const voices = availableVoices.length ? availableVoices : synthRef.current.getVoices();
+      const tamilVoice =
+        voices.find((v) => v.lang.includes("ta")) ||
+        voices.find((v) => v.lang.includes("en-IN")) ||
+        null;
 
-      // Find the best realistic Natural Human Voice
-      const voices = availableVoices.length
-        ? availableVoices
-        : synthRef.current.getVoices();
+      if (tamilVoice) utterance.voice = tamilVoice;
+      utterance.rate = voiceGender === "female" ? 1.0 : 0.95;
+      utterance.pitch = voiceGender === "female" ? 1.05 : 0.92;
 
-      let chosenVoice: SpeechSynthesisVoice | null = null;
-
-      if (voiceGender === "female") {
-        // Preferred Female Natural Voices (Indian English / Tamil / UK / US)
-        chosenVoice =
-          voices.find(
-            (v) =>
-              v.name.includes("Neerja") ||
-              v.name.includes("Swara") ||
-              v.name.includes("Heera") ||
-              (v.lang.includes("en-IN") && v.name.toLowerCase().includes("female"))
-          ) ||
-          voices.find((v) => v.lang.includes("ta-IN")) ||
-          voices.find((v) => v.name.includes("Google UK English Female")) ||
-          voices.find((v) => v.name.includes("Zira")) ||
-          voices.find((v) => v.name.toLowerCase().includes("female")) ||
-          null;
-      } else {
-        // Preferred Male Natural Voices (Indian English / Tamil / UK / US)
-        chosenVoice =
-          voices.find(
-            (v) =>
-              v.name.includes("Prabhat") ||
-              v.name.includes("Valluvar") ||
-              v.name.includes("Ravi") ||
-              (v.lang.includes("en-IN") && v.name.toLowerCase().includes("male"))
-          ) ||
-          voices.find((v) => v.name.includes("Google UK English Male")) ||
-          voices.find((v) => v.name.includes("David")) ||
-          voices.find((v) => v.name.toLowerCase().includes("male")) ||
-          null;
-      }
-
-      let currentIdx = 0;
-
-      const speakNextClause = () => {
-        if (!synthRef.current) return;
-
-        if (currentIdx >= clauses.length) {
-          setIsAiSpeaking(false);
-          // AI finished speaking -> Immediately reactivate Mic so user can talk!
-          setTimeout(() => {
-            if (isCallActiveRef.current && isMicActive && !isMuted) {
-              startMicListening();
-            }
-          }, 200);
-          return;
-        }
-
-        const clauseText = clauses[currentIdx];
-        currentIdx++;
-
-        const utterance = new SpeechSynthesisUtterance(clauseText);
-        if (chosenVoice) utterance.voice = chosenVoice;
-
-        // Smooth human cadence
-        utterance.rate = voiceGender === "female" ? 1.02 : 0.98;
-        utterance.pitch = voiceGender === "female" ? 1.05 : 0.95;
-
-        // Prevent Chrome GC bug by holding reference
-        activeUtterancesRef.current.push(utterance);
-        (window as any).__activeUtterance = utterance;
-
-        utterance.onend = () => {
-          // Natural 40ms human breathing pause between sentences
-          setTimeout(speakNextClause, 40);
-        };
-
-        utterance.onerror = (e) => {
-          console.warn("Utterance error:", e);
-          speakNextClause();
-        };
-
-        synthRef.current.speak(utterance);
+      utterance.onend = () => {
+        setIsAiSpeaking(false);
+        setTimeout(() => {
+          if (isCallActiveRef.current && isMicActive && !isMuted) {
+            startMicListening();
+          }
+        }, 250);
       };
 
-      speakNextClause();
+      utterance.onerror = () => {
+        setIsAiSpeaking(false);
+        startMicListening();
+      };
+
+      activeUtterancesRef.current.push(utterance);
+      synthRef.current.speak(utterance);
     } catch (e) {
-      console.warn("TTS speak error:", e);
+      console.warn("SpeechSynthesis fallback error:", e);
       setIsAiSpeaking(false);
       startMicListening();
     }
   };
 
+  // Real Fluent Tamil Neural Audio Player (Zero Stutter, Native Words, Never Spells Letters)
+  const speakAI = (tamilSpeechText: string, fallbackTanglish: string = "") => {
+    if (isMuted) return;
+
+    // Temporarily pause mic so AI doesn't hear itself from computer speakers
+    stopMicListening();
+    setIsAiSpeaking(true);
+
+    // Cancel any existing audio playing
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+        audioRef.current.src = "";
+      } catch (e) {}
+      audioRef.current = null;
+    }
+    if (synthRef.current) {
+      synthRef.current.cancel();
+    }
+
+    try {
+      // Primary: Fetch high-fidelity Tamil speech stream from /api/ai/telecalling/tts
+      const speechToPlay = tamilSpeechText || fallbackTanglish;
+      const ttsUrl = `/api/ai/telecalling/tts?text=${encodeURIComponent(
+        speechToPlay
+      )}&lang=ta`;
+
+      const audio = new Audio(ttsUrl);
+      audioRef.current = audio;
+
+      // Male vs Female Voice Cadence:
+      // Female (Kavya): 1.02x crisp friendly tone
+      // Male (Vikram): 0.92x deeper authoritative counseling tone
+      audio.playbackRate = voiceGender === "female" ? 1.02 : 0.92;
+
+      audio.onended = () => {
+        setIsAiSpeaking(false);
+        audioRef.current = null;
+        // Reactivate Mic immediately so user can speak next question!
+        setTimeout(() => {
+          if (isCallActiveRef.current && isMicActive && !isMuted) {
+            startMicListening();
+          }
+        }, 250);
+      };
+
+      audio.onerror = (e) => {
+        console.warn("TTS audio streaming failed, trying browser synthesis fallback:", e);
+        fallbackToSpeechSynthesis(speechToPlay);
+      };
+
+      audio.play().catch((playErr) => {
+        console.warn("Audio autoplay blocked or failed, falling back to Web Speech:", playErr);
+        fallbackToSpeechSynthesis(speechToPlay);
+      });
+    } catch (e) {
+      console.warn("Audio play exception:", e);
+      fallbackToSpeechSynthesis(tamilSpeechText || fallbackTanglish);
+    }
+  };
+
   const stopVoice = () => {
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+        audioRef.current.src = "";
+      } catch (e) {}
+      audioRef.current = null;
+    }
     if (synthRef.current) {
       synthRef.current.cancel();
     }
@@ -406,13 +412,16 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
     setQualification({ score: 55, tag: "WARM", reason: "Incoming call connection" });
 
     const personaName = voiceGender === "female" ? "Kavya" : "Vikram";
-    const initialWelcomeText = `Vanakkam! Welcome to WeGrow Skill Campus, Sivakasi. Naan ${personaName}, WeGrow Admissions Counselor. Ungalukku entha course pathi details venum — Full Stack, AI, or Digital Marketing-ah?`;
+    const initialWelcomeTanglish = `Vanakkam! Welcome to WeGrow Skill Campus, Sivakasi. Naan ${personaName}, WeGrow Admissions Counselor. Ungalukku entha course pathi details venum — Full Stack, AI, or Digital Marketing-ah?`;
+    const initialWelcomeTamil = `வணக்கம்! வீக்ரோ ஸ்கில் கேம்பஸுக்கு உங்களை அன்போடு வரவேற்கிறோம். நான் உங்கள் கவுன்சிலர் ${
+      voiceGender === "female" ? "காவ்யா" : "விக்ரம்"
+    }. உங்களுக்கு எந்த கோர்ஸ் பத்தி விவரங்கள் வேணும் — ஃபுல் ஸ்டேக், ஏஐ, அல்லது டிஜிட்டல் மார்க்கெட்டிங்கா?`;
 
     setMessages([
       {
         id: "msg-0",
         sender: "ai",
-        text: initialWelcomeText,
+        text: initialWelcomeTanglish,
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         sentiment: "Positive",
       },
@@ -424,7 +433,7 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
       setAutoAnswerTimer((prev) => {
         if (prev <= 1) {
           if (countdownInterval) clearInterval(countdownInterval);
-          connectCall(initialWelcomeText);
+          connectCall(initialWelcomeTamil, initialWelcomeTanglish);
           return 0;
         }
         return prev - 1;
@@ -439,10 +448,10 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
   }, [isOpen, lead, voiceGender]);
 
   // Connect Call
-  const connectCall = (welcomeText: string) => {
+  const connectCall = (welcomeTamil: string, welcomeTanglish: string) => {
     setCallState("connected");
     startTimer();
-    speakAI(welcomeText);
+    speakAI(welcomeTamil, welcomeTanglish);
   };
 
   // Timer Handlers
@@ -508,6 +517,7 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
         body: JSON.stringify({
           userMessage: queryText,
           apiKey: savedApiKey,
+          voiceGender: voiceGender,
           conversationHistory: messages.map((m) => ({
             sender: m.sender,
             text: m.text,
@@ -523,19 +533,22 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
       const data = await res.json();
       setIsAiThinking(false);
 
-      if (data && data.reply) {
+      if (data && (data.reply || data.tamilSpeech)) {
+        const displayText = data.reply || data.tamilSpeech;
+        const speechAudioText = data.tamilSpeech || data.reply;
+
         const aiMsg: Message = {
           id: `msg-${Date.now() + 1}`,
           sender: "ai",
-          text: data.reply,
+          text: displayText,
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
           sentiment: data.sentiment || "Positive",
         };
 
         setMessages((prev) => [...prev, aiMsg]);
 
-        // Speak response with clean fluid voice
-        speakAI(data.reply);
+        // Speak response in natural Tamil voice
+        speakAI(speechAudioText, displayText);
 
         // Update qualification score & badges
         if (data.leadQualification) {
@@ -567,6 +580,9 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
       setIsAiThinking(false);
       const fallbackReply =
         "Kandippa! Ungaloda enquiry note pannitten. Namma Sivakasi counselor ungalukku syllabus & fees WhatsApp-la share pannuvaanga.";
+      const fallbackTamil =
+        "கண்டிப்பா! உங்களோட விவரங்களை பதிவு பண்ணிட்டேன். சிவகாசி கேம்பஸ் கவுன்சிலர் உங்களுக்கு பாடத்திட்டம் மற்றும் கட்டண விவரங்களை வாட்ஸ்அப்பில் அனுப்புவாங்க.";
+
       setMessages((prev) => [
         ...prev,
         {
@@ -576,7 +592,7 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         },
       ]);
-      speakAI(fallbackReply);
+      speakAI(fallbackTamil, fallbackReply);
     }
   };
 
@@ -700,14 +716,20 @@ Reach our Admissions Desk: +91 99523 37331`;
   const handleToggleVoiceGender = (newGender: "female" | "male") => {
     if (newGender === voiceGender) return;
     setVoiceGender(newGender);
-    synthRef.current?.cancel();
-    setIsAiSpeaking(false);
-    const greeting =
+    stopVoice();
+
+    const previewTamil =
+      newGender === "female"
+        ? "வணக்கம்! நான் காவ்யா, வீக்ரோ ஏஐ கவுன்சிலர். உங்களுக்கு எப்படி உதவ முடியும்?"
+        : "வணக்கம்! நான் விக்ரம், வீக்ரோ சேர்க்கை ஆலோசகர். சொல்லுங்க, எந்த கோர்ஸ் விவரங்கள் வேண்டும்?";
+
+    const previewTanglish =
       newGender === "female"
         ? "Switched to Kavya (Female Counselor Voice). Epdi help panna mudiyum?"
-        : "Switched to Vikram (Male Admissions Lead Voice). Sollunga, enna details venum?";
-    addToast(`Switched Voice to ${newGender === "female" ? "Kavya (Female)" : "Vikram (Male)"}`, "info");
-    speakAI(greeting);
+        : "Switched to Vikram (Male Counselor Voice). Sollunga, enna details venum?";
+
+    addToast(`Switched Voice to ${newGender === "female" ? "👩 Kavya (Female)" : "👨 Vikram (Male)"}`, "info");
+    speakAI(previewTamil, previewTanglish);
   };
 
   if (!isOpen) return null;
@@ -774,13 +796,13 @@ Reach our Admissions Desk: +91 99523 37331`;
               </button>
             </div>
 
-            {/* Language Recognition Switcher (English vs Tamil) */}
+            {/* Language Recognition Switcher (Tanglish vs Tamil) */}
             <button
               type="button"
               onClick={() => {
                 const nextLang = micLanguage === "en-IN" ? "ta-IN" : "en-IN";
                 setMicLanguage(nextLang);
-                addToast(`Mic Language set to ${nextLang === "ta-IN" ? "தமிழ் (Tamil)" : "English / Tanglish"}`, "info");
+                addToast(`Mic Recognition: ${nextLang === "ta-IN" ? "தமிழ் (Tamil Script)" : "Tanglish / English"}`, "info");
               }}
               className="bg-white/15 hover:bg-white/25 border border-white/20 px-2.5 py-1 rounded-xl text-xs font-bold text-white flex items-center gap-1 transition-colors"
               title="Toggle Speech Recognition Language"
@@ -832,7 +854,7 @@ Reach our Admissions Desk: +91 99523 37331`;
               <div
                 className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border transition-all ${
                   isAiSpeaking
-                    ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                    ? "bg-emerald-50 border-emerald-300 text-emerald-800"
                     : isMicListening
                     ? "bg-indigo-50 border-indigo-300 text-indigo-800 animate-pulse"
                     : "bg-slate-100 border-slate-200 text-slate-600"
@@ -841,7 +863,7 @@ Reach our Admissions Desk: +91 99523 37331`;
                 {isAiSpeaking ? (
                   <>
                     <Volume2 className="w-3 h-3 text-emerald-600 animate-bounce" />
-                    <span>{voiceGender === "female" ? "Kavya Speaking" : "Vikram Speaking"}</span>
+                    <span>{voiceGender === "female" ? "Kavya Speaking (Tamil)" : "Vikram Speaking (Tamil)"}</span>
                   </>
                 ) : isMicListening ? (
                   <>
@@ -1068,7 +1090,7 @@ Reach our Admissions Desk: +91 99523 37331`;
               type="text"
               value={inputQuery}
               onChange={(e) => setInputQuery(e.target.value)}
-              placeholder="Speak via Mic, or type message here..."
+              placeholder="Speak via Mic, or type question here..."
               className="flex-1 bg-slate-50 border border-slate-300 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all"
             />
 
@@ -1088,11 +1110,7 @@ Reach our Admissions Desk: +91 99523 37331`;
               {/* Silence AI Button */}
               <button
                 type="button"
-                onClick={() => {
-                  synthRef.current?.cancel();
-                  setIsAiSpeaking(false);
-                  startMicListening();
-                }}
+                onClick={stopVoice}
                 className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 text-xs font-semibold flex items-center gap-1 transition-colors"
                 title="Silence AI Voice"
               >
