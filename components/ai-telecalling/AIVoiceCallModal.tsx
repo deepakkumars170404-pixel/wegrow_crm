@@ -13,24 +13,15 @@ import {
   Bot,
   User,
   Clock,
-  Calendar,
   Send,
   Flame,
   CheckCircle2,
-  AlertCircle,
   MessageSquare,
-  Share2,
-  ExternalLink,
-  ChevronDown,
   RefreshCw,
-  Award,
-  Zap,
-  MapPin,
   X,
-  Languages,
-  Gauge,
   Play,
   AlertTriangle,
+  Zap,
 } from "lucide-react";
 import { useCRM } from "@/context/CRMContext";
 import { Lead } from "@/types";
@@ -110,7 +101,7 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
   const [isMicActive, setIsMicActive] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
 
-  // Microphone permission state
+  // Microphone permission state & interaction unlock
   const [micPermissionDenied, setMicPermissionDenied] = useState(false);
   const [audioNeedsInteraction, setAudioNeedsInteraction] = useState(false);
 
@@ -141,7 +132,6 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
   const transcriptEndRef = useRef<HTMLDivElement | null>(null);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const ringAudioContextRef = useRef<AudioContext | null>(null);
   const isAiSpeakingRef = useRef<boolean>(false);
   const isCallActiveRef = useRef<boolean>(false);
 
@@ -160,71 +150,6 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
     isCallActiveRef.current = callState === "connected";
   }, [callState]);
 
-  // Realistic Telephone Ringtone Generator using Web Audio API
-  const startTelephoneRing = useCallback(() => {
-    try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) return () => {};
-      const ctx = new AudioCtx();
-      ringAudioContextRef.current = ctx;
-
-      // In modern browsers, AudioContext might start suspended until user gesture
-      if (ctx.state === "suspended") {
-        ctx.resume().catch(() => {});
-      }
-
-      const playBurst = () => {
-        if (!ringAudioContextRef.current || ringAudioContextRef.current.state === "closed") return;
-        try {
-          const now = ctx.currentTime;
-          const osc1 = ctx.createOscillator();
-          const osc2 = ctx.createOscillator();
-          const gain = ctx.createGain();
-
-          osc1.type = "sine";
-          osc2.type = "sine";
-          osc1.frequency.value = 400; // Standard PBX dual-frequency ring tone
-          osc2.frequency.value = 450;
-
-          gain.gain.setValueAtTime(0.08, now);
-          gain.gain.setValueAtTime(0.08, now + 0.4);
-          gain.gain.setValueAtTime(0, now + 0.42);
-          gain.gain.setValueAtTime(0.08, now + 0.65);
-          gain.gain.setValueAtTime(0.08, now + 1.05);
-          gain.gain.setValueAtTime(0, now + 1.07);
-
-          osc1.connect(gain);
-          osc2.connect(gain);
-          gain.connect(ctx.destination);
-
-          osc1.start(now);
-          osc2.start(now);
-          osc1.stop(now + 1.1);
-          osc2.stop(now + 1.1);
-        } catch (e) {}
-      };
-
-      playBurst();
-      const ringTimer = setInterval(playBurst, 2400);
-
-      return () => {
-        clearInterval(ringTimer);
-        stopTelephoneRing();
-      };
-    } catch (e) {
-      return () => {};
-    }
-  }, []);
-
-  const stopTelephoneRing = () => {
-    if (ringAudioContextRef.current) {
-      try {
-        ringAudioContextRef.current.close();
-      } catch (e) {}
-      ringAudioContextRef.current = null;
-    }
-  };
-
   // Speech Recognition Language Mapping
   const getRecognitionLang = useCallback(() => {
     if (languageMode === "ta") return "ta-IN";
@@ -237,7 +162,6 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
     try {
       if (typeof navigator !== "undefined" && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        // Release stream tracks immediately (we only wanted user permission)
         stream.getTracks().forEach((track) => track.stop());
         setMicPermissionDenied(false);
         return true;
@@ -252,17 +176,14 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
     return true;
   }, []);
 
-  // Initialize Speech Recognition with Auto-Restart & Silence Detection
+  // Initialize Speech Recognition
   const initSpeechRecognition = useCallback(() => {
     if (typeof window === "undefined") return;
 
     const SpeechRecognition =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
-    if (!SpeechRecognition) {
-      console.warn("SpeechRecognition not supported in this browser.");
-      return;
-    }
+    if (!SpeechRecognition) return;
 
     try {
       if (recognitionRef.current) {
@@ -285,7 +206,6 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
       let finalSpeech = "";
 
       reco.onresult = (event: any) => {
-        // Discard any audio picked up while AI is speaking
         if (isAiSpeakingRef.current) return;
 
         let interimText = "";
@@ -317,7 +237,6 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
       reco.onerror = (err: any) => {
         if (err.error === "not-allowed" || err.error === "service-not-allowed") {
           setMicPermissionDenied(true);
-          console.warn("Microphone access denied by browser.");
         } else if (err.error !== "no-speech") {
           console.warn("Speech recognition event:", err.error);
         }
@@ -325,7 +244,6 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
 
       reco.onend = () => {
         setIsMicListening(false);
-        // Continuous auto-restart loop as long as call is active and AI is silent
         if (isCallActiveRef.current && !isAiSpeakingRef.current && isMicActive && !isMuted) {
           try {
             reco.start();
@@ -351,7 +269,6 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
       recognitionRef.current.start();
       setIsMicListening(true);
     } catch (e: any) {
-      // If already started or active, keep status true
       setIsMicListening(true);
     }
   };
@@ -384,7 +301,7 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
     setIsAiSpeaking(false);
   };
 
-  // Fallback to Web Speech API if HTML5 audio is blocked or fails
+  // Fallback to Web Speech API if HTML5 audio is blocked
   const speakViaSpeechSynthesis = (text: string, lang: "en" | "ta") => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) {
       setIsAiSpeaking(false);
@@ -399,7 +316,6 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
       utterance.rate = voiceSpeedRef.current;
       utterance.pitch = voiceGenderRef.current === "female" ? 1.05 : 0.95;
 
-      // Find best regional voice
       const voices = window.speechSynthesis.getVoices();
       if (voices && voices.length) {
         if (lang === "en") {
@@ -444,7 +360,7 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
   const speakAI = async (audioText: string, ttsLang: "en" | "ta" = "ta") => {
     if (isMuted) return;
 
-    // 1. Temporarily pause mic so AI doesn't pick up speaker sound
+    // 1. Temporarily pause mic so AI doesn't hear itself
     stopMicListening();
     setIsAiSpeaking(true);
 
@@ -467,7 +383,6 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
       const audio = new Audio(ttsUrl);
       audioRef.current = audio;
 
-      // Speed Cadence (1.16x gives natural human counselor pace)
       const currentGender = voiceGenderRef.current;
       const speedMultiplier = currentGender === "female" ? voiceSpeedRef.current : voiceSpeedRef.current * 0.97;
       audio.playbackRate = Math.max(0.85, Math.min(1.4, speedMultiplier));
@@ -484,18 +399,14 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
       };
 
       audio.onerror = () => {
-        console.warn("HTML5 Audio stream failed, falling back to Web Speech Synthesis");
         audioRef.current = null;
         speakViaSpeechSynthesis(cleanText, ttsLang);
       };
 
-      // Play audio stream
       await audio.play();
       setAudioNeedsInteraction(false);
     } catch (playErr: any) {
-      console.warn("Audio autoplay blocked by browser, falling back to SpeechSynthesis:", playErr?.message);
       audioRef.current = null;
-      // If browser blocked HTML5 Audio, fallback to SpeechSynthesis or show unblock button
       setAudioNeedsInteraction(true);
       speakViaSpeechSynthesis(cleanText, ttsLang);
     }
@@ -505,11 +416,9 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
   useEffect(() => {
     if (!isOpen) {
       handleEndCall(false);
-      stopTelephoneRing();
       return;
     }
 
-    // Request microphone permission when modal opens
     requestMicPermission();
 
     // Reset Call States
@@ -539,16 +448,11 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
       },
     ]);
 
-    // If inbound call, start realistic telephone ringing tone!
-    let stopRingSound: () => void = () => {};
-    if (isInbound) {
-      stopRingSound = startTelephoneRing() || (() => {});
-    } else {
-      // Outbound call: connect immediately
+    if (!isInbound) {
       connectCall(initialWelcomeTamil, "ta");
     }
 
-    // Auto-Answer Countdown: If staff does NOT attend within delay, AI takes over automatically!
+    // Auto-Answer Countdown
     if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
 
     if (isInbound) {
@@ -556,7 +460,6 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
         setAutoAnswerTimer((prev) => {
           if (prev <= 1) {
             if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-            stopTelephoneRing();
             connectCall(initialWelcomeTamil, "ta");
             return 0;
           }
@@ -567,16 +470,13 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
 
     return () => {
       if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-      stopRingSound();
-      stopTelephoneRing();
       stopTimer();
       stopVoice();
     };
-  }, [isOpen, lead, isInbound, autoAnswerDelaySeconds, startTelephoneRing, requestMicPermission]);
+  }, [isOpen, lead, isInbound, autoAnswerDelaySeconds, requestMicPermission]);
 
   // Connect Call & Start AI Speaking
   const connectCall = (welcomeSpeech: string, ttsLang: "en" | "ta" = "ta") => {
-    stopTelephoneRing();
     setCallState("connected");
     startTimer();
     speakAI(welcomeSpeech, ttsLang);
@@ -585,7 +485,6 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
   // Staff Answers Call Manually (Human Takeover)
   const handleStaffManualAnswer = () => {
     if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-    stopTelephoneRing();
     triggerHumanTakeover();
     startTimer();
   };
@@ -593,7 +492,6 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
   // Force AI to Answer Immediately
   const handleForceAIAnswer = () => {
     if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-    stopTelephoneRing();
     const currentGender = voiceGenderRef.current;
     const initialWelcomeTamil = `வணக்கம்! வீக்ரோ ஸ்கில் கேம்பஸுக்கு உங்களை அன்போடு வரவேற்கிறோம். நான் உங்கள் கவுன்சிலர் ${
       currentGender === "female" ? "காவ்யா" : "விக்ரம்"
@@ -616,11 +514,9 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
     }
   };
 
-  // Smooth scroll to latest transcript message
+  // Auto-scroll transcript
   useEffect(() => {
-    requestAnimationFrame(() => {
-      transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    });
+    transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, isAiThinking]);
 
   // Handle User Message (via Mic or Typed Input)
@@ -687,10 +583,9 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
 
         setMessages((prev) => [...prev, aiMsg]);
 
-        // Speak response in matching language audio (English for English, Tamil for Tamil/Tanglish)
+        // Speak response in matching language audio
         speakAI(speechAudio, ttsLang);
 
-        // Update qualification score & badges
         if (data.leadQualification) {
           setQualification(data.leadQualification);
         }
@@ -698,19 +593,16 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
           setDetectedCourse(data.detectedCourse);
         }
 
-        // Demo Booking Trigger
         if (data.demoBooked && data.demoDetails) {
           setDemoBooked(true);
           setDemoDetails(data.demoDetails);
           addToast("🎉 Free Demo Class Booked via AI!", "success");
         }
 
-        // Human Takeover Trigger
         if (data.transferToHuman) {
           triggerHumanTakeover();
         }
 
-        // Update Summary Bullets
         if (data.summaryBullets && data.summaryBullets.length) {
           setCallSummary(data.summaryBullets);
         }
@@ -739,7 +631,6 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
   // Trigger Human Takeover
   const triggerHumanTakeover = () => {
     setCallState("human_transferred");
-    stopTelephoneRing();
     stopVoice();
     addToast("📞 Call Handed Over to Human Counselor!", "info");
     const systemMsg: Message = {
@@ -753,7 +644,6 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
 
   // End Call & Synchronize with CRM Database
   const handleEndCall = (shouldSave = true) => {
-    stopTelephoneRing();
     stopTimer();
     stopVoice();
     setCallState("ended");
@@ -764,7 +654,6 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
     const studentName = lead?.studentName || "Incoming Lead (AI Call)";
     const durationStr = `${Math.floor(callSeconds / 60)}m ${callSeconds % 60}s`;
 
-    // 1. Auto-create new Lead if not already existing
     let targetLeadId = lead?.id;
     const existingLead = leads.find((l) => l.phone.replace(/\D/g, "") === callerPhone.replace(/\D/g, ""));
 
@@ -801,7 +690,6 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
       });
     }
 
-    // 2. Add Call Record Log
     if (targetLeadId) {
       addCallRecord(targetLeadId, {
         callerName: `${voiceGender === "female" ? "Kavya" : "Vikram"} (AI Voice Agent)`,
@@ -813,7 +701,6 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
       });
     }
 
-    // 3. Auto-Schedule Demo Class in Follow-ups
     if (demoBooked && demoDetails && targetLeadId) {
       addNewFollowUp({
         leadId: targetLeadId,
@@ -854,7 +741,7 @@ Reach our Admissions Desk: +91 99523 37331`;
     addToast("WhatsApp Follow-up Message Triggered!", "success");
   };
 
-  // Switch Voice Gender (Female / Male) — Strictly switches ONLY the active persona
+  // Switch Voice Gender (Female / Male)
   const handleToggleVoiceGender = (newGender: "female" | "male") => {
     if (newGender === voiceGender) return;
     stopVoice();
@@ -942,7 +829,7 @@ Reach our Admissions Desk: +91 99523 37331`;
 
           <div className="flex flex-wrap items-center gap-2">
             
-            {/* 👩/👨 MALE & FEMALE VOICE SWITCHER BUTTONS (Only chosen one speaks!) */}
+            {/* 👩/👨 MALE & FEMALE VOICE SWITCHER BUTTONS */}
             <div className="bg-white/15 backdrop-blur border border-white/20 p-0.5 rounded-xl flex items-center text-xs font-bold text-white">
               <button
                 type="button"
@@ -1022,7 +909,7 @@ Reach our Admissions Desk: +91 99523 37331`;
               </button>
             </div>
 
-            {/* Speed Selector: 1.0x, 1.16x (Normal Human), 1.25x (Brisk) */}
+            {/* Speed Selector */}
             <div className="bg-white/15 backdrop-blur border border-white/20 p-0.5 rounded-xl flex items-center text-xs font-semibold text-white">
               <button
                 type="button"
@@ -1033,7 +920,6 @@ Reach our Admissions Desk: +91 99523 37331`;
                 className={`px-1.5 py-1 rounded-lg text-[10px] ${
                   voiceSpeed === 1.0 ? "bg-white text-slate-900 font-bold" : "text-white/70"
                 }`}
-                title="Normal Speed"
               >
                 1.0x
               </button>
@@ -1041,12 +927,11 @@ Reach our Admissions Desk: +91 99523 37331`;
                 type="button"
                 onClick={() => {
                   setVoiceSpeed(1.16);
-                  addToast("Speed: 1.16x (Natural Human Conversation Speed)", "info");
+                  addToast("Speed: 1.16x (Normal Human Speed)", "info");
                 }}
                 className={`px-1.5 py-1 rounded-lg text-[10px] ${
                   voiceSpeed === 1.16 ? "bg-white text-slate-900 font-bold" : "text-white/70"
                 }`}
-                title="Natural Human Conversational Speed (Recommended)"
               >
                 1.16x
               </button>
@@ -1059,7 +944,6 @@ Reach our Admissions Desk: +91 99523 37331`;
                 className={`px-1.5 py-1 rounded-lg text-[10px] ${
                   voiceSpeed === 1.25 ? "bg-white text-slate-900 font-bold" : "text-white/70"
                 }`}
-                title="Brisk Speed"
               >
                 1.25x
               </button>
@@ -1079,7 +963,7 @@ Reach our Admissions Desk: +91 99523 37331`;
         </div>
 
         {/* ========================================================================= */}
-        {/* REALISTIC INBOUND CALL RINGING ALERT BANNER (If staff is away) */}
+        {/* REALISTIC INBOUND CALL RINGING ALERT BANNER */}
         {/* ========================================================================= */}
         {callState === "ringing" && (
           <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 text-white p-4 mx-4 sm:mx-6 my-3 rounded-2xl shadow-lg border border-amber-400/40 animate-in slide-in-from-top-3 duration-200">
@@ -1129,7 +1013,7 @@ Reach our Admissions Desk: +91 99523 37331`;
         )}
 
         {/* ========================================================================= */}
-        {/* MIC PERMISSION WARNING BANNER (If browser blocked mic) */}
+        {/* MIC PERMISSION WARNING BANNER */}
         {/* ========================================================================= */}
         {micPermissionDenied && (
           <div className="bg-rose-50 border-b border-rose-200 px-6 py-2.5 flex items-center justify-between text-xs text-rose-800">
@@ -1149,13 +1033,13 @@ Reach our Admissions Desk: +91 99523 37331`;
         )}
 
         {/* ========================================================================= */}
-        {/* AUDIO AUTOPLAY UNLOCK PROMPT (If browser required user interaction) */}
+        {/* AUDIO AUTOPLAY UNLOCK PROMPT */}
         {/* ========================================================================= */}
         {audioNeedsInteraction && (
           <div className="bg-amber-50 border-b border-amber-200 px-6 py-2 flex items-center justify-between text-xs text-amber-900">
             <div className="flex items-center gap-2">
               <Volume2 className="w-4 h-4 text-amber-600" />
-              <span>Browser muted audio playback. Click to unmute and hear AI voice clearly!</span>
+              <span>Browser paused audio. Click to hear AI voice clearly!</span>
             </div>
             <button
               onClick={() => {
@@ -1169,7 +1053,7 @@ Reach our Admissions Desk: +91 99523 37331`;
               className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1"
             >
               <Play className="w-3 h-3 fill-current" />
-              <span>Unmute Audio</span>
+              <span>Play Audio</span>
             </button>
           </div>
         )}
@@ -1233,7 +1117,7 @@ Reach our Admissions Desk: +91 99523 37331`;
             )}
           </div>
 
-          {/* Sound Wave Animation (Pure CSS GPU Animated - Zero React re-renders) */}
+          {/* Sound Wave Animation (Pure CSS GPU Animated) */}
           <div className="flex items-center gap-2">
             <div className="flex items-end gap-1 h-5 w-20">
               {[35, 75, 50, 95, 60, 85, 45, 70].map((heightPct, idx) => (
@@ -1275,7 +1159,7 @@ Reach our Admissions Desk: +91 99523 37331`;
         </div>
 
         {/* ========================================================================= */}
-        {/* DEMO CLASS BOOKED BANNER (Conditional) */}
+        {/* DEMO CLASS BOOKED BANNER */}
         {/* ========================================================================= */}
         {demoBooked && demoDetails && (
           <div className="bg-emerald-50 border-b border-emerald-200 px-6 py-2 flex items-center justify-between text-xs font-semibold text-emerald-800 animate-in slide-in-from-top-2">
@@ -1302,7 +1186,6 @@ Reach our Admissions Desk: +91 99523 37331`;
                 msg.sender === "user" ? "flex-row-reverse" : "flex-row"
               }`}
             >
-              {/* Avatar */}
               <div
                 className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm ${
                   msg.sender === "ai"
@@ -1323,7 +1206,6 @@ Reach our Admissions Desk: +91 99523 37331`;
                 )}
               </div>
 
-              {/* Message Bubble */}
               <div
                 className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-xs sm:text-sm shadow-sm ${
                   msg.sender === "user"
@@ -1385,42 +1267,36 @@ Reach our Admissions Desk: +91 99523 37331`;
           <button
             onClick={() => handleUserUtterance("What are the fees for Full Stack Web Development course?")}
             className="shrink-0 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 px-2.5 py-1 rounded-full text-[11px] transition-colors"
-            title="Test English"
           >
             🇬🇧 Full Stack Fees? (EN)
           </button>
           <button
             onClick={() => handleUserUtterance("Full stack web development fees and duration evvalavu?")}
             className="shrink-0 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 px-2.5 py-1 rounded-full text-[11px] transition-colors"
-            title="Test Tanglish"
           >
             🇮🇳 Full Stack Fees? (Tanglish)
           </button>
           <button
             onClick={() => handleUserUtterance("வணக்கம், கோர்ஸ் கட்டணம் மற்றும் வேலைவாய்ப்பு உதவி பற்றி சொல்லுங்கள்")}
             className="shrink-0 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 px-2.5 py-1 rounded-full text-[11px] transition-colors"
-            title="Test Tamil"
           >
             🇮🇳 கட்டணம் & வேலைவாய்ப்பு? (தமிழ்)
           </button>
           <button
             onClick={() => handleUserUtterance("Can you tell me about the AI & GenAI syllabus and placements?")}
             className="shrink-0 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 px-2.5 py-1 rounded-full text-[11px] transition-colors"
-            title="Test English"
           >
             🤖 AI Placements? (EN)
           </button>
           <button
             onClick={() => handleUserUtterance("Free Demo class attend panna virumburen, Saturday batch book pannunga")}
             className="shrink-0 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 px-2.5 py-1 rounded-full text-[11px] transition-colors"
-            title="Test Demo Booking"
           >
             📅 Book Saturday Demo
           </button>
           <button
             onClick={() => handleUserUtterance("Manager or senior counselor kitta direct-ah pesanum transfer pannunga")}
             className="shrink-0 bg-amber-50 hover:bg-amber-100 text-amber-800 px-2.5 py-1 rounded-full text-[11px] transition-colors"
-            title="Test Human Takeover"
           >
             👤 Request Human Transfer
           </button>
@@ -1431,7 +1307,6 @@ Reach our Admissions Desk: +91 99523 37331`;
         {/* ========================================================================= */}
         <div className="bg-white border-t border-slate-200 p-4 sm:p-5 flex flex-col gap-3">
           
-          {/* Query Input Row with Push-to-Talk Mic */}
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -1439,7 +1314,6 @@ Reach our Admissions Desk: +91 99523 37331`;
             }}
             className="flex items-center gap-2"
           >
-            {/* Live Mic Button */}
             <button
               type="button"
               onClick={() => {
@@ -1487,7 +1361,6 @@ Reach our Admissions Desk: +91 99523 37331`;
           {/* Bottom Action Controls */}
           <div className="flex items-center justify-between pt-1">
             <div className="flex items-center gap-2">
-              {/* Silence AI Button */}
               <button
                 type="button"
                 onClick={stopVoice}
@@ -1498,7 +1371,6 @@ Reach our Admissions Desk: +91 99523 37331`;
                 <span className="hidden sm:inline">Stop Audio</span>
               </button>
 
-              {/* Transfer to Human */}
               {callState !== "human_transferred" && (
                 <button
                   type="button"
@@ -1512,7 +1384,6 @@ Reach our Admissions Desk: +91 99523 37331`;
             </div>
 
             <div className="flex items-center gap-2">
-              {/* WhatsApp Brochure */}
               <button
                 type="button"
                 onClick={handleSendWhatsApp}
@@ -1522,7 +1393,6 @@ Reach our Admissions Desk: +91 99523 37331`;
                 <span className="hidden sm:inline">WhatsApp Brochure</span>
               </button>
 
-              {/* End Call */}
               <button
                 type="button"
                 onClick={() => {

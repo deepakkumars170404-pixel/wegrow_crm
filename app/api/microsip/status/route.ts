@@ -29,7 +29,7 @@ function checkPortReachable(host: string, port: number, timeoutMs = 600): Promis
 // In-memory status cache to avoid constant heavy Windows process spawning (netsh, tasklist)
 let cachedStatus: any = null;
 let lastCheckTime = 0;
-const CACHE_TTL_MS = 6000; // 6 seconds cache
+const CACHE_TTL_MS = 30000; // 30 seconds cache to keep CPU usage at 0% and eliminate server lag
 
 // Dynamically discover JioFiber router gateway IP
 async function discoverJioGateway(): Promise<{ reachable: boolean; gatewayIp: string }> {

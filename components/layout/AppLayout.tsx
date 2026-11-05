@@ -66,19 +66,23 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
         onClose={() => setIsAddLeadModalOpen(false)}
       />
 
-      {/* Gemini AI Voice Telecalling Modals */}
-      <AIVoiceCallModal
-        isOpen={isAiCallModalOpen}
-        onClose={closeAiCallModal}
-        lead={aiCallLead}
-        phoneNumber={aiCallPhone}
-        isInbound={isAiInbound}
-      />
-      <AIBatchDialerModal
-        isOpen={isAiBatchDialerOpen}
-        onClose={closeAiBatchDialer}
-        initialSelectedLeadIds={aiBatchSelectedLeadIds}
-      />
+      {/* Gemini AI Voice Telecalling Modals (Mounted only when active -> 0% background overhead!) */}
+      {isAiCallModalOpen && (
+        <AIVoiceCallModal
+          isOpen={isAiCallModalOpen}
+          onClose={closeAiCallModal}
+          lead={aiCallLead}
+          phoneNumber={aiCallPhone}
+          isInbound={isAiInbound}
+        />
+      )}
+      {isAiBatchDialerOpen && (
+        <AIBatchDialerModal
+          isOpen={isAiBatchDialerOpen}
+          onClose={closeAiBatchDialer}
+          initialSelectedLeadIds={aiBatchSelectedLeadIds}
+        />
+      )}
     </div>
   );
 };

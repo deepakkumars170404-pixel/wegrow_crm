@@ -387,12 +387,12 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
-  // Periodic status poll (every 6 seconds, ultra-lightweight via route memory cache)
+  // Periodic status poll (every 30 seconds, ultra-lightweight via route memory cache)
   useEffect(() => {
     refreshTelephonyStatus();
     const interval = setInterval(() => {
       refreshTelephonyStatus();
-    }, 6000);
+    }, 30000);
     return () => clearInterval(interval);
   }, [refreshTelephonyStatus]);
 
