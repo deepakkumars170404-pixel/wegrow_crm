@@ -7,7 +7,7 @@
       "courseInterested": "General Enquiry",
       "leadSource": "Phone",
       "status": "Interested",
-      "priority": "Hot",
+      "priority": "Warm",
       "stage": "Interested",
       "assignedCaller": "Priya Sharma",
       "city": "Sivakasi",
@@ -506,6 +506,34 @@
   ],
   "followUps": [
     {
+      "id": "fu-1793864177364",
+      "leadId": "LD-1017",
+      "studentName": "Incoming Lead (AI Call)",
+      "phone": "+91 99523 37331",
+      "course": "General Enquiry",
+      "assignedCaller": "Vikram (AI Voice Agent)",
+      "lastContacted": "2026-11-05 01:06 PM",
+      "followUpDate": "2026-11-05",
+      "followUpTime": "11:00 AM",
+      "status": "Today",
+      "priority": "Hot",
+      "remarks": "[AI Telecaller] Intent: Course exploration call | Key Discussion: Introduced top career tracks and offered counseling guidance | Next Action: Qualify student background and career interest"
+    },
+    {
+      "id": "fu-1793863281929",
+      "leadId": "LD-1017",
+      "studentName": "Incoming Lead (AI Call)",
+      "phone": "+91 99523 37331",
+      "course": "General Enquiry",
+      "assignedCaller": "Kavya (AI Voice Agent)",
+      "lastContacted": "2026-11-05 12:51 PM",
+      "followUpDate": "2026-11-05",
+      "followUpTime": "11:00 AM",
+      "status": "Today",
+      "priority": "Hot",
+      "remarks": "[AI Telecaller] Intent: Course exploration call | Key Discussion: Introduced top career tracks and offered counseling guidance | Next Action: Qualify student background and career interest"
+    },
+    {
       "id": "fu-1793863234678",
       "leadId": "LD-1017",
       "studentName": "Incoming Lead (AI Call)",
@@ -716,5 +744,5 @@
       "remarks": "Orientation briefing completed. Admitted."
     }
   ],
-  "savedAt": "2026-11-05T07:20:34.728Z"
+  "savedAt": "2026-11-05T07:36:18.241Z"
 }
