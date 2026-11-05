@@ -26,6 +26,7 @@ import {
   Sparkles,
   Flame,
   CheckCircle,
+  Bot,
 } from "lucide-react";
 import { useCRM } from "@/context/CRMContext";
 import { StatusBadge } from "@/components/shared/StatusBadge";
@@ -41,7 +42,18 @@ type LeadCustomView =
   | "admitted";
 
 export default function LeadsPage() {
-  const { leads, courses, telecallers, updateLead, updateLeadStatus, activeUserRole, addToast, initiateCall } = useCRM();
+  const {
+    leads,
+    courses,
+    telecallers,
+    updateLead,
+    updateLeadStatus,
+    activeUserRole,
+    addToast,
+    initiateCall,
+    openAiCallModal,
+    openAiBatchDialer,
+  } = useCRM();
 
   const isOwnerMD = activeUserRole === "Owner" || activeUserRole === "Owner / MD";
   const isTelecaller = activeUserRole === "Telecaller";
@@ -337,6 +349,15 @@ export default function LeadsPage() {
             >
               <Upload className="w-3.5 h-3.5 text-slate-500" />
               <span>Import Leads</span>
+            </button>
+
+            <button
+              onClick={() => openAiBatchDialer()}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-indigo-700 hover:from-emerald-700 hover:to-indigo-800 text-white rounded-xl text-xs font-bold transition-all shadow-sm hover:scale-105 active:scale-95"
+              title="Launch Autonomous AI Batch Calling"
+            >
+              <Bot className="w-3.5 h-3.5 text-emerald-200" />
+              <span>AI Batch Dialer</span>
             </button>
 
             <button
@@ -654,6 +675,14 @@ export default function LeadsPage() {
                             className="p-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors font-bold"
                           >
                             <PhoneCall className="w-4 h-4 text-emerald-600" />
+                          </button>
+
+                          <button
+                            onClick={() => openAiCallModal(lead, lead.phone, false)}
+                            title={`AI Voice Call ${lead.studentName} with Kavya`}
+                            className="p-1.5 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors font-bold"
+                          >
+                            <Bot className="w-4 h-4 text-indigo-600" />
                           </button>
                         </div>
                       )}

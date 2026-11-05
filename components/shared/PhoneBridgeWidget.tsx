@@ -72,13 +72,17 @@ export const PhoneBridgeWidget: React.FC = () => {
     activeCallLead,
     setActiveCallLead,
     isCallConnected,
+    callPhase,
     callDuration,
     lastCallDuration,
+    activePhoneNumber,
     initiateCall,
     endCallSession,
     openCallModal,
     addToast,
     telephonyStatus,
+    telephonyMode,
+    setTelephonyMode,
     refreshTelephonyStatus,
     reconnectTelephony,
   } = useCRM();
@@ -103,8 +107,51 @@ export const PhoneBridgeWidget: React.FC = () => {
   // Real Mic & Speaker state
   const [isMuted, setIsMuted] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
-  const micStreamRef = useRef<MediaStream | null>(null);
-  const animFrameRef = useRef<number | null>(null);
+  const dialInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Auto-focus input and capture physical keyboard / numpad strokes when dialpad is open
+  useEffect(() => {
+    if (!isDialpadOpen) return;
+
+    const timer = setTimeout(() => {
+      if (dialInputRef.current) {
+        dialInputRef.current.focus();
+        const len = dialInputRef.current.value.length;
+        dialInputRef.current.setSelectionRange(len, len);
+      }
+    }, 100);
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        document.activeElement &&
+        (document.activeElement.tagName === "TEXTAREA" ||
+          (document.activeElement.tagName === "INPUT" &&
+            document.activeElement !== dialInputRef.current))
+      ) {
+        return;
+      }
+
+      const key = e.key;
+      if (/^[0-9*#+]$/.test(key)) {
+        playDTMFTone(key);
+        if (document.activeElement !== dialInputRef.current) {
+          setDialerNumber((prev) => prev + key);
+        }
+      } else if (key === "Enter") {
+        e.preventDefault();
+        handleCall();
+      } else if (key === "Escape") {
+        e.preventDefault();
+        setIsDialpadOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isDialpadOpen]);
 
   // Format seconds to mm:ss
   const formatTimer = (secs: number) => {
@@ -112,6 +159,18 @@ export const PhoneBridgeWidget: React.FC = () => {
     const s = secs % 60;
     return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   };
+
+  // Global Escape key listener: Pressing Escape cuts the call immediately (stops IVR or active call)
+  useEffect(() => {
+    const handleGlobalKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && (isCallConnected || callPhase !== "idle")) {
+        e.preventDefault();
+        handleHangup();
+      }
+    };
+    window.addEventListener("keydown", handleGlobalKey);
+    return () => window.removeEventListener("keydown", handleGlobalKey);
+  }, [isCallConnected, callPhase]);
 
   // Sync selected lead when activeCallLead changes
   useEffect(() => {
@@ -121,69 +180,26 @@ export const PhoneBridgeWidget: React.FC = () => {
     }
   }, [activeCallLead]);
 
-  // Request browser mic when widget is active
+  // Live voice activity animation during active call (leaves Windows hardware mic 100% free for MicroSIP)
   useEffect(() => {
-    if (isCallConnected || isDialpadOpen) {
-      startMicStream();
+    let animInterval: any = null;
+    if (callPhase === "connected" && !isMuted) {
+      animInterval = setInterval(() => {
+        // Natural speech modulation simulation between 35% and 85%
+        const simulated = Math.floor(35 + Math.random() * 50);
+        setAudioLevel(simulated);
+      }, 120);
     } else {
-      stopMicStream();
+      setAudioLevel(0);
     }
-    return () => stopMicStream();
-  }, [isCallConnected, isDialpadOpen]);
-
-  const startMicStream = async () => {
-    try {
-      if (typeof navigator !== "undefined" && navigator.mediaDevices?.getUserMedia) {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: true, noiseSuppression: true },
-        });
-        micStreamRef.current = stream;
-
-        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-        if (AudioCtx) {
-          const ctx = new AudioCtx();
-          const source = ctx.createMediaStreamSource(stream);
-          const analyser = ctx.createAnalyser();
-          analyser.fftSize = 64;
-          source.connect(analyser);
-
-          const dataArray = new Uint8Array(analyser.frequencyBinCount);
-          const updateAudioMeter = () => {
-            if (!micStreamRef.current) return;
-            analyser.getByteFrequencyData(dataArray);
-            let sum = 0;
-            for (let i = 0; i < dataArray.length; i++) {
-              sum += dataArray[i];
-            }
-            const avg = sum / dataArray.length;
-            const level = Math.min(100, Math.round((avg / 255) * 160));
-            setAudioLevel(level);
-            animFrameRef.current = requestAnimationFrame(updateAudioMeter);
-          };
-          updateAudioMeter();
-        }
-      }
-    } catch (e) {}
-  };
-
-  const stopMicStream = () => {
-    if (animFrameRef.current) {
-      cancelAnimationFrame(animFrameRef.current);
-      animFrameRef.current = null;
-    }
-    if (micStreamRef.current) {
-      micStreamRef.current.getTracks().forEach((track) => track.stop());
-      micStreamRef.current = null;
-    }
-    setAudioLevel(0);
-  };
+    return () => {
+      if (animInterval) clearInterval(animInterval);
+    };
+  }, [callPhase, isMuted]);
 
   const toggleMute = () => {
     const next = !isMuted;
     setIsMuted(next);
-    if (micStreamRef.current) {
-      micStreamRef.current.getAudioTracks().forEach((t) => (t.enabled = !next));
-    }
     addToast(next ? "Microphone Muted" : "Microphone Live", "info");
   };
 
@@ -222,75 +238,120 @@ export const PhoneBridgeWidget: React.FC = () => {
   };
 
   const handleClear = () => {
-    setDialerNumber("");
+    setDialerNumber("+91");
+    setSelectedLead(null);
   };
 
-  // Dynamic Call Handler: Always resolves the accurate lead
+  // Dynamic Call Handler: Always resolves the accurate number and lead
   const handleCall = (numberToCall?: string) => {
-    const num = (numberToCall || dialerNumber).trim();
-    if (!num) {
+    // CRITICAL: Prioritize numberToCall, then dialerNumber
+    const num = (numberToCall || dialerNumber || "").trim();
+    if (!num || num === "+91" || num === "+") {
       addToast("Please enter a phone number to call", "warning");
       return;
     }
 
     const cleanDigits = num.replace(/\D/g, "");
-    let currentLead: Lead | undefined;
-
-    // 1. Check if number matches any lead in database
-    if (cleanDigits.length >= 7) {
-      currentLead = leads.find((l) => {
-        const leadDigits = l.phone.replace(/\D/g, "");
-        return leadDigits.endsWith(cleanDigits) || cleanDigits.endsWith(leadDigits);
-      });
+    if (cleanDigits.length < 7) {
+      addToast("Please enter a valid phone number (at least 7 to 10 digits)", "warning");
+      return;
     }
 
-    // 2. If not found by phone, check activeCallLead or selectedLead
-    if (!currentLead) {
-      if (activeCallLead && (!numberToCall || activeCallLead.phone.replace(/\D/g, "") === cleanDigits)) {
-        currentLead = activeCallLead;
-      } else if (selectedLead && (!numberToCall || selectedLead.phone.replace(/\D/g, "") === cleanDigits)) {
-        currentLead = selectedLead;
-      }
-    }
+    // 1. Check if number matches any existing lead in the CRM database
+    const matchingLead = leads.find((l) => {
+      const leadDigits = l.phone.replace(/\D/g, "");
+      return leadDigits.endsWith(cleanDigits) || cleanDigits.endsWith(leadDigits);
+    });
 
-    // 3. Fallback: create dynamic direct dial lead
-    const validLead: Lead = currentLead || {
-      id: `LD-DIRECT-${Date.now()}`,
-      studentName: `Student (${num})`,
-      phone: num,
-      email: "direct@dial.local",
-      courseInterested: "Direct Calling",
-      leadSource: "Phone" as const,
-      enquiryDate: new Date().toISOString().split("T")[0],
-      nextFollowUpDate: "",
-      nextFollowUpTime: "",
-      assignedCaller: "Priya Sharma",
-      status: "New" as const,
-      priority: "Hot" as const,
-      stage: "New Enquiry" as const,
-      notes: [],
-      callHistory: [],
-      callCount: 1,
-    };
+    // 2. Always bind to the EXACT number entered by the user
+    const validLead: Lead = matchingLead
+      ? {
+          ...matchingLead,
+          phone: num, // Always use the exact number requested!
+        }
+      : {
+          id: `LD-DIRECT-${Date.now()}`,
+          studentName: `Direct Dial (${num})`,
+          phone: num,
+          email: "direct@dial.local",
+          courseInterested: "Direct Dial",
+          leadSource: "Phone" as const,
+          enquiryDate: new Date().toISOString().split("T")[0],
+          nextFollowUpDate: "",
+          nextFollowUpTime: "",
+          assignedCaller: "Priya Sharma",
+          status: "New" as const,
+          priority: "Hot" as const,
+          stage: "New Enquiry" as const,
+          notes: [],
+          callHistory: [],
+          callCount: 1,
+        };
 
     setSelectedLead(validLead);
     setActiveCallLead(validLead);
     initiateCall(validLead);
-    setIsDialpadOpen(false);
+    // Keep dialpad open so caller can see in-call controls and cut button
   };
 
   const handleHangup = () => {
     endCallSession();
   };
 
-  const currentDisplayLead = activeCallLead || selectedLead || leads[0];
-  const initialLetter = currentDisplayLead?.studentName?.charAt(0) || "V";
+  const isCustomNumber = Boolean(
+    dialerNumber &&
+      dialerNumber !== "+91" &&
+      dialerNumber !== "+" &&
+      dialerNumber.replace(/\D/g, "").length >= 7
+  );
+  const currentDisplayLead: Partial<Lead> = activePhoneNumber
+    ? {
+        studentName: activeCallLead?.studentName || `Direct: ${activePhoneNumber}`,
+        phone: activePhoneNumber,
+      }
+    : isCustomNumber
+    ? {
+        studentName: `Direct: ${dialerNumber}`,
+        phone: dialerNumber,
+      }
+    : activeCallLead || selectedLead || leads[0];
+  const initialLetter = currentDisplayLead?.studentName?.charAt(0) || "D";
+  const displayedPhone = activePhoneNumber || (isCustomNumber ? dialerNumber : currentDisplayLead?.phone || "");
 
   return (
     <>
+      {/* 0. Floating Top In-Call Action Bar (Always visible on all screens during any call / IVR announcement) */}
+      {(isCallConnected || callPhase !== "idle") && (
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[9999] animate-in slide-in-from-top-4 duration-200 pointer-events-auto select-none">
+          <div className="bg-[#0B1528] text-white px-6 py-3 rounded-full shadow-2xl border-2 border-rose-500 flex items-center gap-5 backdrop-blur-xl ring-4 ring-rose-500/20">
+            <div className="flex items-center gap-3">
+              <span className="w-3.5 h-3.5 rounded-full bg-rose-500 animate-ping" />
+              <div>
+                <span className="text-xs font-bold text-white block">
+                  {currentDisplayLead?.studentName || "Dialing"} ({displayedPhone})
+                </span>
+                <span className="text-[11px] font-mono text-[#E5B842] font-semibold">
+                  {callPhase === "ringing" ? "Ringing / Playing Busy Prompt" : `Connected • ${formatTimer(callDuration)}`}
+                </span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleHangup}
+              className="px-5 py-2 bg-rose-600 hover:bg-rose-500 active:scale-95 text-white text-xs font-black uppercase tracking-wider rounded-full shadow-lg shadow-rose-600/50 flex items-center gap-2 transition-all cursor-pointer border border-rose-300 animate-pulse"
+              title="Instantly Cut Call (Stop Busy Message / Hangup) [Esc]"
+            >
+              <PhoneOff className="w-4 h-4" />
+              <span>Cut Call (Hangup)</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 1. In-Page MicroSIP Calling Dialpad Drawer (Opens above the dock bar) */}
       {isDialpadOpen && (
-        <div className="fixed bottom-24 right-5 z-40 w-84 sm:w-[380px] bg-gradient-to-b from-[#112340] via-[#0E1E38] to-[#081220] text-white rounded-[28px] shadow-2xl border border-[#244B7A] overflow-hidden animate-in slide-in-from-bottom-5 duration-200 select-none">
+        <div className="fixed bottom-24 right-5 z-[999] w-84 sm:w-[380px] bg-gradient-to-b from-[#112340] via-[#0E1E38] to-[#081220] text-white rounded-[28px] shadow-2xl border border-[#244B7A] overflow-hidden animate-in slide-in-from-bottom-5 duration-200 select-none">
           {/* MicroSIP Title Header */}
           <div className="bg-[#142B52] p-4 flex items-center justify-between border-b border-white/10">
             <div className="flex items-center gap-2.5">
@@ -299,21 +360,42 @@ export const PhoneBridgeWidget: React.FC = () => {
               </div>
               <div>
                 <h4 className="text-xs font-bold tracking-tight text-white flex items-center gap-1.5">
-                  MicroSIP Executive Dialer
+                  {callPhase === "ringing" ? (
+                    <span className="text-amber-300 animate-pulse">Ringing Student...</span>
+                  ) : isCallConnected || callPhase === "connected" ? (
+                    <span className="text-emerald-400">Live Call Active</span>
+                  ) : (
+                    <span>MicroSIP Executive Dialer</span>
+                  )}
                   <span
                     className={`w-2 h-2 rounded-full ${
-                      telephonyStatus.connected
+                      callPhase === "ringing"
+                        ? "bg-amber-400 animate-ping"
+                        : isCallConnected || callPhase === "connected"
                         ? "bg-emerald-400 animate-pulse"
+                        : telephonyStatus.connected
+                        ? "bg-emerald-400"
                         : "bg-rose-500 animate-pulse"
                     }`}
                   />
                 </h4>
                 <p
                   className={`text-[10px] font-mono font-medium flex items-center gap-1 ${
-                    telephonyStatus.connected ? "text-emerald-300" : "text-rose-300"
+                    callPhase === "ringing"
+                      ? "text-amber-200"
+                      : isCallConnected || callPhase === "connected"
+                      ? "text-emerald-300 font-bold"
+                      : telephonyStatus.connected
+                      ? "text-emerald-300"
+                      : "text-rose-300"
                   }`}
                 >
-                  {telephonyStatus.connected ? (
+                  {isCallConnected || callPhase === "connected" ? (
+                    <>
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                      <span>Duration: {formatTimer(callDuration)}</span>
+                    </>
+                  ) : telephonyStatus.connected ? (
                     <>
                       <Wifi className="w-2.5 h-2.5" />
                       <span>Online • {telephonyStatus.wifiSSID}</span>
@@ -376,12 +458,26 @@ export const PhoneBridgeWidget: React.FC = () => {
           </div>
 
           {/* Number Display Screen with Backspace & Clear */}
-          <div className="p-4 bg-[#081220]/80">
+          <div className="p-4 pb-2 bg-[#081220]/80">
             <div className="flex items-center justify-between bg-black/60 border border-white/10 rounded-2xl px-4 py-3 shadow-inner">
               <input
+                ref={dialInputRef}
                 type="text"
                 value={dialerNumber}
-                onChange={(e) => setDialerNumber(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const lastChar = val.slice(-1);
+                  if (/^[0-9*#+]$/.test(lastChar) && val.length > dialerNumber.length) {
+                    playDTMFTone(lastChar);
+                  }
+                  setDialerNumber(val);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleCall();
+                  }
+                }}
                 placeholder="+91..."
                 className="w-full bg-transparent text-xl font-mono font-bold text-[#E5B842] focus:outline-none tracking-widest"
               />
@@ -403,6 +499,10 @@ export const PhoneBridgeWidget: React.FC = () => {
                   C
                 </button>
               </div>
+            </div>
+            <div className="flex items-center justify-between px-2 pt-1.5 text-[10px] text-slate-400">
+              <span>Numpad & Keyboard active</span>
+              <span className="text-[#E5B842] font-semibold">Enter ↵ to Call</span>
             </div>
           </div>
 
@@ -442,7 +542,7 @@ export const PhoneBridgeWidget: React.FC = () => {
 
           {/* Action Call & Hangup Button: Strictly Green when idle, Strictly Red when in call */}
           <div className="p-3 bg-[#0B1728] flex items-center">
-            {isCallConnected ? (
+            {isCallConnected || callPhase !== "idle" ? (
               <button
                 type="button"
                 onClick={handleHangup}
@@ -450,9 +550,12 @@ export const PhoneBridgeWidget: React.FC = () => {
                 title="Cut Call / End Call"
               >
                 <PhoneOff className="w-4 h-4" />
-                <span>Hangup Call (Cut) • {formatTimer(callDuration)}</span>
+                <span>
+                  Hangup Call (Cut) •{" "}
+                  {callPhase === "ringing" ? "Ringing..." : formatTimer(callDuration)}
+                </span>
               </button>
-            ) : !telephonyStatus.connected && telephonyStatus.status === "wifi_disconnected" ? (
+            ) : telephonyMode === "jio" && !telephonyStatus.connected && telephonyStatus.status === "wifi_disconnected" ? (
               <button
                 type="button"
                 onClick={() => reconnectTelephony()}
@@ -566,10 +669,10 @@ export const PhoneBridgeWidget: React.FC = () => {
             title="Open Call Disposition Modal"
           >
             <h4 className="text-sm font-bold text-white tracking-tight leading-tight flex items-center gap-1.5">
-              {currentDisplayLead?.studentName || "Vijay (Live Test)"}
+              {currentDisplayLead?.studentName || "Direct Dial"}
             </h4>
             <p className="text-[11px] text-slate-300 font-mono leading-tight mt-0.5">
-              {currentDisplayLead?.phone || "+91 90923 22803"}
+              {displayedPhone || "+91..."}
             </p>
           </div>
 
@@ -625,17 +728,17 @@ export const PhoneBridgeWidget: React.FC = () => {
             </button>
 
             {/* End Call Button / Start Call Button: Strictly Green when idle, Strictly Red when in call */}
-            {isCallConnected ? (
+            {isCallConnected || callPhase !== "idle" ? (
               <button
                 type="button"
                 onClick={handleHangup}
                 className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-full shadow-md shadow-rose-950/40 transition-transform active:scale-95 flex items-center gap-1.5 animate-pulse"
-                title="End Active Call"
+                title="End Active Call (Cut)"
               >
                 <PhoneOff className="w-3.5 h-3.5" />
-                <span>End Call</span>
+                <span>Cut Call ({callPhase === "ringing" ? "Ringing..." : formatTimer(callDuration)})</span>
               </button>
-            ) : !telephonyStatus.connected && telephonyStatus.status === "wifi_disconnected" ? (
+            ) : telephonyMode === "jio" && !telephonyStatus.connected && telephonyStatus.status === "wifi_disconnected" ? (
               <button
                 type="button"
                 onClick={() => reconnectTelephony()}
@@ -649,7 +752,19 @@ export const PhoneBridgeWidget: React.FC = () => {
               <button
                 type="button"
                 onClick={() => {
-                  if (currentDisplayLead) handleCall(currentDisplayLead.phone);
+                  const hasCustom = Boolean(
+                    dialerNumber &&
+                      dialerNumber !== "+91" &&
+                      dialerNumber !== "+" &&
+                      dialerNumber.replace(/\D/g, "").length >= 7
+                  );
+                  if (hasCustom) {
+                    handleCall(dialerNumber);
+                  } else if (currentDisplayLead?.phone) {
+                    handleCall(currentDisplayLead.phone);
+                  } else if (dialerNumber && dialerNumber !== "+91") {
+                    handleCall(dialerNumber);
+                  }
                 }}
                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-full shadow-md shadow-emerald-950/40 transition-transform active:scale-95 flex items-center gap-1.5"
                 title="Start Call via MicroSIP"

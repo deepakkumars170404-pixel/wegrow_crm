@@ -28,6 +28,8 @@ import {
   WifiOff,
   RefreshCw,
   AlertTriangle,
+  Bot,
+  PhoneIncoming,
 } from "lucide-react";
 import { useCRM } from "@/context/CRMContext";
 import { StatusBadge } from "@/components/shared/StatusBadge";
@@ -40,6 +42,7 @@ export default function CallManagementPage() {
     initiateCall,
     endCallSession,
     isCallConnected,
+    callPhase,
     callDuration,
     lastCallDuration,
     openCallModal,
@@ -49,6 +52,8 @@ export default function CallManagementPage() {
     telephonyStatus,
     refreshTelephonyStatus,
     reconnectTelephony,
+    openAiCallModal,
+    openAiBatchDialer,
   } = useCRM();
 
   // Calling Interface Type Switcher: "station" (Image 3) or "modal" (Image 2)
@@ -249,6 +254,59 @@ export default function CallManagementPage() {
         </div>
       </div>
 
+      {/* Gemini AI Voice Telecalling Suite Banner */}
+      <div className="bg-gradient-to-r from-emerald-600 via-teal-700 to-indigo-800 rounded-2xl p-4 sm:p-5 text-white shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5">
+          <div className="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur border border-white/20 flex items-center justify-center shrink-0 shadow-inner">
+            <Bot className="w-6 h-6 text-emerald-200" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-base font-bold">Kavya — Gemini AI Telecalling Suite</h3>
+              <span className="bg-white/20 text-emerald-100 text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
+                <Sparkles className="w-2.5 h-2.5 text-amber-300" />
+                24/7 AI Counselor
+              </span>
+            </div>
+            <p className="text-xs text-emerald-100/90 mt-0.5">
+              Automated Tanglish/English call answering, course counseling, lead qualification & demo booking
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => openAiCallModal(selectedLead, selectedLead?.phone, false)}
+            className="px-3.5 py-2 rounded-xl text-xs font-bold bg-white text-emerald-900 hover:bg-emerald-50 transition-all shadow-sm flex items-center gap-1.5 hover:scale-105 active:scale-95"
+            title="AI Voice Agent calls this selected lead"
+          >
+            <PhoneCall className="w-3.5 h-3.5 text-emerald-600" />
+            <span>AI Call (This Lead)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => openAiCallModal(null, "+91 99523 37331", true)}
+            className="px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-500/30 hover:bg-emerald-500/40 text-white border border-white/20 transition-all flex items-center gap-1.5 active:scale-95"
+            title="Simulate incoming student call to test 24/7 AI Auto-Answer"
+          >
+            <PhoneIncoming className="w-3.5 h-3.5 text-emerald-200" />
+            <span>Simulate Inbound Call</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => openAiBatchDialer()}
+            className="px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-500/40 hover:bg-indigo-500/60 text-white border border-white/20 transition-all flex items-center gap-1.5 active:scale-95"
+            title="Open Bulk Outbound Auto-Dialer"
+          >
+            <Bot className="w-3.5 h-3.5 text-indigo-200" />
+            <span>AI Batch Auto-Dialer</span>
+          </button>
+        </div>
+      </div>
+
       {/* Wi-Fi Disconnected Critical Warning Alert */}
       {!telephonyStatus.connected && telephonyStatus.status === "wifi_disconnected" && (
         <div className="bg-gradient-to-r from-rose-50 via-amber-50 to-rose-50 border-2 border-rose-300 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm animate-in fade-in duration-200">
@@ -393,7 +451,7 @@ export default function CallManagementPage() {
 
               <div className="flex items-center gap-2">
                 {/* Direct Call & End Call Button in Lead Banner: Strictly Green when idle, Strictly Red when in call */}
-                {isCallConnected ? (
+                {isCallConnected || callPhase !== "idle" ? (
                   <button
                     type="button"
                     onClick={handleEndCall}
@@ -401,7 +459,7 @@ export default function CallManagementPage() {
                     title="End Call in MicroSIP (Cut Call)"
                   >
                     <PhoneOff className="w-3.5 h-3.5" />
-                    <span>End Call ({formatTimer(callDuration)})</span>
+                    <span>Cut Call ({callPhase === "ringing" ? "Ringing..." : formatTimer(callDuration)})</span>
                   </button>
                 ) : !telephonyStatus.connected && telephonyStatus.status === "wifi_disconnected" ? (
                   <button
@@ -424,6 +482,16 @@ export default function CallManagementPage() {
                     <span>Call Lead</span>
                   </button>
                 )}
+
+                <button
+                  type="button"
+                  onClick={() => openAiCallModal(selectedLead, selectedLead?.phone, false)}
+                  className="px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-transform active:scale-95"
+                  title="Call using Gemini AI Voice Counselor"
+                >
+                  <Bot className="w-3.5 h-3.5 text-emerald-200" />
+                  <span>AI Voice Call</span>
+                </button>
 
                 <Link
                   href={`/leads/${selectedLead?.id}`}
@@ -517,17 +585,34 @@ export default function CallManagementPage() {
                 </p>
               </div>
 
-              <div className="text-sm font-mono font-bold text-[#E5B842] tracking-wider pt-0.5">
-                {isCallConnected
-                  ? formatTimer(callDuration)
-                  : lastCallDuration
-                  ? `Call Ended • ${lastCallDuration}`
-                  : "00:00"}
+              {/* Softphone Status & Timer */}
+              <div className="flex flex-col items-center gap-1.5 pt-0.5 min-h-[32px]">
+                {callPhase === "ringing" ? (
+                  <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-300 text-xs font-bold animate-pulse">
+                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                    <span>Ringing Student&apos;s Phone...</span>
+                  </span>
+                ) : isCallConnected || callPhase === "connected" ? (
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+                    <span className="text-sm font-mono font-bold text-emerald-400 tracking-wider">
+                      Live Call Active • {formatTimer(callDuration)}
+                    </span>
+                  </div>
+                ) : lastCallDuration ? (
+                  <span className="text-sm font-mono font-bold text-[#E5B842] tracking-wider">
+                    Call Ended • {lastCallDuration}
+                  </span>
+                ) : (
+                  <span className="text-sm font-mono font-bold text-slate-300 tracking-wider">
+                    00:00 • Ready to Call
+                  </span>
+                )}
               </div>
 
               {/* Station Call & Cut Button: Strictly Green when idle, Strictly Red when in call */}
               <div className="pt-1 flex items-center justify-center gap-2">
-                {isCallConnected ? (
+                {isCallConnected || callPhase !== "idle" ? (
                   <button
                     type="button"
                     onClick={handleEndCall}
@@ -535,7 +620,7 @@ export default function CallManagementPage() {
                     title="End Call / Cut Call in MicroSIP"
                   >
                     <PhoneOff className="w-4 h-4" />
-                    <span>End Call (Cut)</span>
+                    <span>Cut Call (Hangup)</span>
                   </button>
                 ) : !telephonyStatus.connected && telephonyStatus.status === "wifi_disconnected" ? (
                   <button

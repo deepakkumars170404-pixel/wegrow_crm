@@ -13,11 +13,13 @@ import {
   Sliders,
   Sparkles,
   Save,
+  Bot,
 } from "lucide-react";
 import { useCRM } from "@/context/CRMContext";
+import { AITelecallingSettings } from "@/components/ai-telecalling/AITelecallingSettings";
 
 export default function SettingsPage() {
-  const { showToast } = useCRM();
+  const { showToast, telephonyMode, setTelephonyMode, openAiCallModal } = useCRM();
 
   const [activeTab, setActiveTab] = useState<
     | "company"
@@ -27,6 +29,7 @@ export default function SettingsPage() {
     | "notifications"
     | "calling"
     | "whatsapp"
+    | "ai_telecalling"
   >("company");
 
   // Company Profile State
@@ -90,6 +93,7 @@ export default function SettingsPage() {
             { id: "notifications", label: "Notification Preferences", icon: Bell },
             { id: "calling", label: "Telecalling Dialer Settings", icon: PhoneCall },
             { id: "whatsapp", label: "WhatsApp Template Settings", icon: MessageSquare },
+            { id: "ai_telecalling", label: "Gemini AI Voice Telecalling", icon: Bot },
           ].map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -473,7 +477,75 @@ export default function SettingsPage() {
                 </p>
               </div>
 
-              <div className="space-y-4">
+                            <div className="space-y-4">
+                {/* Office Network Profile Switcher */}
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-bold text-slate-900 text-xs">Active Office Network Profile</h4>
+                      <p className="text-[11px] text-slate-500">Switch calling configuration when moving between campus branches</p>
+                    </div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                      {telephonyMode === "jio" ? "Local Branch (Jio)" : telephonyMode === "airtel" ? "Main Office (Airtel)" : "Presentation Mode"}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setTelephonyMode("jio")}
+                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                        telephonyMode === "jio"
+                          ? "bg-[#142B52] text-white border-[#142B52] shadow-sm"
+                          : "bg-white text-slate-800 border-slate-200 hover:bg-slate-100/70"
+                      }`}
+                    >
+                      <div className="font-bold text-xs flex items-center justify-between">
+                        <span>🏢 Local Branch</span>
+                        {telephonyMode === "jio" && <span className="w-2 h-2 rounded-full bg-emerald-400" />}
+                      </div>
+                      <p className={`text-[10px] mt-1 ${telephonyMode === "jio" ? "text-slate-300" : "text-slate-500"}`}>
+                        JioFiber SIP (+91 4562 355214) via local office Wi-Fi
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setTelephonyMode("airtel")}
+                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                        telephonyMode === "airtel"
+                          ? "bg-[#142B52] text-white border-[#142B52] shadow-sm"
+                          : "bg-white text-slate-800 border-slate-200 hover:bg-slate-100/70"
+                      }`}
+                    >
+                      <div className="font-bold text-xs flex items-center justify-between">
+                        <span>🌐 Main Office</span>
+                        {telephonyMode === "airtel" && <span className="w-2 h-2 rounded-full bg-emerald-400" />}
+                      </div>
+                      <p className={`text-[10px] mt-1 ${telephonyMode === "airtel" ? "text-slate-300" : "text-slate-500"}`}>
+                        Airtel Wi-Fi Presentation Mode with zero network block
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setTelephonyMode("presentation")}
+                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                        telephonyMode === "presentation"
+                          ? "bg-[#142B52] text-white border-[#142B52] shadow-sm"
+                          : "bg-white text-slate-800 border-slate-200 hover:bg-slate-100/70"
+                      }`}
+                    >
+                      <div className="font-bold text-xs flex items-center justify-between">
+                        <span>🎯 Demo Mode</span>
+                        {telephonyMode === "presentation" && <span className="w-2 h-2 rounded-full bg-emerald-400" />}
+                      </div>
+                      <p className={`text-[10px] mt-1 ${telephonyMode === "presentation" ? "text-slate-300" : "text-slate-500"}`}>
+                        100% reliable demo for presentations on any Wi-Fi/Hotspot
+                      </p>
+                    </button>
+                  </div>
+                </div>
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
                     Daily Call Target Per Telecaller
@@ -589,6 +661,13 @@ export default function SettingsPage() {
                 </button>
               </div>
             </div>
+          )}
+
+          {/* TAB 8: GEMINI AI VOICE TELECALLING */}
+          {activeTab === "ai_telecalling" && (
+            <AITelecallingSettings
+              onTriggerTestCall={() => openAiCallModal(null, "+91 99523 37331", true)}
+            />
           )}
         </div>
       </div>

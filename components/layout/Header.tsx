@@ -27,6 +27,7 @@ import {
   Wifi,
   WifiOff,
   RefreshCw,
+  Bot,
 } from "lucide-react";
 import { useCRM } from "@/context/CRMContext";
 import { recentActivityTimeline } from "@/data/dummy-data";
@@ -42,7 +43,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const pathname = usePathname();
   const router = useRouter();
-  const { leads, activeUserRole, addToast, telephonyStatus, reconnectTelephony } = useCRM();
+  const { leads, activeUserRole, addToast, telephonyStatus, reconnectTelephony, openAiCallModal } = useCRM();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -222,6 +223,17 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Right side: Telephony Status (Staff only), Quick Create, Setup, Notifications, Profile */}
       <div className="flex items-center gap-2 sm:gap-2.5">
+        {/* 🤖 AI Receptionist Active Pill & Inbound Simulator Trigger */}
+        <button
+          type="button"
+          onClick={() => openAiCallModal(null, "+91 99523 37331", true)}
+          className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-[11px] font-bold text-emerald-800 transition-all shadow-2xs hover:scale-105 active:scale-95"
+          title="AI Voice Receptionist is Active 24/7. Click to simulate incoming student call!"
+        >
+          <Bot className="w-3.5 h-3.5 text-emerald-600" />
+          <span>AI Receptionist: Active</span>
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+        </button>
         {/* Telephony Agent Status Selector (For calling staff / telecallers only) */}
         {!isOwnerMD ? (
           <div className="relative hidden sm:block">

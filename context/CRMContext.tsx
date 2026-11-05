@@ -1,6 +1,11 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
+import {
+  startIndianRingbackCadence,
+  stopRingbackCadence,
+  playCallEndTone,
+} from "@/utils/softphoneAudio";
 import {
   Lead,
   FollowUpTask,
@@ -40,6 +45,8 @@ export interface TelephonyStatus {
   checkedAt?: string;
 }
 
+export type TelephonyMode = "jio" | "airtel" | "presentation";
+
 interface CRMContextType {
   leads: Lead[];
   followUps: FollowUpTask[];
@@ -62,16 +69,32 @@ interface CRMContextType {
   closeCallModal: () => void;
   isCallConnected: boolean;
   setIsCallConnected: (connected: boolean) => void;
+  callPhase: "idle" | "ringing" | "connected";
   callDuration: number;
   lastCallDuration: string | null;
   setLastCallDuration: (dur: string | null) => void;
+  activePhoneNumber: string;
   initiateCall: (lead: Lead) => void;
   endCallSession: () => void;
 
   // Telephony Presence & Reconnect
   telephonyStatus: TelephonyStatus;
+  telephonyMode: TelephonyMode;
+  setTelephonyMode: (mode: TelephonyMode) => void;
   refreshTelephonyStatus: (force?: boolean) => Promise<void>;
   reconnectTelephony: () => Promise<void>;
+
+  // AI Voice Telecalling & Batch Auto-Dialer Session State
+  isAiCallModalOpen: boolean;
+  aiCallLead: Lead | null;
+  aiCallPhone: string;
+  isAiInbound: boolean;
+  openAiCallModal: (lead?: Lead | null, phone?: string, isInbound?: boolean) => void;
+  closeAiCallModal: () => void;
+  isAiBatchDialerOpen: boolean;
+  aiBatchSelectedLeadIds: string[];
+  openAiBatchDialer: (leadIds?: string[]) => void;
+  closeAiBatchDialer: () => void;
 
   // Leads & Data Actions
   addLead: (lead: Omit<Lead, "id" | "callCount">) => void;
@@ -118,10 +141,50 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activeCallLead, setActiveCallLead] = useState<Lead | null>(null);
   const [isCallModalOpen, setIsCallModalOpen] = useState(false);
   const [isCallConnected, setIsCallConnected] = useState(false);
+  const [callPhase, setCallPhase] = useState<"idle" | "ringing" | "connected">("idle");
   const [callDuration, setCallDuration] = useState(0);
   const [lastCallDuration, setLastCallDuration] = useState<string | null>(null);
+  const [activePhoneNumber, setActivePhoneNumber] = useState<string>("");
+  const ringingTimeoutRef = useRef<any>(null);
+  const callStartTimeRef = useRef<number>(0);
+  const activePhoneRef = useRef<string>("");
+  const callDurationRef = useRef<number>(0);
+
+  // AI Voice Telecalling & Batch Auto-Dialer State
+  const [isAiCallModalOpen, setIsAiCallModalOpen] = useState(false);
+  const [aiCallLead, setAiCallLead] = useState<Lead | null>(null);
+  const [aiCallPhone, setAiCallPhone] = useState<string>("+91 99523 37331");
+  const [isAiInbound, setIsAiInbound] = useState(false);
+  const [isAiBatchDialerOpen, setIsAiBatchDialerOpen] = useState(false);
+  const [aiBatchSelectedLeadIds, setAiBatchSelectedLeadIds] = useState<string[]>([]);
+
+  const openAiCallModal = useCallback(
+    (lead?: Lead | null, phone?: string, isInbound?: boolean) => {
+      setAiCallLead(lead || null);
+      setAiCallPhone(phone || lead?.phone || "+91 99523 37331");
+      setIsAiInbound(Boolean(isInbound));
+      setIsAiCallModalOpen(true);
+    },
+    []
+  );
+
+  const closeAiCallModal = useCallback(() => {
+    setIsAiCallModalOpen(false);
+  }, []);
+
+  const openAiBatchDialer = useCallback((leadIds?: string[]) => {
+    setAiBatchSelectedLeadIds(leadIds || []);
+    setIsAiBatchDialerOpen(true);
+  }, []);
+
+  const closeAiBatchDialer = useCallback(() => {
+    setIsAiBatchDialerOpen(false);
+  }, []);
 
   // Live MicroSIP Telephony & Wi-Fi Network Presence
+  const [telephonyMode, setTelephonyModeState] = useState<TelephonyMode>("jio");
+  const telephonyModeRef = useRef<TelephonyMode>("jio");
+
   const [telephonyStatus, setTelephonyStatus] = useState<TelephonyStatus>({
     connected: true,
     status: "online",
@@ -132,6 +195,56 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     microsipRunning: true,
     account: "+914562355214@tn.wln.ims.jio.com",
   });
+
+  useEffect(() => {
+    try {
+      if (typeof window !== "undefined") {
+        const savedMode = localStorage.getItem("wegrow_telephony_mode") as TelephonyMode;
+        if (savedMode === "jio" || savedMode === "airtel" || savedMode === "presentation") {
+          setTelephonyModeState(savedMode);
+          telephonyModeRef.current = savedMode;
+        }
+      }
+    } catch {}
+  }, []);
+
+  const setTelephonyMode = (mode: TelephonyMode) => {
+    setTelephonyModeState(mode);
+    telephonyModeRef.current = mode;
+    try {
+      if (typeof window !== "undefined") {
+        localStorage.setItem("wegrow_telephony_mode", mode);
+      }
+    } catch {}
+    if (mode === "airtel") {
+      setTelephonyStatus({
+        connected: true,
+        status: "online",
+        message: "Main Office Airtel Mode • Presentation Ready",
+        wifiSSID: "Airtel Office Wi-Fi",
+        wifiState: "connected",
+        gatewayReachable: true,
+        microsipRunning: true,
+        account: "Airtel Office / Presentation SIP",
+      });
+      addToast("Switched to Main Office (Airtel Wi-Fi Mode)", "success");
+    } else if (mode === "presentation") {
+      setTelephonyStatus({
+        connected: true,
+        status: "online",
+        message: "Presentation / Demo Mode • 100% Reliable",
+        wifiSSID: "Any Network / Wi-Fi",
+        wifiState: "connected",
+        gatewayReachable: true,
+        microsipRunning: true,
+        account: "Interactive Presentation Mode",
+      });
+      addToast("Switched to Presentation / Demo Mode", "success");
+    } else {
+      addToast("Switched to Local Branch (JioFiber SIP)", "info");
+      refreshTelephonyStatus(true);
+    }
+  };
 
   // 1. Initial Load of persistent leads from localStorage and /api/leads
   useEffect(() => {
@@ -159,13 +272,15 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .then((res) => res.json())
       .then((data) => {
         if (data && Array.isArray(data.leads) && data.leads.length > 0) {
-          setLeads((prev) => {
-            // Keep existing leads or merge
-            const existingIds = new Set(prev.map((l) => l.id));
-            const newFromDisk = data.leads.filter((l: Lead) => !existingIds.has(l.id));
-            const merged = [...prev, ...newFromDisk];
-            return merged;
-          });
+          setLeads(data.leads);
+          try {
+            if (typeof window !== "undefined") {
+              localStorage.setItem(LOCAL_STORAGE_LEADS_KEY, JSON.stringify(data.leads));
+              if (data.followUps) {
+                localStorage.setItem(LOCAL_STORAGE_FOLLOWUPS_KEY, JSON.stringify(data.followUps));
+              }
+            }
+          } catch {}
         }
       })
       .catch(() => {});
@@ -193,6 +308,33 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Telephony Refresh Function
   const refreshTelephonyStatus = useCallback(async (force = false) => {
+    if (telephonyModeRef.current === "airtel") {
+      setTelephonyStatus({
+        connected: true,
+        status: "online",
+        message: "Main Office Airtel Mode • Presentation Ready",
+        wifiSSID: "Airtel Office Wi-Fi",
+        wifiState: "connected",
+        gatewayReachable: true,
+        microsipRunning: true,
+        account: "Airtel Office / Presentation SIP",
+      });
+      return;
+    }
+    if (telephonyModeRef.current === "presentation") {
+      setTelephonyStatus({
+        connected: true,
+        status: "online",
+        message: "Presentation / Demo Mode • 100% Reliable",
+        wifiSSID: "Any Network / Wi-Fi",
+        wifiState: "connected",
+        gatewayReachable: true,
+        microsipRunning: true,
+        account: "Interactive Presentation Mode",
+      });
+      return;
+    }
+
     try {
       const url = force ? "/api/microsip/status?force=true" : "/api/microsip/status";
       const res = await fetch(url);
@@ -254,7 +396,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => clearInterval(interval);
   }, [refreshTelephonyStatus]);
 
-  // Synchronized Call Timer
+  // Synchronized Call Timer (ticks continuously while in call)
   const formatTimer = (secs: number) => {
     const m = Math.floor(secs / 60);
     const s = secs % 60;
@@ -263,22 +405,105 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     let timer: any = null;
-    if (isCallConnected) {
+    if (isCallConnected && callPhase === "connected") {
       timer = setInterval(() => {
-        setCallDuration((prev) => prev + 1);
+        setCallDuration((prev) => {
+          const next = prev + 1;
+          callDurationRef.current = next;
+          return next;
+        });
       }, 1000);
     }
     return () => clearInterval(timer);
-  }, [isCallConnected]);
+  }, [isCallConnected, callPhase]);
 
-  // Unified Call Initiator
+  const hasRungOnceRef = useRef<boolean>(false);
+  const idleConfirmCountRef = useRef<number>(0);
+
+  // Real-time MicroSIP Call State Detector (Automatic answer detection & automatic hangup on remote cut)
+  useEffect(() => {
+    let interval: any = null;
+    if (isCallConnected && telephonyMode === "jio") {
+      interval = setInterval(async () => {
+        try {
+          const targetPhone = activePhoneRef.current || "";
+          const res = await fetch(
+            `/api/microsip/call-state?phone=${encodeURIComponent(targetPhone)}&_t=${Date.now()}`,
+            {
+              cache: "no-store",
+              headers: { "Cache-Control": "no-cache, no-store, must-revalidate" },
+            }
+          );
+          if (!res.ok) return;
+          const data = await res.json();
+
+          if (data.state === "connected") {
+            // Opposite person has ANSWERED the call! Locked in active state.
+            idleConfirmCountRef.current = 0;
+            hasRungOnceRef.current = true;
+            stopRingbackCadence();
+            setCallPhase("connected");
+          } else if (data.state === "ringing") {
+            idleConfirmCountRef.current = 0;
+            hasRungOnceRef.current = true;
+            setCallPhase("ringing");
+          } else if (data.state === "idle") {
+            const timeSinceStart = Date.now() - (callStartTimeRef.current || 0);
+
+            // While initial dialing, give MicroSIP up to 3 seconds to initiate the SIP transaction
+            if (!hasRungOnceRef.current && timeSinceStart < 3000) {
+              return;
+            }
+
+            // If call is actively connected, require 3 consecutive idle polls (~1.2s) to prevent any premature blip
+            idleConfirmCountRef.current += 1;
+            const threshold = callPhase === "connected" ? 3 : 2;
+            if (idleConfirmCountRef.current < threshold) {
+              return;
+            }
+
+            // Remote party has CUT / REJECTED / ENDED the call (or call dropped)
+            idleConfirmCountRef.current = 0;
+            stopRingbackCadence();
+            playCallEndTone();
+            const dur = callDurationRef.current;
+            const formatted = formatTimer(dur > 0 ? dur : 0);
+            setLastCallDuration(formatted);
+            setCallPhase("idle");
+            setIsCallConnected(false);
+            hasRungOnceRef.current = false;
+
+            if (data.lastOutcome) {
+              addToast(data.lastOutcome, "warning");
+            } else {
+              addToast(`Call ended (${formatted})`, "info");
+            }
+          }
+        } catch {}
+      }, 400); // Fast 400ms polling for instant UI reactivity
+    } else {
+      hasRungOnceRef.current = false;
+      idleConfirmCountRef.current = 0;
+    }
+    return () => clearInterval(interval);
+  }, [isCallConnected, callPhase, telephonyMode]);
+
+  // Unified Call Initiator with Real Audio & Smooth SIP Bridging
   const initiateCall = (lead: Lead) => {
+    callStartTimeRef.current = Date.now();
+    callDurationRef.current = 0;
+    hasRungOnceRef.current = false;
+    idleConfirmCountRef.current = 0;
     setActiveCallLead(lead);
     setIsCallConnected(true);
+    setCallPhase("ringing");
     setCallDuration(0);
     setLastCallDuration(null);
 
-    // Format phone with mandatory +91 or 0 for JioFiber SIP (+91XXXXXXXXXX)
+    // Ensure any leftover browser ringback audio is completely stopped so it doesn't clash with MicroSIP
+    stopRingbackCadence();
+
+    // Format phone with mandatory +91 or 0 for JioFiber SIP (+91XXXXXXXXXX) - strictly remove all spaces/symbols
     const rawDigits = lead.phone.replace(/\D/g, "");
     let cleanPhone = "";
     if (rawDigits.length === 10) {
@@ -287,8 +512,34 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       cleanPhone = `+${rawDigits}`;
     } else if (rawDigits.length === 11 && rawDigits.startsWith("0")) {
       cleanPhone = `+91${rawDigits.substring(1)}`;
+    } else if (lead.phone.trim().startsWith("+")) {
+      cleanPhone = `+${rawDigits}`;
     } else {
-      cleanPhone = lead.phone.trim().startsWith("+") ? lead.phone.trim() : `+91${rawDigits}`;
+      cleanPhone = `+91${rawDigits}`;
+    }
+
+    activePhoneRef.current = cleanPhone;
+    setActivePhoneNumber(cleanPhone);
+
+    // Presentation / Airtel Demo Mode (Zero dependencies, 100% flawless presentation)
+    if (telephonyMode === "airtel" || telephonyMode === "presentation") {
+      addToast(
+        telephonyMode === "airtel"
+          ? `Airtel Office Mode: Calling ${lead.studentName} (${cleanPhone})...`
+          : `Presentation Mode: Calling ${lead.studentName} (${cleanPhone})...`,
+        "info"
+      );
+      // Realistic Indian telecom ringback tone
+      startIndianRingbackCadence();
+
+      // Automatically connect call after 2.8s for presentation demo
+      ringingTimeoutRef.current = setTimeout(() => {
+        stopRingbackCadence();
+        hasRungOnceRef.current = true;
+        setCallPhase("connected");
+        addToast(`Call connected with ${lead.studentName}`, "success");
+      }, 2800);
+      return;
     }
 
     if (!telephonyStatus.connected && telephonyStatus.status === "wifi_disconnected") {
@@ -300,7 +551,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addToast(`Dialing ${lead.studentName} (${cleanPhone}) via JioFiber MicroSIP...`, "info");
     }
 
-    // Exclusively trigger local MicroSIP Bridge (100% background, zero visible window)
+    // Trigger local MicroSIP Bridge (100% background, zero visible window)
     fetch("/api/microsip/call", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -310,12 +561,26 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  // Unified Call Hangup
+  // Unified Call Hangup (Stops audio, plays disconnect chime, triggers SIP hangup)
   const endCallSession = () => {
+    if (ringingTimeoutRef.current) {
+      clearTimeout(ringingTimeoutRef.current);
+      ringingTimeoutRef.current = null;
+    }
+    hasRungOnceRef.current = false;
+    idleConfirmCountRef.current = 0;
+    stopRingbackCadence();
+    playCallEndTone();
+
     const formatted = formatTimer(callDuration > 0 ? callDuration : 1);
     setLastCallDuration(formatted);
+    setCallPhase("idle");
     setIsCallConnected(false);
-    fetch("/api/microsip/hangup", { method: "POST" }).catch(() => {});
+    setActivePhoneNumber("");
+
+    if (telephonyMode === "jio") {
+      fetch("/api/microsip/hangup", { method: "POST" }).catch(() => {});
+    }
     addToast(`Call ended (${formatted}). Please log disposition.`, "info");
   };
 
@@ -653,14 +918,28 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         closeCallModal,
         isCallConnected,
         setIsCallConnected,
+        callPhase,
         callDuration,
         lastCallDuration,
         setLastCallDuration,
+        activePhoneNumber,
         initiateCall,
         endCallSession,
         telephonyStatus,
+        telephonyMode,
+        setTelephonyMode,
         refreshTelephonyStatus,
         reconnectTelephony,
+        isAiCallModalOpen,
+        aiCallLead,
+        aiCallPhone,
+        isAiInbound,
+        openAiCallModal,
+        closeAiCallModal,
+        isAiBatchDialerOpen,
+        aiBatchSelectedLeadIds,
+        openAiBatchDialer,
+        closeAiBatchDialer,
         addLead,
         updateLead,
         updateLeadStatus,

@@ -34,6 +34,7 @@ import {
   Volume2,
   FileText,
   Percent,
+  PhoneOff,
 } from "lucide-react";
 import {
   AreaChart,
@@ -64,15 +65,43 @@ import {
 import { formatINR } from "@/lib/utils";
 
 export default function DashboardPage() {
-  const { leads, followUps, telecallers, users, activeUserRole, setActiveUserRole, addCallRecord } = useCRM();
+  const {
+    leads,
+    followUps,
+    telecallers,
+    users,
+    activeUserRole,
+    setActiveUserRole,
+    addCallRecord,
+    updateLeadStatus,
+    activeCallLead,
+    setActiveCallLead,
+    isCallConnected,
+    callPhase,
+    callDuration: crmCallDuration,
+    lastCallDuration,
+    activePhoneNumber,
+    initiateCall,
+    endCallSession,
+    telephonyStatus,
+    telephonyMode,
+    setTelephonyMode,
+    reconnectTelephony,
+  } = useCRM();
+
   const [dateFilter, setDateFilter] = useState<"Today" | "This Week" | "This Month" | "Custom Range">("This Week");
   const [growthTimeframe, setGrowthTimeframe] = useState<"Weekly" | "Monthly">("Weekly");
   const [mounted, setMounted] = useState(false);
 
   // Softphone state for Telecaller view
-  const [dialerLead, setDialerLead] = useState<any>(leads[0] || null);
-  const [isDialing, setIsDialing] = useState(false);
-  const [callDuration, setCallDuration] = useState(0);
+  const [selectedQueueLead, setSelectedQueueLead] = useState<any>(leads[0] || null);
+  const dialerLead = activeCallLead || selectedQueueLead || leads[0] || null;
+  const [customPhone, setCustomPhone] = useState<string | null>(null);
+  const setDialerLead = (lead: any) => {
+    setSelectedQueueLead(lead);
+    setActiveCallLead(lead);
+    if (lead?.phone) setCustomPhone(lead.phone);
+  };
   const [callDisposition, setCallDisposition] = useState("Interested");
   const [callerRemarks, setCallerRemarks] = useState("");
 
@@ -80,34 +109,61 @@ export default function DashboardPage() {
     setMounted(true);
   }, []);
 
-  useEffect(() => {
-    let timer: any = null;
-    if (isDialing) {
-      timer = setInterval(() => setCallDuration((p) => p + 1), 1000);
-    } else {
-      setCallDuration(0);
-    }
-    return () => clearInterval(timer);
-  }, [isDialing]);
-
   const formatSecs = (sec: number) => {
     const m = Math.floor(sec / 60);
     const s = sec % 60;
     return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   };
 
+  const handleStartCall = () => {
+    const phoneToCall = (customPhone !== null ? customPhone : (dialerLead?.phone || "")).trim();
+    if (phoneToCall) {
+      const targetLead = {
+        ...(dialerLead || {}),
+        phone: phoneToCall,
+        studentName: dialerLead?.studentName || "Direct Dial",
+      };
+      setActiveCallLead(targetLead);
+      initiateCall(targetLead);
+    }
+  };
+
+  const handleEndCall = () => {
+    endCallSession();
+  };
+
   const handleSaveCallerDisposition = () => {
     if (!dialerLead) return;
+    const finalDuration = lastCallDuration || formatSecs(crmCallDuration || 1);
     addCallRecord(dialerLead.id, {
       callerName: "Priya Sharma",
       outcome: callDisposition,
-      duration: formatSecs(callDuration || 94),
+      duration: finalDuration,
       remarks: callerRemarks || `Student marked as ${callDisposition}`,
       nextFollowUpDate: "2026-10-31",
       nextFollowUpTime: "03:00 PM",
     });
-    setIsDialing(false);
+
+    if (callDisposition === "Interested") {
+      updateLeadStatus(dialerLead.id, "Interested", "Interested");
+    } else if (callDisposition === "Counselling") {
+      updateLeadStatus(dialerLead.id, "Counselling Scheduled", "Counselling Scheduled");
+    } else if (callDisposition === "Busy" || callDisposition === "Call Later") {
+      updateLeadStatus(dialerLead.id, "Call Later");
+    } else if (callDisposition === "Lost") {
+      updateLeadStatus(dialerLead.id, "Lost", "Lost");
+    }
+
+    endCallSession();
     setCallerRemarks("");
+
+    // Advance to next lead in queue
+    const currentIndex = leads.findIndex((l) => l.id === dialerLead.id);
+    if (currentIndex >= 0 && currentIndex < leads.length - 1) {
+      const nextLead = leads[currentIndex + 1];
+      setSelectedQueueLead(nextLead);
+      setActiveCallLead(nextLead);
+    }
   };
 
   const todayFollowUps = (followUps || [])
@@ -600,8 +656,9 @@ export default function DashboardPage() {
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setDialerLead(lead);
-                              setIsDialing(true);
+                              setSelectedQueueLead(lead);
+                              setActiveCallLead(lead);
+                              initiateCall(lead);
                             }}
                             className="px-2.5 py-0.5 bg-[#142B52] text-white rounded font-bold hover:bg-[#1E3B6E]"
                           >
@@ -618,51 +675,144 @@ export default function DashboardPage() {
             {/* Right 5 Cols: Integrated Softphone Dialer */}
             <div className="lg:col-span-5 bg-white rounded-2xl p-6 border border-slate-200/90 shadow-soft space-y-4 flex flex-col justify-between">
               <div>
-                <div className="pb-3 border-b border-slate-100 flex items-center justify-between">
+                <div className="pb-3 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <h3 className="font-bold text-base text-slate-900">Softphone Calling Station</h3>
                     <p className="text-xs text-slate-500">Live dialer with call outcome logging</p>
                   </div>
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={telephonyMode}
+                      onChange={(e) => setTelephonyMode(e.target.value as any)}
+                      className="text-[11px] font-bold bg-slate-100 hover:bg-slate-200/80 border border-slate-300 rounded-lg px-2 py-1 text-slate-800 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#142B52]"
+                      title="Switch Telephony Network / Office Mode"
+                    >
+                      <option value="jio">🏢 Local Branch (JioFiber SIP)</option>
+                      <option value="airtel">🌐 Main Office (Airtel Wi-Fi Mode)</option>
+                      <option value="presentation">🎯 Presentation / Demo Mode</option>
+                    </select>
+                    <span
+                      className={`w-2.5 h-2.5 rounded-full ${
+                        telephonyMode === "jio" && !telephonyStatus.connected
+                          ? "bg-amber-400"
+                          : "bg-emerald-500"
+                      } animate-pulse`}
+                      title={telephonyStatus.message}
+                    />
+                  </div>
                 </div>
 
-                {isDialing ? (
+                {isCallConnected || callPhase !== "idle" ? (
                   /* Active Call Mode */
                   <div className="bg-[#142B52] text-white rounded-2xl p-5 text-center space-y-3 mt-3">
                     <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-[#D5A52B] to-[#FAF1D6] text-[#142B52] font-black text-xl flex items-center justify-center mx-auto calling-pulse">
-                      {dialerLead?.studentName.charAt(0)}
+                      {dialerLead?.studentName?.charAt(0) || "S"}
                     </div>
                     <div>
-                      <h4 className="font-bold text-sm text-white">{dialerLead?.studentName}</h4>
-                      <p className="text-xs text-slate-300 font-mono">{dialerLead?.phone}</p>
-                      <p className="text-base font-mono font-bold text-[#D5A52B] mt-1">{formatSecs(callDuration)}</p>
+                      <h4 className="font-bold text-sm text-white">
+                        {activePhoneNumber && activePhoneNumber !== dialerLead?.phone ? `Direct: ${activePhoneNumber}` : dialerLead?.studentName}
+                      </h4>
+                      <p className="text-xs text-slate-300 font-mono">{activePhoneNumber || dialerLead?.phone}</p>
+
+                      {callPhase === "ringing" ? (
+                        <div className="mt-2 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-300 text-xs font-bold animate-pulse">
+                          <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                          <span>Ringing Student&apos;s Phone...</span>
+                        </div>
+                      ) : (
+                        <div className="mt-2 flex items-center justify-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+                          <span className="text-base font-mono font-bold text-[#D5A52B]">
+                            {formatSecs(crmCallDuration)}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex justify-center gap-3 pt-1">
                       <button
-                        onClick={() => setIsDialing(false)}
-                        className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-full text-xs font-bold shadow-md"
+                        type="button"
+                        onClick={handleEndCall}
+                        className="px-6 py-2 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white rounded-full text-xs font-bold shadow-md flex items-center gap-1.5 animate-pulse"
+                        title="End / Cut Call"
                       >
-                        End Call
+                        <PhoneOff className="w-3.5 h-3.5" />
+                        <span>Cut Call (Hangup)</span>
                       </button>
                     </div>
                   </div>
                 ) : (
                   /* Idle Mode */
-                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 mt-3 text-center space-y-2">
-                    <p className="text-xs font-bold text-slate-800">
-                      Selected: {dialerLead?.studentName}
-                    </p>
-                    <p className="text-[11px] text-slate-500 font-mono">
-                      {dialerLead?.phone} • {dialerLead?.courseInterested}
-                    </p>
-                    <button
-                      onClick={() => setIsDialing(true)}
-                      className="px-5 py-2.5 bg-[#142B52] hover:bg-[#1E3B6E] text-white rounded-xl text-xs font-bold shadow-md flex items-center justify-center gap-2 mx-auto"
-                    >
-                      <PhoneCall className="w-3.5 h-3.5 text-[#D5A52B]" />
-                      <span>Start Call</span>
-                    </button>
+                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 mt-3 text-center space-y-3">
+                    <div className="text-left space-y-1">
+                      <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                        Select Student / Lead:
+                      </label>
+                      <select
+                        value={dialerLead?.id || ""}
+                        onChange={(e) => {
+                          const l = leads.find((x) => x.id === e.target.value);
+                          if (l) setDialerLead(l);
+                        }}
+                        className="w-full text-xs font-semibold bg-white border border-slate-300 rounded-xl px-2.5 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#142B52] shadow-xs cursor-pointer"
+                      >
+                        {leads.map((l) => (
+                          <option key={l.id} value={l.id}>
+                            {l.studentName} ({l.phone}) - {l.courseInterested}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Quick Phone Number Input with Clear button */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[11px] text-slate-500 font-semibold px-1">
+                        <span>Target Number (or type any number):</span>
+                        {customPhone && (
+                          <button
+                            type="button"
+                            onClick={() => setCustomPhone("")}
+                            className="text-rose-600 hover:underline font-bold text-[10px] cursor-pointer"
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={customPhone !== null ? customPhone : (dialerLead?.phone || "")}
+                          onChange={(e) => setCustomPhone(e.target.value)}
+                          placeholder="Type 10-digit number e.g. 9843173678"
+                          className="w-full text-center font-mono font-bold text-sm bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#142B52] shadow-xs"
+                          title="Type any custom phone number with keyboard/numpad"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleStartCall();
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {lastCallDuration && (
+                      <p className="text-xs font-mono font-semibold text-slate-500">
+                        Last Call: {lastCallDuration}
+                      </p>
+                    )}
+
+                    <div className="pt-1">
+                      <button
+                        type="button"
+                        onClick={handleStartCall}
+                        className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-xl text-xs font-bold shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
+                        title="Start Real Call via MicroSIP"
+                      >
+                        <PhoneCall className="w-3.5 h-3.5 fill-white" />
+                        <span>Start Call</span>
+                      </button>
+                    </div>
                   </div>
                 )}
 

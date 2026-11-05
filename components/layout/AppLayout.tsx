@@ -7,12 +7,26 @@ import { ToastContainer } from "./ToastContainer";
 import { AddLeadModal } from "@/components/leads/AddLeadModal";
 import { PhoneBridgeWidget } from "@/components/shared/PhoneBridgeWidget";
 import { LiveCallModal } from "@/components/shared/LiveCallModal";
+import { AIVoiceCallModal } from "@/components/ai-telecalling/AIVoiceCallModal";
+import { AIBatchDialerModal } from "@/components/ai-telecalling/AIBatchDialerModal";
+import { useCRM } from "@/context/CRMContext";
 import { cn } from "@/lib/utils";
 
 export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isAddLeadModalOpen, setIsAddLeadModalOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
+  const {
+    isAiCallModalOpen,
+    closeAiCallModal,
+    aiCallLead,
+    aiCallPhone,
+    isAiInbound,
+    isAiBatchDialerOpen,
+    closeAiBatchDialer,
+    aiBatchSelectedLeadIds,
+  } = useCRM();
 
   return (
     <div className="min-h-screen bg-[#F5F7FA] text-slate-800 antialiased flex">
@@ -51,7 +65,20 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
         isOpen={isAddLeadModalOpen}
         onClose={() => setIsAddLeadModalOpen(false)}
       />
+
+      {/* Gemini AI Voice Telecalling Modals */}
+      <AIVoiceCallModal
+        isOpen={isAiCallModalOpen}
+        onClose={closeAiCallModal}
+        lead={aiCallLead}
+        phoneNumber={aiCallPhone}
+        isInbound={isAiInbound}
+      />
+      <AIBatchDialerModal
+        isOpen={isAiBatchDialerOpen}
+        onClose={closeAiBatchDialer}
+        initialSelectedLeadIds={aiBatchSelectedLeadIds}
+      />
     </div>
   );
 };
-
