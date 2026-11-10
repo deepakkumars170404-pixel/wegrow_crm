@@ -21,7 +21,9 @@ export const LiveCallModal: React.FC = () => {
     activeCallLead,
     isCallModalOpen,
     isCallConnected,
+    callPhase,
     callDuration,
+    lastCallDuration,
     endCallSession,
     closeCallModal,
     addCallRecord,
@@ -277,10 +279,24 @@ export const LiveCallModal: React.FC = () => {
             {cleanPhone} • {activeCallLead.courseInterested}
           </p>
 
-          {/* Status Badge (Matches "Call Ended • 01:21" or "Live • 00:32") */}
+          {/* Status Badge (Matches "Call Ended • 01:21" or "Live • 00:32" or "Ringing...") */}
           <div className="mt-2.5 inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-[#0B3B30] text-emerald-300 border border-emerald-500/30 shadow-xs">
-            <span className={`w-2 h-2 rounded-full ${isCallConnected ? "bg-emerald-400 animate-pulse" : "bg-rose-500"}`} />
-            <span>{isCallConnected ? `Live • ${formatTimer(callDuration)}` : `Call Ended • ${callDuration > 0 ? formatTimer(callDuration) : "01:21"}`}</span>
+            <span
+              className={`w-2 h-2 rounded-full ${
+                callPhase === "connected"
+                  ? "bg-emerald-400 animate-pulse"
+                  : callPhase === "ringing"
+                  ? "bg-amber-400 animate-ping"
+                  : "bg-rose-500"
+              }`}
+            />
+            <span>
+              {callPhase === "ringing"
+                ? "Ringing Student's Phone..."
+                : callPhase === "connected"
+                ? `Live • ${formatTimer(callDuration)}`
+                : `Call Ended • ${lastCallDuration || (callDuration > 0 ? formatTimer(callDuration) : "01:21")}`}
+            </span>
           </div>
 
           {/* Audio Equalizer Channel (Image 2) */}

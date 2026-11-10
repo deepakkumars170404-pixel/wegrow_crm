@@ -723,7 +723,7 @@ export default function DashboardPage() {
                         <div className="mt-2 flex items-center justify-center gap-2">
                           <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
                           <span className="text-base font-mono font-bold text-[#D5A52B]">
-                            {formatSecs(crmCallDuration)}
+                            Live Talk • {formatSecs(crmCallDuration)}
                           </span>
                         </div>
                       )}

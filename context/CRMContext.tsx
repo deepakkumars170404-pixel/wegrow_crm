@@ -308,14 +308,35 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Telephony Refresh Function
   const refreshTelephonyStatus = useCallback(async (force = false) => {
+    try {
+      const url = force ? "/api/microsip/status?force=true" : "/api/microsip/status";
+      const res = await fetch(url, { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        setTelephonyStatus(data);
+        if (data.connected) {
+          // If Office JioFiber Wi-Fi is actively connected, always ensure JioFiber SIP mode
+          setTelephonyModeState("jio");
+          telephonyModeRef.current = "jio";
+          try {
+            if (typeof window !== "undefined") {
+              localStorage.setItem("wegrow_telephony_mode", "jio");
+            }
+          } catch {}
+          return;
+        }
+      }
+    } catch {}
+
+    // Fallback configurations if JioFiber is not reachable
     if (telephonyModeRef.current === "airtel") {
       setTelephonyStatus({
-        connected: true,
-        status: "online",
-        message: "Main Office Airtel Mode • Presentation Ready",
+        connected: false,
+        status: "wifi_disconnected",
+        message: "Main Office Airtel Mode (Simulation)",
         wifiSSID: "Airtel Office Wi-Fi",
         wifiState: "connected",
-        gatewayReachable: true,
+        gatewayReachable: false,
         microsipRunning: true,
         account: "Airtel Office / Presentation SIP",
       });
@@ -323,33 +344,24 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     if (telephonyModeRef.current === "presentation") {
       setTelephonyStatus({
-        connected: true,
-        status: "online",
-        message: "Presentation / Demo Mode • 100% Reliable",
+        connected: false,
+        status: "wifi_disconnected",
+        message: "Presentation / Demo Mode (Simulation)",
         wifiSSID: "Any Network / Wi-Fi",
         wifiState: "connected",
-        gatewayReachable: true,
-        microsipRunning: true,
+        gatewayReachable: false,
+        microsipRunning: false,
         account: "Interactive Presentation Mode",
       });
       return;
     }
 
-    try {
-      const url = force ? "/api/microsip/status?force=true" : "/api/microsip/status";
-      const res = await fetch(url);
-      if (res.ok) {
-        const data = await res.json();
-        setTelephonyStatus(data);
-      }
-    } catch {
-      setTelephonyStatus((prev) => ({
-        ...prev,
-        connected: false,
-        status: "offline",
-        message: "MicroSIP Telephony Offline",
-      }));
-    }
+    setTelephonyStatus((prev) => ({
+      ...prev,
+      connected: false,
+      status: "offline",
+      message: "MicroSIP Telephony Offline",
+    }));
   }, []);
 
   // Office Reconnect Function (Triggered when user arrives at office from home)
@@ -423,7 +435,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Real-time MicroSIP Call State Detector (Automatic answer detection & automatic hangup on remote cut)
   useEffect(() => {
     let interval: any = null;
-    if (isCallConnected && telephonyMode === "jio") {
+    if (isCallConnected) {
       interval = setInterval(async () => {
         try {
           const targetPhone = activePhoneRef.current || "";
@@ -486,7 +498,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       idleConfirmCountRef.current = 0;
     }
     return () => clearInterval(interval);
-  }, [isCallConnected, callPhase, telephonyMode]);
+  }, [isCallConnected, callPhase]);
 
   // Unified Call Initiator with Real Audio & Smooth SIP Bridging
   const initiateCall = (lead: Lead) => {
@@ -512,6 +524,17 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCallPhase("idle");
       setIsCallConnected(false);
       addToast("Calling 9952337331 is strictly blocked. Allowed test numbers: 9843173678, 9943877948, 9092322803", "error");
+      return;
+    }
+
+    // STRICT TESTING NUMBERS ALLOWED ONLY: 9843173678, 9943877948, 9092322803
+    const ALLOWED_TEST_NUMBERS = ["9843173678", "9943877948", "9092322803"];
+    const last10 = rawDigits.slice(-10);
+    if (!ALLOWED_TEST_NUMBERS.includes(last10)) {
+      stopRingbackCadence();
+      setCallPhase("idle");
+      setIsCallConnected(false);
+      addToast(`Testing Mode: Calling ${rawDigits} is blocked for safety. Only authorized test numbers are allowed: 9843173678, 9943877948, 9092322803`, "warning");
       return;
     }
 
@@ -586,9 +609,8 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsCallConnected(false);
     setActivePhoneNumber("");
 
-    if (telephonyMode === "jio") {
-      fetch("/api/microsip/hangup", { method: "POST" }).catch(() => {});
-    }
+    // Always trigger background MicroSIP hangup
+    fetch("/api/microsip/hangup", { method: "POST" }).catch(() => {});
     addToast(`Call ended (${formatted}). Please log disposition.`, "info");
   };
 

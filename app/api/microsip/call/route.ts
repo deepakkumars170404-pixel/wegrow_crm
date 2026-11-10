@@ -56,6 +56,17 @@ export async function POST(request: Request) {
       );
     }
 
+    // STRICT TESTING NUMBERS ALLOWED ONLY: 9843173678, 9943877948, 9092322803
+    const ALLOWED_TEST_NUMBERS = ["9843173678", "9943877948", "9092322803"];
+    const last10 = rawDigits.slice(-10);
+    if (!ALLOWED_TEST_NUMBERS.includes(last10)) {
+      console.warn(`[SAFETY BLOCK] Call to ${rawDigits} was blocked. Only authorized testing numbers allowed.`);
+      return NextResponse.json(
+        { error: `Testing Mode: Calling ${rawDigits} is blocked for safety. Only authorized test numbers are allowed: 9843173678, 9943877948, 9092322803` },
+        { status: 403 }
+      );
+    }
+
     const formattedPhone = cleanAndFormatPhone(rawPhone);
     if (!formattedPhone || formattedPhone.replace(/\D/g, "").length < 7) {
       return NextResponse.json({ error: "Invalid phone number format" }, { status: 400 });

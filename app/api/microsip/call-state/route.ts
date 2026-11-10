@@ -64,6 +64,8 @@ export async function GET(request: Request) {
       if (
         line.includes("[DISCONNECTED]") ||
         line.includes("to DISCONNECTED") ||
+        line.includes("Hangup all calls") ||
+        line.includes("Shutting down") ||
         line.includes("Request msg BYE") ||
         line.includes("Response msg 200/BYE") ||
         line.includes("Incoming Request msg BYE") ||
@@ -76,6 +78,12 @@ export async function GET(request: Request) {
         line.includes("Response msg 487") ||
         line.includes("487 Request Terminated") ||
         line.includes("Sending Request msg CANCEL") ||
+        line.includes("Response msg 403") ||
+        line.includes("403 Forbidden") ||
+        line.includes("Response msg 404") ||
+        line.includes("404 Not Found") ||
+        line.includes("Response msg 503") ||
+        line.includes("503 Service Unavailable") ||
         line.includes("Connection refused (WSAECONNREFUSED)") ||
         line.includes("Failed to send Request msg INVITE")
       ) {
@@ -88,6 +96,10 @@ export async function GET(request: Request) {
           lastOutcome = "Call Declined by Recipient (603)";
         } else if (line.includes("487") || line.includes("CANCEL")) {
           lastOutcome = "Call Cut / Canceled";
+        } else if (line.includes("403") || line.includes("Forbidden")) {
+          lastOutcome = "Call Forbidden (403)";
+        } else if (line.includes("404") || line.includes("Not Found")) {
+          lastOutcome = "Number Not Found (404)";
         } else if (line.includes("Connection refused") || line.includes("WSAECONNREFUSED")) {
           lastOutcome = "Connection Cooldown (Please wait 2 seconds)";
         } else {

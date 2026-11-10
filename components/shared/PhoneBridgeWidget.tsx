@@ -323,15 +323,17 @@ export const PhoneBridgeWidget: React.FC = () => {
       {/* 0. Floating Top In-Call Action Bar (Always visible on all screens during any call / IVR announcement) */}
       {(isCallConnected || callPhase !== "idle") && (
         <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[9999] animate-in slide-in-from-top-4 duration-200 pointer-events-auto select-none">
-          <div className="bg-[#0B1528] text-white px-6 py-3 rounded-full shadow-2xl border-2 border-rose-500 flex items-center gap-5 backdrop-blur-xl ring-4 ring-rose-500/20">
+          <div className={`bg-[#0B1528] text-white px-6 py-3 rounded-full shadow-2xl border-2 ${
+            callPhase === "connected" ? "border-emerald-500 ring-4 ring-emerald-500/20" : "border-rose-500 ring-4 ring-rose-500/20"
+          } flex items-center gap-5 backdrop-blur-xl`}>
             <div className="flex items-center gap-3">
-              <span className="w-3.5 h-3.5 rounded-full bg-rose-500 animate-ping" />
+              <span className={`w-3.5 h-3.5 rounded-full ${callPhase === "connected" ? "bg-emerald-400" : "bg-rose-500"} animate-ping`} />
               <div>
                 <span className="text-xs font-bold text-white block">
                   {currentDisplayLead?.studentName || "Dialing"} ({displayedPhone})
                 </span>
-                <span className="text-[11px] font-mono text-[#E5B842] font-semibold">
-                  {callPhase === "ringing" ? "Ringing / Playing Busy Prompt" : `Connected • ${formatTimer(callDuration)}`}
+                <span className={`text-[11px] font-mono font-semibold ${callPhase === "connected" ? "text-emerald-400" : "text-[#E5B842]"}`}>
+                  {callPhase === "ringing" ? "Ringing Student's Phone..." : `Connected • Live Talk: ${formatTimer(callDuration)}`}
                 </span>
               </div>
             </div>
@@ -340,7 +342,7 @@ export const PhoneBridgeWidget: React.FC = () => {
               type="button"
               onClick={handleHangup}
               className="px-5 py-2 bg-rose-600 hover:bg-rose-500 active:scale-95 text-white text-xs font-black uppercase tracking-wider rounded-full shadow-lg shadow-rose-600/50 flex items-center gap-2 transition-all cursor-pointer border border-rose-300 animate-pulse"
-              title="Instantly Cut Call (Stop Busy Message / Hangup) [Esc]"
+              title="Instantly Cut Call (Hangup) [Esc]"
             >
               <PhoneOff className="w-4 h-4" />
               <span>Cut Call (Hangup)</span>
