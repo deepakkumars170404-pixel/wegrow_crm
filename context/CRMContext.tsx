@@ -459,6 +459,18 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             idleConfirmCountRef.current = 0;
             hasRungOnceRef.current = true;
             setCallPhase("ringing");
+
+            // Automatic 50-second ring timeout if recipient never answers
+            const timeRinging = Date.now() - (callStartTimeRef.current || 0);
+            if (timeRinging > 50000) {
+              stopRingbackCadence();
+              playCallEndTone();
+              setCallPhase("idle");
+              setIsCallConnected(false);
+              hasRungOnceRef.current = false;
+              addToast("Ring Timeout • Student did not answer the phone", "warning");
+              fetch("/api/microsip/hangup", { method: "POST" }).catch(() => {});
+            }
           } else if (data.state === "idle") {
             const timeSinceStart = Date.now() - (callStartTimeRef.current || 0);
 

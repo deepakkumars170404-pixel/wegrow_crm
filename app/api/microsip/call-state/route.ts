@@ -75,7 +75,10 @@ export async function GET(request: Request) {
           globalThis.__MICROSIP_ACTIVE_CALL__.phone.includes(targetDigits)
         );
 
-        if (isCurrentCall && globalThis.__MICROSIP_ACTIVE_CALL__?.state !== "idle") {
+        const timeSinceDial = Date.now() - (globalThis.__MICROSIP_ACTIVE_CALL__?.updatedAt || 0);
+
+        // Only return synthetic "ringing" for the first 3500ms while MicroSIP is dispatching the INVITE
+        if (isCurrentCall && globalThis.__MICROSIP_ACTIVE_CALL__?.state !== "idle" && timeSinceDial < 3500) {
           return NextResponse.json(
             {
               state: "ringing",
@@ -93,11 +96,16 @@ export async function GET(request: Request) {
           );
         }
 
+        // If >3.5s passed and call was never logged in MicroSIP, mark idle immediately so UI doesn't hang
+        if (isCurrentCall && globalThis.__MICROSIP_ACTIVE_CALL__) {
+          globalThis.__MICROSIP_ACTIVE_CALL__.state = "idle";
+        }
+
         return NextResponse.json(
           {
             state: "idle",
             active: false,
-            lastOutcome: "Softphone Ready",
+            lastOutcome: timeSinceDial >= 3500 && isCurrentCall ? "Call Not Placed (MicroSIP Reconnected)" : "Softphone Ready",
             timestamp: Date.now(),
           },
           {
