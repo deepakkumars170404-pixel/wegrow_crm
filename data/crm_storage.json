@@ -1,14 +1,92 @@
 {
   "leads": [
     {
-      "studentName": "Incoming Lead (AI Call)",
-      "phone": "+91 99523 37331",
-      "email": "enquiry@wegrow.edu",
+      "id": "LD-TEST-1",
+      "studentName": "Ramesh Kumar (Test Line 1)",
+      "phone": "+91 98431 73678",
+      "email": "ramesh.test@wegrow.edu",
       "courseInterested": "Full Stack Web Development (MERN + Next.js)",
       "leadSource": "Phone",
       "status": "Interested",
       "priority": "Hot",
       "stage": "Interested",
+      "assignedCaller": "Kavya (AI Voice Agent)",
+      "city": "Sivakasi",
+      "enquiryDate": "2026-11-10",
+      "nextFollowUpDate": "2026-11-10",
+      "nextFollowUpTime": "11:00 AM",
+      "callCount": 1,
+      "notes": [
+        {
+          "id": "note-1",
+          "content": "Approved Testing Number for Live Telecalling Demo",
+          "timestamp": "2026-11-10T04:57:08.391Z",
+          "author": "System"
+        }
+      ],
+      "callHistory": []
+    },
+    {
+      "id": "LD-TEST-2",
+      "studentName": "Priya Sundaram (Test Line 2)",
+      "phone": "+91 99438 77948",
+      "email": "priya.test@wegrow.edu",
+      "courseInterested": "AI & Machine Learning (GenAI + Python)",
+      "leadSource": "Phone",
+      "status": "New",
+      "priority": "Hot",
+      "stage": "New Enquiry",
+      "assignedCaller": "Vikram (AI Voice Agent)",
+      "city": "Sivakasi",
+      "enquiryDate": "2026-11-10",
+      "nextFollowUpDate": "2026-11-10",
+      "nextFollowUpTime": "12:00 PM",
+      "callCount": 0,
+      "notes": [
+        {
+          "id": "note-2",
+          "content": "Approved Testing Number for Live Telecalling Demo",
+          "timestamp": "2026-11-10T04:57:08.392Z",
+          "author": "System"
+        }
+      ],
+      "callHistory": []
+    },
+    {
+      "id": "LD-TEST-3",
+      "studentName": "Vignesh R (Test Line 3)",
+      "phone": "+91 90923 22803",
+      "email": "vignesh.test@wegrow.edu",
+      "courseInterested": "Digital Marketing & Growth Engineering",
+      "leadSource": "Phone",
+      "status": "New",
+      "priority": "Warm",
+      "stage": "New Enquiry",
+      "assignedCaller": "Kavya (AI Voice Agent)",
+      "city": "Sivakasi",
+      "enquiryDate": "2026-11-10",
+      "nextFollowUpDate": "2026-11-10",
+      "nextFollowUpTime": "02:00 PM",
+      "callCount": 0,
+      "notes": [
+        {
+          "id": "note-3",
+          "content": "Approved Testing Number for Live Telecalling Demo",
+          "timestamp": "2026-11-10T04:57:08.392Z",
+          "author": "System"
+        }
+      ],
+      "callHistory": []
+    },
+    {
+      "studentName": "Incoming Lead (AI Call)",
+      "phone": "+91 98431 73678",
+      "email": "enquiry@wegrow.edu",
+      "courseInterested": "Full Stack Web Development (MERN + Next.js)",
+      "leadSource": "Phone",
+      "status": "Counselling Scheduled",
+      "priority": "Hot",
+      "stage": "Counselling Scheduled",
       "assignedCaller": "Priya Sharma",
       "city": "Sivakasi",
       "enquiryDate": "2026-11-05",
@@ -23,8 +101,26 @@
         }
       ],
       "id": "LD-1017",
-      "callCount": 4,
+      "callCount": 6,
       "callHistory": [
+        {
+          "id": "ch-1793871799958",
+          "callDate": "2026-11-05",
+          "callTime": "03:13 PM",
+          "callerName": "Kavya (AI Voice Agent)",
+          "duration": "0m 9s",
+          "outcome": "Enquiry Completed",
+          "remarks": "[AI Telecaller] Intent: Student enquired about WeGrow programs | Key Discussion: Discussed curriculum and Sivakasi campus visit | Next Action: Follow up with course brochure on WhatsApp"
+        },
+        {
+          "id": "ch-1793871640416",
+          "callDate": "2026-11-05",
+          "callTime": "03:10 PM",
+          "callerName": "Kavya (AI Voice Agent)",
+          "duration": "7m 55s",
+          "outcome": "Enquiry Completed",
+          "remarks": "[AI Telecaller] Intent: Student exploring available courses | Key Discussion: Mentioned major domains like Full Stack, AI, Data Science, Digital Marketing | Next Action: Assist student in choosing a specific course and offer free demo"
+        },
         {
           "id": "ch-1793866595684",
           "callDate": "2026-11-05",
@@ -167,7 +263,7 @@
       "leadSource": "Instagram",
       "assignedCaller": "Rahul Deshmukh",
       "priority": "Hot",
-      "status": "Counselling Scheduled",
+      "status": "Campus Visited",
       "enquiryDate": "2026-10-27",
       "nextFollowUpDate": "2026-10-30",
       "nextFollowUpTime": "04:00 PM",
@@ -176,7 +272,7 @@
       "callCount": 2,
       "lastCallDate": "2026-10-29",
       "lastCallOutcome": "Agreed for 1:1 campus counselling session tomorrow.",
-      "stage": "Counselling Scheduled",
+      "stage": "Campus Visited",
       "notes": [
         {
           "id": "nt-3",
@@ -371,7 +467,7 @@
       "leadSource": "Website",
       "assignedCaller": "Priya Sharma",
       "priority": "Hot",
-      "status": "Visited Campus",
+      "status": "Fee Discussion",
       "enquiryDate": "2026-10-24",
       "nextFollowUpDate": "2026-10-30",
       "nextFollowUpTime": "11:30 AM",
@@ -380,7 +476,7 @@
       "callCount": 3,
       "lastCallDate": "2026-10-28",
       "lastCallOutcome": "Campus tour completed. Met AI faculty Mr. Arvind.",
-      "stage": "Campus Visited"
+      "stage": "Fee Discussion"
     },
     {
       "id": "LD-1009",
@@ -515,10 +611,38 @@
   ],
   "followUps": [
     {
+      "id": "fu-1793871799958",
+      "leadId": "LD-1017",
+      "studentName": "Incoming Lead (AI Call)",
+      "phone": "+91 98431 73678",
+      "course": "Full Stack Web Development (MERN + Next.js)",
+      "assignedCaller": "Kavya (AI Voice Agent)",
+      "lastContacted": "2026-11-05 03:13 PM",
+      "followUpDate": "2026-11-05",
+      "followUpTime": "11:00 AM",
+      "status": "Today",
+      "priority": "Hot",
+      "remarks": "[AI Telecaller] Intent: Student enquired about WeGrow programs | Key Discussion: Discussed curriculum and Sivakasi campus visit | Next Action: Follow up with course brochure on WhatsApp"
+    },
+    {
+      "id": "fu-1793871640416",
+      "leadId": "LD-1017",
+      "studentName": "Incoming Lead (AI Call)",
+      "phone": "+91 98431 73678",
+      "course": "Full Stack Web Development (MERN + Next.js)",
+      "assignedCaller": "Kavya (AI Voice Agent)",
+      "lastContacted": "2026-11-05 03:10 PM",
+      "followUpDate": "2026-11-05",
+      "followUpTime": "11:00 AM",
+      "status": "Today",
+      "priority": "Hot",
+      "remarks": "[AI Telecaller] Intent: Student exploring available courses | Key Discussion: Mentioned major domains like Full Stack, AI, Data Science, Digital Marketing | Next Action: Assist student in choosing a specific course and offer free demo"
+    },
+    {
       "id": "fu-1793866595684",
       "leadId": "LD-1017",
       "studentName": "Incoming Lead (AI Call)",
-      "phone": "+91 99523 37331",
+      "phone": "+91 98431 73678",
       "course": "Full Stack Web Development (MERN + Next.js)",
       "assignedCaller": "Kavya (AI Voice Agent)",
       "lastContacted": "2026-11-05 01:46 PM",
@@ -697,5 +821,5 @@
       "remarks": "Orientation briefing completed. Admitted."
     }
   ],
-  "savedAt": "2026-11-05T08:16:35.730Z"
+  "savedAt": "2026-11-05T09:43:20.001Z"
 }

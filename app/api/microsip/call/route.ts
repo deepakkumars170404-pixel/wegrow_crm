@@ -19,24 +19,21 @@ function cleanAndFormatPhone(rawPhone: string): string {
   const cleanDigits = String(rawPhone).replace(/\D/g, "");
   if (!cleanDigits) return "";
 
-  // 10 digits Indian mobile (e.g. 9843173678 -> +919843173678)
+  // For JioFiber Fixed-Line SIP (TRAI India standard: Prefix '0' for Fixed-to-Mobile calling)
+  // 10 digits Indian mobile (e.g. 9843173678 -> 09843173678)
   if (cleanDigits.length === 10) {
-    return `+91${cleanDigits}`;
+    return `0${cleanDigits}`;
   }
-  // 12 digits starting with 91 (e.g. 919843173678 -> +919843173678)
+  // 12 digits starting with 91 (e.g. 919843173678 -> 09843173678)
   if (cleanDigits.length === 12 && cleanDigits.startsWith("91")) {
-    return `+${cleanDigits}`;
+    return `0${cleanDigits.substring(2)}`;
   }
-  // 11 digits starting with 0 (e.g. 09843173678 -> +919843173678, 04562355214 -> +914562355214)
+  // 11 digits starting with 0 (already formatted: 09843173678)
   if (cleanDigits.length === 11 && cleanDigits.startsWith("0")) {
-    return `+91${cleanDigits.substring(1)}`;
+    return cleanDigits;
   }
-  // Any international or other format with leading +
-  if (String(rawPhone).trim().startsWith("+")) {
-    return `+${cleanDigits}`;
-  }
-  // Default Indian prefix
-  return `+91${cleanDigits}`;
+  // Direct dial fallback
+  return cleanDigits;
 }
 
 export async function POST(request: Request) {
@@ -46,6 +43,17 @@ export async function POST(request: Request) {
 
     if (!rawPhone) {
       return NextResponse.json({ error: "Phone number is required" }, { status: 400 });
+    }
+
+    const rawDigits = String(rawPhone).replace(/\D/g, "");
+
+    // STRICT SAFETY GUARD: Do NOT call 9952337331 under any circumstance
+    if (rawDigits.includes("9952337331")) {
+      console.warn("[SAFETY BLOCK] Call to 9952337331 was rejected. Allowed test numbers: 9843173678, 9943877948, 9092322803");
+      return NextResponse.json(
+        { error: "Call to 9952337331 is strictly blocked. Allowed test numbers: 9843173678, 9943877948, 9092322803" },
+        { status: 403 }
+      );
     }
 
     const formattedPhone = cleanAndFormatPhone(rawPhone);

@@ -226,7 +226,7 @@ export const Header: React.FC<HeaderProps> = ({
         {/* 🤖 AI Receptionist Active Pill & Inbound Simulator Trigger */}
         <button
           type="button"
-          onClick={() => openAiCallModal(null, "+91 99523 37331", true)}
+          onClick={() => openAiCallModal(null, "+91 98431 73678", true)}
           className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-[11px] font-bold text-emerald-800 transition-all shadow-2xs hover:scale-105 active:scale-95"
           title="AI Voice Receptionist is Active 24/7. Click to simulate incoming student call!"
         >

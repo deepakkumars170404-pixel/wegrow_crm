@@ -5,7 +5,7 @@ import { initialCourses } from "@/data/dummy-data";
 const WEGROW_KNOWLEDGE = {
   name: "WeGrow Skill Campus",
   location: "Parasakthi Colony, Opposite Ayyappan Kovil, Sivakasi - 626123, Tamil Nadu",
-  phone: "+91 99523 37331",
+  phone: "+91 98431 73678",
   email: "admissions@wegrow.edu",
   courses: initialCourses.map((c) => ({
     name: c.name,

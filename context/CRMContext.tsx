@@ -153,7 +153,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // AI Voice Telecalling & Batch Auto-Dialer State
   const [isAiCallModalOpen, setIsAiCallModalOpen] = useState(false);
   const [aiCallLead, setAiCallLead] = useState<Lead | null>(null);
-  const [aiCallPhone, setAiCallPhone] = useState<string>("+91 99523 37331");
+  const [aiCallPhone, setAiCallPhone] = useState<string>("+91 98431 73678");
   const [isAiInbound, setIsAiInbound] = useState(false);
   const [isAiBatchDialerOpen, setIsAiBatchDialerOpen] = useState(false);
   const [aiBatchSelectedLeadIds, setAiBatchSelectedLeadIds] = useState<string[]>([]);
@@ -161,7 +161,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const openAiCallModal = useCallback(
     (lead?: Lead | null, phone?: string, isInbound?: boolean) => {
       setAiCallLead(lead || null);
-      setAiCallPhone(phone || lead?.phone || "+91 99523 37331");
+      setAiCallPhone(phone || lead?.phone || "+91 98431 73678");
       setIsAiInbound(Boolean(isInbound));
       setIsAiCallModalOpen(true);
     },
@@ -505,28 +505,36 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Format phone with mandatory +91 or 0 for JioFiber SIP (+91XXXXXXXXXX) - strictly remove all spaces/symbols
     const rawDigits = lead.phone.replace(/\D/g, "");
+
+    // STRICT SAFETY CHECK: Never call 9952337331
+    if (rawDigits.includes("9952337331")) {
+      stopRingbackCadence();
+      setCallPhase("idle");
+      setIsCallConnected(false);
+      addToast("Calling 9952337331 is strictly blocked. Allowed test numbers: 9843173678, 9943877948, 9092322803", "error");
+      return;
+    }
+
     let cleanPhone = "";
     if (rawDigits.length === 10) {
-      cleanPhone = `+91${rawDigits}`;
+      cleanPhone = `0${rawDigits}`;
     } else if (rawDigits.length === 12 && rawDigits.startsWith("91")) {
-      cleanPhone = `+${rawDigits}`;
+      cleanPhone = `0${rawDigits.substring(2)}`;
     } else if (rawDigits.length === 11 && rawDigits.startsWith("0")) {
-      cleanPhone = `+91${rawDigits.substring(1)}`;
-    } else if (lead.phone.trim().startsWith("+")) {
-      cleanPhone = `+${rawDigits}`;
+      cleanPhone = rawDigits;
     } else {
-      cleanPhone = `+91${rawDigits}`;
+      cleanPhone = rawDigits;
     }
 
     activePhoneRef.current = cleanPhone;
     setActivePhoneNumber(cleanPhone);
 
-    // Presentation / Airtel Demo Mode (Zero dependencies, 100% flawless presentation)
-    if (telephonyMode === "airtel" || telephonyMode === "presentation") {
+    // Presentation / Airtel Demo Mode (ONLY if JioFiber is NOT connected)
+    if (!telephonyStatus.connected && (telephonyMode === "airtel" || telephonyMode === "presentation")) {
       addToast(
         telephonyMode === "airtel"
-          ? `Airtel Office Mode: Calling ${lead.studentName} (${cleanPhone})...`
-          : `Presentation Mode: Calling ${lead.studentName} (${cleanPhone})...`,
+          ? `Airtel Office Mode (Simulation): Calling ${lead.studentName} (${cleanPhone})...`
+          : `Presentation Mode (Simulation): Calling ${lead.studentName} (${cleanPhone})...`,
         "info"
       );
       // Realistic Indian telecom ringback tone

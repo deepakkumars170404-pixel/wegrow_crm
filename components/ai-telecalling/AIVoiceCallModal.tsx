@@ -54,7 +54,7 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
   isOpen,
   onClose,
   lead,
-  phoneNumber = "+91 99523 37331",
+  phoneNumber = "+91 98431 73678",
   isInbound = false,
   autoAnswerDelaySeconds = 3,
 }) => {
@@ -788,7 +788,7 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
 
     if (!shouldSave) return;
 
-    const callerPhone = lead?.phone || phoneNumber || "+91 99523 37331";
+    const callerPhone = lead?.phone || phoneNumber || "+91 98431 73678";
     const studentName = lead?.studentName || "Incoming Lead (AI Call)";
     const durationStr = `${Math.floor(callSeconds / 60)}m ${callSeconds % 60}s`;
 
@@ -860,7 +860,7 @@ export const AIVoiceCallModal: React.FC<AIVoiceCallModalProps> = ({
 
   // Instant WhatsApp Message Dispatch
   const handleSendWhatsApp = () => {
-    const callerPhone = lead?.phone || phoneNumber || "+91 99523 37331";
+    const callerPhone = lead?.phone || phoneNumber || "+91 98431 73678";
     const cleanPhone = callerPhone.replace(/\D/g, "");
     const studentName = lead?.studentName || "Student";
 
@@ -872,7 +872,7 @@ Here are the details for your interested course:
 ${demoBooked && demoDetails ? `🎉 Free Demo Class: ${demoDetails.date} at ${demoDetails.time}` : "🎓 Free 2-Day Demo Class Available This Weekend!"}
 
 Download Syllabus & Fee Structure: https://wegrow.edu/syllabus
-Reach our Admissions Desk: +91 99523 37331`;
+Reach our Admissions Desk: +91 98431 73678`;
 
     const encoded = encodeURIComponent(text);
     window.open(`https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encoded}`, "_blank");

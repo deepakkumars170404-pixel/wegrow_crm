@@ -666,7 +666,7 @@ export default function SettingsPage() {
           {/* TAB 8: GEMINI AI VOICE TELECALLING */}
           {activeTab === "ai_telecalling" && (
             <AITelecallingSettings
-              onTriggerTestCall={() => openAiCallModal(null, "+91 99523 37331", true)}
+              onTriggerTestCall={() => openAiCallModal(null, "+91 98431 73678", true)}
             />
           )}
         </div>

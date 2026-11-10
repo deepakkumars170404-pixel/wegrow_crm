@@ -287,7 +287,7 @@ export default function CallManagementPage() {
 
           <button
             type="button"
-            onClick={() => openAiCallModal(null, "+91 99523 37331", true)}
+            onClick={() => openAiCallModal(null, "+91 98431 73678", true)}
             className="px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-500/30 hover:bg-emerald-500/40 text-white border border-white/20 transition-all flex items-center gap-1.5 active:scale-95"
             title="Simulate incoming student call to test 24/7 AI Auto-Answer"
           >
