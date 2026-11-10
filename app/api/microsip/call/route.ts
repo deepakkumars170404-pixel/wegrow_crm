@@ -47,22 +47,11 @@ export async function POST(request: Request) {
 
     const rawDigits = String(rawPhone).replace(/\D/g, "");
 
-    // STRICT SAFETY GUARD: Do NOT call 9952337331 under any circumstance
+    // STRICT SAFETY GUARD: PERMANENTLY BLOCK 9952337331 (NEVER CALL)
     if (rawDigits.includes("9952337331")) {
-      console.warn("[SAFETY BLOCK] Call to 9952337331 was rejected. Allowed test numbers: 9843173678, 9943877948, 9092322803");
+      console.warn("[SAFETY BLOCK] Call to 9952337331 was rejected.");
       return NextResponse.json(
-        { error: "Call to 9952337331 is strictly blocked. Allowed test numbers: 9843173678, 9943877948, 9092322803" },
-        { status: 403 }
-      );
-    }
-
-    // STRICT TESTING NUMBERS ALLOWED ONLY: 9843173678, 9943877948, 9092322803
-    const ALLOWED_TEST_NUMBERS = ["9843173678", "9943877948", "9092322803"];
-    const last10 = rawDigits.slice(-10);
-    if (!ALLOWED_TEST_NUMBERS.includes(last10)) {
-      console.warn(`[SAFETY BLOCK] Call to ${rawDigits} was blocked. Only authorized testing numbers allowed.`);
-      return NextResponse.json(
-        { error: `Testing Mode: Calling ${rawDigits} is blocked for safety. Only authorized test numbers are allowed: 9843173678, 9943877948, 9092322803` },
+        { error: "Calling 9952337331 is strictly and permanently blocked." },
         { status: 403 }
       );
     }

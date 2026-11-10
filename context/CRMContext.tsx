@@ -518,23 +518,12 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Format phone with mandatory +91 or 0 for JioFiber SIP (+91XXXXXXXXXX) - strictly remove all spaces/symbols
     const rawDigits = lead.phone.replace(/\D/g, "");
 
-    // STRICT SAFETY CHECK: Never call 9952337331
+    // STRICT SAFETY CHECK: PERMANENTLY BLOCK 9952337331 (NEVER CALL)
     if (rawDigits.includes("9952337331")) {
       stopRingbackCadence();
       setCallPhase("idle");
       setIsCallConnected(false);
-      addToast("Calling 9952337331 is strictly blocked. Allowed test numbers: 9843173678, 9943877948, 9092322803", "error");
-      return;
-    }
-
-    // STRICT TESTING NUMBERS ALLOWED ONLY: 9843173678, 9943877948, 9092322803
-    const ALLOWED_TEST_NUMBERS = ["9843173678", "9943877948", "9092322803"];
-    const last10 = rawDigits.slice(-10);
-    if (!ALLOWED_TEST_NUMBERS.includes(last10)) {
-      stopRingbackCadence();
-      setCallPhase("idle");
-      setIsCallConnected(false);
-      addToast(`Testing Mode: Calling ${rawDigits} is blocked for safety. Only authorized test numbers are allowed: 9843173678, 9943877948, 9092322803`, "warning");
+      addToast("Calling 9952337331 is strictly and permanently blocked.", "error");
       return;
     }
 

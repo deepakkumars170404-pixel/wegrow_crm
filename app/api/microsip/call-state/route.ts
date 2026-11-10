@@ -84,14 +84,13 @@ export async function GET(request: Request) {
         line.includes("404 Not Found") ||
         line.includes("Response msg 503") ||
         line.includes("503 Service Unavailable") ||
-        line.includes("Connection refused (WSAECONNREFUSED)") ||
         line.includes("Failed to send Request msg INVITE")
       ) {
         state = "idle";
         if (line.includes("480") || line.includes("Temporarily Unavailable")) {
-          lastOutcome = "Call Cut / Not Answered by Recipient (480)";
+          lastOutcome = "Call Cut / Not Answered (480)";
         } else if (line.includes("486") || line.includes("Busy")) {
-          lastOutcome = "Student Line Busy (486)";
+          lastOutcome = "Line Busy (486)";
         } else if (line.includes("603") || line.includes("Decline")) {
           lastOutcome = "Call Declined by Recipient (603)";
         } else if (line.includes("487") || line.includes("CANCEL")) {
@@ -100,10 +99,10 @@ export async function GET(request: Request) {
           lastOutcome = "Call Forbidden (403)";
         } else if (line.includes("404") || line.includes("Not Found")) {
           lastOutcome = "Number Not Found (404)";
-        } else if (line.includes("Connection refused") || line.includes("WSAECONNREFUSED")) {
-          lastOutcome = "Connection Cooldown (Please wait 2 seconds)";
+        } else if (line.includes("Failed to send Request msg INVITE")) {
+          lastOutcome = "Network Timeout (Please retry)";
         } else {
-          lastOutcome = "Call Ended / Disconnected";
+          lastOutcome = "Call Ended";
         }
         foundEvent = true;
         break; // Most recent event is termination! Stop scanning.
