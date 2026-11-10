@@ -1,0 +1,305 @@
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  Alert,
+  ActivityIndicator,
+} from "react-native";
+import { THEME } from "../constants/theme";
+import { StorageService } from "../services/storage";
+import { ApiService } from "../services/api";
+import { AppSettings } from "../types";
+
+export const SettingsScreen: React.FC = () => {
+  const [serverUrl, setServerUrl] = useState("http://192.168.29.60:3000");
+  const [callerName, setCallerName] = useState("Priya Sharma");
+  const [testing, setTesting] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+
+  useEffect(() => {
+    (async () => {
+      const s = await StorageService.getSettings();
+      setServerUrl(s.crmServerUrl);
+      setCallerName(s.callerName);
+      const pending = await StorageService.getPendingCalls();
+      setPendingCount(pending.length);
+    })();
+  }, []);
+
+  const handleSave = async () => {
+    const updated: AppSettings = {
+      crmServerUrl: serverUrl.trim(),
+      callerName: callerName.trim(),
+      autoPopupDisposition: true,
+      strictSafetyBlock: true,
+      vibrateOnCall: true,
+    };
+    await StorageService.saveSettings(updated);
+    Alert.alert("Saved", "Settings saved successfully!");
+  };
+
+  const handleTestConnection = async () => {
+    setTesting(true);
+    try {
+      let url = serverUrl.trim();
+      if (url.endsWith("/")) url = url.slice(0, -1);
+      const res = await fetch(`${url}/api/microsip/status`, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        Alert.alert(
+          "Connection Successful! ✓",
+          `Connected to Wegrow CRM Server.\nWiFi: ${data.wifiSSID || "Connected"}\nServer IP: ${data.localIp || "OK"}`
+        );
+      } else {
+        Alert.alert("Server Reachable", `Server responded with HTTP ${res.status}`);
+      }
+    } catch (err: any) {
+      Alert.alert(
+        "Connection Failed",
+        `Could not reach ${serverUrl}.\nEnsure phone is on same Wi-Fi or check IP address.\n\nError: ${err.message}`
+      );
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const handleSyncPending = async () => {
+    const res = await ApiService.syncPendingCalls();
+    const pending = await StorageService.getPendingCalls();
+    setPendingCount(pending.length);
+    Alert.alert("Sync Result", `Synced ${res.syncedCount} records. Remaining pending: ${pending.length}`);
+  };
+
+  return (
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>App Settings</Text>
+        <Text style={styles.headerSubtitle}>Wegrow CRM Connection & Caller Profile</Text>
+      </View>
+
+      {/* CRM Server URL */}
+      <View style={styles.card}>
+        <Text style={styles.label}>WEGROW CRM SERVER URL</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="e.g. http://192.168.29.60:3000"
+          placeholderTextColor={THEME.colors.textMuted}
+          value={serverUrl}
+          onChangeText={setServerUrl}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        <Text style={styles.helpText}>
+          Enter your computer's local IP address or production CRM domain.
+        </Text>
+
+        <TouchableOpacity
+          style={styles.testBtn}
+          onPress={handleTestConnection}
+          disabled={testing}
+        >
+          {testing ? (
+            <ActivityIndicator color={THEME.colors.gold} />
+          ) : (
+            <Text style={styles.testBtnText}>⚡ Test Connection to CRM</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      {/* Telecaller Identity */}
+      <View style={styles.card}>
+        <Text style={styles.label}>TELECALLER NAME</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="e.g. Priya Sharma"
+          placeholderTextColor={THEME.colors.textMuted}
+          value={callerName}
+          onChangeText={setCallerName}
+        />
+        <Text style={styles.helpText}>
+          This name will appear on all call logs and follow-up activities in the CRM.
+        </Text>
+      </View>
+
+      {/* Safety Guard Status */}
+      <View style={styles.card}>
+        <View style={styles.guardHeader}>
+          <Text style={styles.label}>STRICT SAFETY GUARD</Text>
+          <View style={styles.lockedBadge}>
+            <Text style={styles.lockedText}>LOCKED ON</Text>
+          </View>
+        </View>
+        <Text style={styles.guardDesc}>
+          • Number <Text style={styles.boldRed}>9952337331</Text> is strictly and permanently blocked from being dialed or messaged on this device.
+        </Text>
+      </View>
+
+      {/* Offline Sync Status */}
+      <View style={styles.card}>
+        <Text style={styles.label}>OFFLINE QUEUE & SYNC</Text>
+        <View style={styles.syncRow}>
+          <Text style={styles.syncCountText}>
+            {pendingCount} offline calls waiting to sync
+          </Text>
+          <TouchableOpacity
+            style={[styles.syncNowBtn, pendingCount === 0 && styles.syncNowDisabled]}
+            onPress={handleSyncPending}
+            disabled={pendingCount === 0}
+          >
+            <Text style={styles.syncNowText}>Sync Now</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Save Button */}
+      <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
+        <Text style={styles.saveBtnText}>Save Settings</Text>
+      </TouchableOpacity>
+    </ScrollView>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: THEME.colors.background,
+  },
+  content: {
+    paddingBottom: 40,
+  },
+  header: {
+    paddingTop: 50,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    backgroundColor: THEME.colors.card,
+    borderBottomWidth: 1,
+    borderBottomColor: THEME.colors.border,
+    marginBottom: 16,
+  },
+  headerTitle: {
+    color: THEME.colors.textPrimary,
+    fontSize: 22,
+    fontWeight: "bold",
+  },
+  headerSubtitle: {
+    color: THEME.colors.textSecondary,
+    fontSize: 13,
+    marginTop: 2,
+  },
+  card: {
+    backgroundColor: THEME.colors.card,
+    borderRadius: 14,
+    padding: 16,
+    marginHorizontal: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+  },
+  label: {
+    color: THEME.colors.gold,
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.8,
+    marginBottom: 8,
+  },
+  input: {
+    backgroundColor: THEME.colors.surface,
+    color: THEME.colors.textPrimary,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+  },
+  helpText: {
+    color: THEME.colors.textMuted,
+    fontSize: 11,
+    marginTop: 6,
+  },
+  testBtn: {
+    backgroundColor: THEME.colors.surface,
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: "center",
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: THEME.colors.gold,
+  },
+  testBtnText: {
+    color: THEME.colors.gold,
+    fontSize: 13,
+    fontWeight: "bold",
+  },
+  guardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  lockedBadge: {
+    backgroundColor: THEME.colors.surface,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: THEME.colors.emerald,
+  },
+  lockedText: {
+    color: THEME.colors.emerald,
+    fontSize: 10,
+    fontWeight: "bold",
+  },
+  guardDesc: {
+    color: THEME.colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  boldRed: {
+    color: THEME.colors.danger,
+    fontWeight: "bold",
+  },
+  syncRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 4,
+  },
+  syncCountText: {
+    color: THEME.colors.textSecondary,
+    fontSize: 13,
+  },
+  syncNowBtn: {
+    backgroundColor: THEME.colors.emerald,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  syncNowDisabled: {
+    opacity: 0.4,
+  },
+  syncNowText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "bold",
+  },
+  saveBtn: {
+    backgroundColor: THEME.colors.gold,
+    marginHorizontal: 16,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
+    marginTop: 8,
+  },
+  saveBtnText: {
+    color: "#0A1128",
+    fontSize: 15,
+    fontWeight: "bold",
+  },
+});

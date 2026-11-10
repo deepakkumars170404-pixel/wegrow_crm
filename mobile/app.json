@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "Wegrow Telecaller",
+    "slug": "wegrow-telecaller",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "backgroundColor": "#0A1128",
+      "resizeMode": "contain"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0A1128"
+      },
+      "package": "com.wegrow.telecaller",
+      "permissions": [
+        "CALL_PHONE",
+        "READ_PHONE_STATE",
+        "READ_CALL_LOG",
+        "INTERNET"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}
