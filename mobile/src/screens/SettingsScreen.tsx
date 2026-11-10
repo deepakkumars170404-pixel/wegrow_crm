@@ -12,6 +12,7 @@ import {
 import { THEME } from "../constants/theme";
 import { StorageService } from "../services/storage";
 import { ApiService } from "../services/api";
+import { TelephonyService } from "../services/telephony";
 import { AppSettings } from "../types";
 
 export const SettingsScreen: React.FC = () => {
@@ -139,6 +140,20 @@ export const SettingsScreen: React.FC = () => {
         <Text style={styles.guardDesc}>
           • Number <Text style={styles.boldRed}>9952337331</Text> is strictly and permanently blocked from being dialed or messaged on this device.
         </Text>
+      </View>
+
+      {/* Default Dialer Section */}
+      <View style={styles.card}>
+        <Text style={styles.label}>DEFAULT PHONE APP / DIALER</Text>
+        <Text style={styles.helpText}>
+          Make Wegrow Telecaller your phone's default dialer for 1-tap direct SIM calls.
+        </Text>
+        <TouchableOpacity
+          style={[styles.button, { backgroundColor: THEME.colors.primary, marginTop: 12 }]}
+          onPress={() => TelephonyService.promptSetAsDefaultDialer()}
+        >
+          <Text style={styles.buttonText}>📱 Set as Default Phone App</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Offline Sync Status */}

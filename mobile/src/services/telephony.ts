@@ -1,5 +1,7 @@
 import * as Linking from "expo-linking";
-import { Alert } from "react-native";
+import { Alert, NativeModules, Platform } from "react-native";
+
+const { WegrowTelephony } = NativeModules;
 
 export const TelephonyService = {
   // STRICT PERMANENT SAFETY GUARD
@@ -37,16 +39,49 @@ export const TelephonyService = {
       return { success: false, error: "Number too short" };
     }
 
+    // Try direct native SIM call first (places call directly without extra keypad)
+    if (Platform.OS === "android" && WegrowTelephony?.directCall) {
+      try {
+        await WegrowTelephony.directCall(clean10Digits);
+        return { success: true };
+      } catch (e: any) {
+        console.warn("WegrowTelephony directCall fallback:", e);
+      }
+    }
+
+    // Fallback to standard Linking intent
     try {
       const telUrl = `tel:${clean10Digits}`;
-      // On Android 11+ (API 30+), canOpenURL may return false due to package visibility,
-      // so directly calling openURL is the documented, robust way to launch the native dialer.
       await Linking.openURL(telUrl);
       return { success: true };
     } catch (err: any) {
       Alert.alert("Dialing Error", err.message || "Failed to launch phone dialer");
       return { success: false, error: err.message };
     }
+  },
+
+  async checkIsDefaultDialer(): Promise<boolean> {
+    if (Platform.OS === "android" && WegrowTelephony?.isDefaultDialer) {
+      try {
+        return await WegrowTelephony.isDefaultDialer();
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  },
+
+  async promptSetAsDefaultDialer(): Promise<boolean> {
+    if (Platform.OS === "android" && WegrowTelephony?.requestDefaultDialer) {
+      try {
+        await WegrowTelephony.requestDefaultDialer();
+        return true;
+      } catch (err: any) {
+        Alert.alert("Default Dialer", "Please select Wegrow Telecaller in Settings -> Default Apps -> Phone app.");
+        return false;
+      }
+    }
+    return false;
   },
 
   async openWhatsAppChat(phoneNumber: string, studentName?: string, course?: string): Promise<boolean> {
