@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { spawn, execSync } from "child_process";
+import { spawn } from "child_process";
 import fs from "fs";
 
 declare global {
@@ -72,12 +72,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Ensure MicroSIP is running; if not, launch via bridge /start
+    // Clear any dangling audio session in MicroSIP before immediate dialing (0ms delay)
     try {
-      const tasklist = execSync('tasklist /FI "IMAGENAME eq microsip.exe" /NH', { encoding: "utf8" });
-      if (!tasklist.toLowerCase().includes("microsip.exe") && fs.existsSync(bridgeExePath)) {
-        execSync(`"${bridgeExePath}" /start`);
-      }
+      spawn(exeToRun, ["/hangupall"], { detached: true, stdio: "ignore", cwd: "D:\\WEGROW\\MicroSIP" }).unref();
     } catch {}
 
     // Pre-seed in-memory active call state
