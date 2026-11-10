@@ -39,14 +39,10 @@ export const TelephonyService = {
 
     try {
       const telUrl = `tel:${clean10Digits}`;
-      const supported = await Linking.canOpenURL(telUrl);
-      if (supported) {
-        await Linking.openURL(telUrl);
-        return { success: true };
-      } else {
-        Alert.alert("Dialer Not Supported", "Unable to launch SIM phone dialer on this device.");
-        return { success: false, error: "Linking not supported" };
-      }
+      // On Android 11+ (API 30+), canOpenURL may return false due to package visibility,
+      // so directly calling openURL is the documented, robust way to launch the native dialer.
+      await Linking.openURL(telUrl);
+      return { success: true };
     } catch (err: any) {
       Alert.alert("Dialing Error", err.message || "Failed to launch phone dialer");
       return { success: false, error: err.message };
