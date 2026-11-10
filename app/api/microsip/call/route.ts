@@ -72,11 +72,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Clear any dangling audio session in MicroSIP before immediate dialing (0ms delay)
-    try {
-      spawn(exeToRun, ["/hangupall"], { detached: true, stdio: "ignore", cwd: "D:\\WEGROW\\MicroSIP" }).unref();
-    } catch {}
-
     // Pre-seed in-memory active call state
     globalThis.__MICROSIP_ACTIVE_CALL__ = {
       state: "ringing",

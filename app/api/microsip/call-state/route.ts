@@ -92,6 +92,22 @@ export async function GET(request: Request) {
             }
           );
         }
+
+        return NextResponse.json(
+          {
+            state: "idle",
+            active: false,
+            lastOutcome: "Softphone Ready",
+            timestamp: Date.now(),
+          },
+          {
+            headers: {
+              "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+              Pragma: "no-cache",
+              Expires: "0",
+            },
+          }
+        );
       } else {
         // Call for targetDigits was found! Scan lines strictly from callStartIndex to the end of log
         let isConnected = false;
@@ -150,6 +166,9 @@ export async function GET(request: Request) {
         }
 
         if (isDisconnected) {
+          if (globalThis.__MICROSIP_ACTIVE_CALL__) {
+            globalThis.__MICROSIP_ACTIVE_CALL__.state = "idle";
+          }
           return NextResponse.json(
             {
               state: "idle",
@@ -168,6 +187,12 @@ export async function GET(request: Request) {
         }
 
         if (isConnected) {
+          if (globalThis.__MICROSIP_ACTIVE_CALL__) {
+            globalThis.__MICROSIP_ACTIVE_CALL__.state = "connected";
+            if (!globalThis.__MICROSIP_ACTIVE_CALL__.connectedAt) {
+              globalThis.__MICROSIP_ACTIVE_CALL__.connectedAt = Date.now();
+            }
+          }
           return NextResponse.json(
             {
               state: "connected",
