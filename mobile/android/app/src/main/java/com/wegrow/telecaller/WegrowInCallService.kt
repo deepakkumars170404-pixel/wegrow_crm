@@ -45,7 +45,11 @@ class WegrowInCallService : InCallService() {
                 durationSeconds: Int,
                 activeTimeMs: Long,
                 isSpeaker: Boolean,
-                isMuted: Boolean
+                isMuted: Boolean,
+                hasHeldCall: Boolean = false,
+                heldPhoneNumber: String = "",
+                heldContactName: String = "",
+                isConference: Boolean = false
             )
         }
 
@@ -150,12 +154,57 @@ class WegrowInCallService : InCallService() {
             return false
         }
 
+        fun swapCalls(): Boolean {
+            val service = instance ?: return false
+            val active = service.calls.firstOrNull { it.state == Call.STATE_ACTIVE }
+            val held = service.calls.firstOrNull { it.state == Call.STATE_HOLDING }
+            if (active != null && held != null) {
+                try {
+                    active.hold()
+                    held.unhold()
+                    currentCall = held
+                    val handleUri = held.details?.handle
+                    if (handleUri != null) {
+                        currentPhoneNumber = handleUri.schemeSpecificPart ?: ""
+                    }
+                    contactName = resolveContactName(service, currentPhoneNumber)
+                    notifyUpdate("ACTIVE", Call.STATE_ACTIVE)
+                    return true
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to swap calls", e)
+                }
+            } else if (held != null) {
+                try {
+                    held.unhold()
+                    currentCall = held
+                    val handleUri = held.details?.handle
+                    if (handleUri != null) {
+                        currentPhoneNumber = handleUri.schemeSpecificPart ?: ""
+                    }
+                    contactName = resolveContactName(service, currentPhoneNumber)
+                    notifyUpdate("ACTIVE", Call.STATE_ACTIVE)
+                    return true
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to unhold held call", e)
+                }
+            }
+            return false
+        }
+
         fun mergeConference(): Boolean {
-            val call = currentCall ?: return false
+            val service = instance ?: return false
+            val active = currentCall ?: service.calls.firstOrNull { it.state == Call.STATE_ACTIVE } ?: return false
             try {
-                val conf = call.conferenceableCalls
+                val conf = active.conferenceableCalls
                 if (conf != null && conf.isNotEmpty()) {
-                    call.conference(conf[0])
+                    active.conference(conf[0])
+                    notifyUpdate("ACTIVE", Call.STATE_ACTIVE)
+                    return true
+                }
+                val other = service.calls.firstOrNull { it != active && (it.state == Call.STATE_HOLDING || it.state == Call.STATE_ACTIVE) }
+                if (other != null) {
+                    active.conference(other)
+                    notifyUpdate("ACTIVE", Call.STATE_ACTIVE)
                     return true
                 }
             } catch (e: Exception) {
@@ -197,6 +246,20 @@ class WegrowInCallService : InCallService() {
                 }
             } else 0
 
+            val held = instance?.calls?.firstOrNull { it.state == Call.STATE_HOLDING }
+            val hasHeld = held != null
+            var heldPhone = ""
+            var heldName = ""
+            if (held != null) {
+                try {
+                    heldPhone = held.details?.handle?.schemeSpecificPart ?: ""
+                    instance?.let { heldName = resolveContactName(it, heldPhone) }
+                } catch (e: Exception) {}
+            }
+
+            val isConf = (currentCall?.conferenceableCalls != null && currentCall?.conferenceableCalls?.isNotEmpty() == true) ||
+                         (instance?.calls?.any { it.details?.hasProperty(Call.Details.PROPERTY_CONFERENCE) == true } == true)
+
             listener?.onCallStateUpdate(
                 state = state,
                 rawState = rawState,
@@ -206,7 +269,11 @@ class WegrowInCallService : InCallService() {
                 durationSeconds = durSecs,
                 activeTimeMs = callActiveTimeMs,
                 isSpeaker = isSpeakerOn,
-                isMuted = isMuted
+                isMuted = isMuted,
+                hasHeldCall = hasHeld,
+                heldPhoneNumber = heldPhone,
+                heldContactName = heldName,
+                isConference = isConf
             )
         }
     }
@@ -234,10 +301,23 @@ class WegrowInCallService : InCallService() {
 
     override fun onCallAdded(call: Call) {
         super.onCallAdded(call)
+
+        // If there's an existing active call, place it on hold to make room for this new call
+        val prevCall = currentCall
+        if (prevCall != null && prevCall != call && prevCall.state == Call.STATE_ACTIVE) {
+            try {
+                prevCall.hold()
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to put previous call on hold", e)
+            }
+        }
+
         currentCall = call
-        callDialStartTimeMs = System.currentTimeMillis()
-        callActiveTimeMs = 0L
-        callEndTimeMs = 0L
+        if (callActiveTimeMs == 0L || prevCall == null) {
+            callDialStartTimeMs = System.currentTimeMillis()
+            callActiveTimeMs = 0L
+            callEndTimeMs = 0L
+        }
         isSpeakerOn = false
         isMuted = false
 
@@ -287,11 +367,42 @@ class WegrowInCallService : InCallService() {
                 notifyUpdate("RINGING", state)
             }
             Call.STATE_DISCONNECTED, Call.STATE_DISCONNECTING -> {
-                callEndTimeMs = System.currentTimeMillis()
-                cancelNotification()
-                notifyUpdate("DISCONNECTED", state)
-                if (currentCall == c) {
-                    currentCall = null
+                // Check if another call is still alive (e.g. Call 1 that was placed on hold)
+                val remainingLiveCalls = calls.filter { 
+                    it != c && it.state != Call.STATE_DISCONNECTED && it.state != Call.STATE_DISCONNECTING 
+                }
+
+                if (remainingLiveCalls.isNotEmpty()) {
+                    // Switch back to the remaining live call!
+                    val remaining = remainingLiveCalls.first()
+                    currentCall = remaining
+
+                    // Automatically unhold Call 1 so student and telecaller can continue talking immediately!
+                    try {
+                        if (remaining.state == Call.STATE_HOLDING) {
+                            remaining.unhold()
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to auto-unhold remaining call", e)
+                    }
+
+                    try {
+                        val handleUri = remaining.details?.handle
+                        if (handleUri != null) {
+                            currentPhoneNumber = handleUri.schemeSpecificPart ?: ""
+                        }
+                    } catch (e: Exception) {}
+                    contactName = resolveContactName(this, currentPhoneNumber)
+
+                    notifyUpdate(if (remaining.state == Call.STATE_HOLDING) "HOLDING" else "ACTIVE", remaining.state)
+                } else {
+                    // All calls have ended!
+                    callEndTimeMs = System.currentTimeMillis()
+                    cancelNotification()
+                    notifyUpdate("DISCONNECTED", state)
+                    if (currentCall == c) {
+                        currentCall = null
+                    }
                 }
             }
             else -> {
@@ -302,14 +413,36 @@ class WegrowInCallService : InCallService() {
 
     override fun onCallRemoved(call: Call) {
         super.onCallRemoved(call)
-        if (currentCall == call) {
-            if (currentState != "DISCONNECTED") {
-                callEndTimeMs = System.currentTimeMillis()
-                notifyUpdate("DISCONNECTED", Call.STATE_DISCONNECTED)
-            }
-            currentCall = null
+        val remainingLiveCalls = calls.filter { 
+            it != call && it.state != Call.STATE_DISCONNECTED && it.state != Call.STATE_DISCONNECTING 
         }
-        cancelNotification()
+
+        if (remainingLiveCalls.isNotEmpty()) {
+            val remaining = remainingLiveCalls.first()
+            currentCall = remaining
+            try {
+                if (remaining.state == Call.STATE_HOLDING) {
+                    remaining.unhold()
+                }
+            } catch (e: Exception) {}
+            try {
+                val handleUri = remaining.details?.handle
+                if (handleUri != null) {
+                    currentPhoneNumber = handleUri.schemeSpecificPart ?: ""
+                }
+            } catch (e: Exception) {}
+            contactName = resolveContactName(this, currentPhoneNumber)
+            notifyUpdate("ACTIVE", remaining.state)
+        } else {
+            if (currentCall == call) {
+                if (currentState != "DISCONNECTED") {
+                    callEndTimeMs = System.currentTimeMillis()
+                    notifyUpdate("DISCONNECTED", Call.STATE_DISCONNECTED)
+                }
+                currentCall = null
+            }
+            cancelNotification()
+        }
     }
 
     private fun wakeUpScreenAndLaunchUI() {

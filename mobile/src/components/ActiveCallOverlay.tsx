@@ -11,12 +11,14 @@ import {
   PanResponder,
   Alert,
   ScrollView,
+  Platform,
 } from "react-native";
 import { THEME } from "../constants/theme";
 import {
   Phone,
   PhoneCall,
   PhoneOff,
+  PhoneIncoming,
   ChevronsLeft,
   ChevronsRight,
   Mic,
@@ -24,11 +26,14 @@ import {
   Volume2,
   Grid3X3,
   UserPlus,
-  Bell,
+  Users,
+  ArrowLeftRight,
+  UserCheck,
   GraduationCap,
   User,
   X,
   Delete,
+  Sparkles,
 } from "lucide-react-native";
 import { TelephonyService, NativeCallStateEvent } from "../services/telephony";
 import { StorageService } from "../services/storage";
@@ -58,7 +63,21 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({ onCallEnde
   const [matchedLead, setMatchedLead] = useState<Lead | null>(null);
   const [activeStaff, setActiveStaff] = useState<StaffMember>("MuthuSelvi");
 
+  // Multi-Call / Conference Support
+  const [hasHeldCall, setHasHeldCall] = useState<boolean>(false);
+  const [heldPhoneNumber, setHeldPhoneNumber] = useState<string>("");
+  const [heldContactName, setHeldContactName] = useState<string>("");
+  const [isConference, setIsConference] = useState<boolean>(false);
+  const [heldCallBackup, setHeldCallBackup] = useState<{
+    phone: string;
+    name: string;
+    duration: number;
+    lead: Lead | null;
+  } | null>(null);
+
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const waveAnim1 = useRef(new Animated.Value(0)).current;
+  const waveAnim2 = useRef(new Animated.Value(0)).current;
   const activeCallStartRef = useRef<number | null>(null);
   const currentPhoneNumberRef = useRef<string>("");
 
@@ -75,13 +94,13 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({ onCallEnde
     });
   }, []);
 
-  // Pulsing animation for ringing
+  // Radar Pulse Waves Animation for Incoming Calls
   useEffect(() => {
     if (callState === "RINGING" || callState === "DIALING") {
-      const loop = Animated.loop(
+      const pulseLoop = Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
-            toValue: 1.2,
+            toValue: 1.15,
             duration: 700,
             useNativeDriver: true,
           }),
@@ -92,8 +111,30 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({ onCallEnde
           }),
         ])
       );
-      loop.start();
-      return () => loop.stop();
+      pulseLoop.start();
+
+      const waveLoop = Animated.loop(
+        Animated.stagger(450, [
+          Animated.timing(waveAnim1, {
+            toValue: 1,
+            duration: 1600,
+            useNativeDriver: true,
+          }),
+          Animated.timing(waveAnim2, {
+            toValue: 1,
+            duration: 1600,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      waveLoop.start();
+
+      return () => {
+        pulseLoop.stop();
+        waveLoop.stop();
+        waveAnim1.setValue(0);
+        waveAnim2.setValue(0);
+      };
     } else {
       pulseAnim.setValue(1);
     }
@@ -154,6 +195,18 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({ onCallEnde
       if (event.isMuted !== undefined) {
         setIsMuted(event.isMuted);
       }
+      if (event.hasHeldCall !== undefined) {
+        setHasHeldCall(event.hasHeldCall);
+      }
+      if (event.heldPhoneNumber !== undefined) {
+        setHeldPhoneNumber(event.heldPhoneNumber);
+      }
+      if (event.heldContactName !== undefined) {
+        setHeldContactName(event.heldContactName);
+      }
+      if (event.isConference !== undefined) {
+        setIsConference(event.isConference);
+      }
 
       if (state === "ACTIVE") {
         if (callState !== "ACTIVE") {
@@ -161,6 +214,8 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({ onCallEnde
           setLiveDurationSec(1);
         }
         setCallState("ACTIVE");
+      } else if (state === "HOLDING") {
+        setCallState("HOLDING");
       } else if (state === "RINGING" || state === "DIALING" || state === "CONNECTING") {
         setCallState("RINGING");
         lookupLead(phone);
@@ -168,6 +223,23 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({ onCallEnde
           Vibration.vibrate([0, 500, 400, 500]);
         }
       } else if (state === "DISCONNECTED") {
+        // If there is still a held call in background, seamlessly restore Call 1!
+        if (event.hasHeldCall || hasHeldCall || heldCallBackup) {
+          const backup = heldCallBackup;
+          if (backup) {
+            setPhoneNumber(backup.phone);
+            currentPhoneNumberRef.current = backup.phone;
+            setContactName(backup.name);
+            setLiveDurationSec(backup.duration);
+            setMatchedLead(backup.lead);
+          }
+          setHeldCallBackup(null);
+          setHasHeldCall(false);
+          setCallState("ACTIVE");
+          TelephonyService.unholdCall().catch(() => {});
+          return;
+        }
+
         const finalSecs = activeCallStartRef.current
           ? Math.max(1, Math.round((Date.now() - activeCallStartRef.current) / 1000))
           : event.durationSeconds || 0;
@@ -179,6 +251,9 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({ onCallEnde
         activeCallStartRef.current = null;
         setShowKeypad(false);
         setShowAddCallSheet(false);
+        setHeldCallBackup(null);
+        setHasHeldCall(false);
+        setIsConference(false);
 
         if (currentPhone) {
           onCallEnded({
@@ -192,7 +267,7 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({ onCallEnde
     });
 
     return () => sub.remove();
-  }, [callState, contactName, matchedLead]);
+  }, [callState, contactName, matchedLead, hasHeldCall, heldCallBackup]);
 
   const handleAnswer = async () => {
     try {
@@ -251,14 +326,76 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({ onCallEnde
     }
 
     try {
-      // Put first call on hold
+      // 1. Save backup snapshot of Call 1
+      setHeldCallBackup({
+        phone: phoneNumber,
+        name: displayName,
+        duration: liveDurationSec,
+        lead: matchedLead,
+      });
+
+      // 2. Put first call on hold
       await TelephonyService.holdCall();
-      // Dial second call
+
+      // 3. 300ms buffer for carrier hold transition
+      await new Promise((r) => setTimeout(r, 300));
+
+      // 4. Dial second call via SIM
       await TelephonyService.dialViaSIM(addCallNumber.trim());
+
       setShowAddCallSheet(false);
       setAddCallNumber("");
     } catch (e: any) {
       Alert.alert("Call Error", e.message || "Failed to place second call");
+    }
+  };
+
+  const handleMergeConference = async () => {
+    try {
+      Vibration.vibrate(60);
+      const res = await TelephonyService.mergeCalls();
+      if (res) {
+        setIsConference(true);
+        setHasHeldCall(false);
+        setHeldCallBackup(null);
+        Alert.alert("Conference Active", "Both calls are now merged into a 3-way conference call!");
+      }
+    } catch (e: any) {
+      Alert.alert("Conference", e.message || "Failed to merge calls into conference");
+    }
+  };
+
+  const handleSwapCalls = async () => {
+    try {
+      Vibration.vibrate(60);
+      await TelephonyService.swapCalls();
+      // Swap local display state
+      const prevActivePhone = phoneNumber;
+      const prevActiveName = displayName;
+      const prevActiveDuration = liveDurationSec;
+      const prevActiveLead = matchedLead;
+
+      if (heldCallBackup) {
+        setPhoneNumber(heldCallBackup.phone);
+        currentPhoneNumberRef.current = heldCallBackup.phone;
+        setContactName(heldCallBackup.name);
+        setLiveDurationSec(heldCallBackup.duration);
+        setMatchedLead(heldCallBackup.lead);
+        setHeldCallBackup({
+          phone: prevActivePhone,
+          name: prevActiveName,
+          duration: prevActiveDuration,
+          lead: prevActiveLead,
+        });
+      } else if (heldPhoneNumber) {
+        setPhoneNumber(heldPhoneNumber);
+        currentPhoneNumberRef.current = heldPhoneNumber;
+        setContactName(heldContactName);
+        setHeldPhoneNumber(prevActivePhone);
+        setHeldContactName(prevActiveName);
+      }
+    } catch (e: any) {
+      Alert.alert("Swap Error", e.message || "Failed to swap calls");
     }
   };
 
@@ -317,6 +454,7 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({ onCallEnde
     callState === "RINGING" ||
     callState === "DIALING" ||
     callState === "ACTIVE" ||
+    callState === "HOLDING" ||
     callState === "CONNECTING";
 
   if (!isVisible) return null;
@@ -345,24 +483,78 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({ onCallEnde
           ) : null}
         </View>
 
-        {/* Center Caller Info & Pulsing Avatar */}
+        {/* Center Caller Info & High-End Radar Wave Avatar */}
         <View style={styles.centerArea}>
-          <Animated.View
-            style={[
-              styles.avatarContainer,
-              (callState === "RINGING" || callState === "DIALING") && {
-                transform: [{ scale: pulseAnim }],
-              },
-            ]}
-          >
-            <View style={[styles.avatarInner, isIncoming ? styles.avatarIncoming : styles.avatarActive]}>
-              {isIncoming ? (
-                <Bell size={46} color="#FFFFFF" />
-              ) : (
-                <PhoneCall size={46} color="#FFFFFF" />
-              )}
-            </View>
-          </Animated.View>
+          <View style={styles.avatarWrapper}>
+            {isIncoming && (
+              <>
+                <Animated.View
+                  style={[
+                    styles.radarRing,
+                    {
+                      transform: [
+                        {
+                          scale: waveAnim1.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [1, 1.55],
+                          }),
+                        },
+                      ],
+                      opacity: waveAnim1.interpolate({
+                        inputRange: [0, 0.7, 1],
+                        outputRange: [0.55, 0.25, 0],
+                      }),
+                    },
+                  ]}
+                />
+                <Animated.View
+                  style={[
+                    styles.radarRing,
+                    {
+                      transform: [
+                        {
+                          scale: waveAnim2.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [1, 1.35],
+                          }),
+                        },
+                      ],
+                      opacity: waveAnim2.interpolate({
+                        inputRange: [0, 0.7, 1],
+                        outputRange: [0.65, 0.35, 0],
+                      }),
+                    },
+                  ]}
+                />
+              </>
+            )}
+
+            <Animated.View
+              style={[
+                styles.avatarContainer,
+                (callState === "RINGING" || callState === "DIALING") && {
+                  transform: [{ scale: pulseAnim }],
+                },
+              ]}
+            >
+              <View style={[styles.avatarInner, isIncoming ? styles.avatarIncoming : styles.avatarActive]}>
+                {isIncoming ? (
+                  matchedLead || contactName ? (
+                    <UserCheck size={52} color="#FFFFFF" strokeWidth={2.3} />
+                  ) : (
+                    <PhoneIncoming size={50} color="#FFFFFF" strokeWidth={2.3} />
+                  )
+                ) : (
+                  <PhoneCall size={50} color="#FFFFFF" strokeWidth={2.3} />
+                )}
+                {isIncoming && (
+                  <View style={styles.floatingIncomingBadge}>
+                    <Phone size={13} color="#FFFFFF" strokeWidth={2.5} />
+                  </View>
+                )}
+              </View>
+            </Animated.View>
+          </View>
 
           <Text style={styles.callerName} numberOfLines={1}>
             {displayName}
@@ -371,14 +563,29 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({ onCallEnde
 
           {/* Status & Live Timer */}
           <View style={styles.statusBox}>
-            {callState === "ACTIVE" ? (
+            {isConference ? (
+              <View style={styles.activeTimerRow}>
+                <View style={styles.greenPulseDot} />
+                <Text style={styles.liveTimerText}>{formatTimer(liveDurationSec)}</Text>
+                <Text style={[styles.callStateLabel, { color: "#10B981" }]}>3-WAY CONFERENCE</Text>
+              </View>
+            ) : callState === "ACTIVE" ? (
               <View style={styles.activeTimerRow}>
                 <View style={styles.greenPulseDot} />
                 <Text style={styles.liveTimerText}>{formatTimer(liveDurationSec)}</Text>
                 <Text style={styles.callStateLabel}>LIVE CALL</Text>
               </View>
+            ) : callState === "HOLDING" ? (
+              <View style={styles.activeTimerRow}>
+                <View style={[styles.greenPulseDot, { backgroundColor: "#F59E0B" }]} />
+                <Text style={[styles.liveTimerText, { color: "#D97706" }]}>{formatTimer(liveDurationSec)}</Text>
+                <Text style={[styles.callStateLabel, { color: "#D97706" }]}>CALL ON HOLD</Text>
+              </View>
             ) : isIncoming ? (
-              <Text style={styles.incomingLabel}>INCOMING CALL • RINGING...</Text>
+              <View style={styles.incomingBadgePill}>
+                <View style={styles.liveGreenDot} />
+                <Text style={styles.incomingLabel}>INCOMING CALL • SIM 1</Text>
+              </View>
             ) : (
               <Text style={styles.dialingLabel}>DIALING • CONNECTING...</Text>
             )}
@@ -455,6 +662,45 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({ onCallEnde
           ) : (
             /* Active Call Controls: Mute, Speaker, Keypad, Add Call, End Call */
             <View style={styles.activeControlsContainer}>
+              {/* Held Call Card (When in a 2-call session or call on hold) */}
+              {(hasHeldCall || heldCallBackup) && (
+                <View style={styles.heldCallCard}>
+                  <View style={styles.heldCallHeader}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1 }}>
+                      <View style={styles.heldPulseDot} />
+                      <Text style={styles.heldCallTitle} numberOfLines={1}>
+                        On Hold: <Text style={{ fontWeight: "800", color: "#166534" }}>
+                          {heldContactName || heldCallBackup?.name || heldPhoneNumber || "Call 1"}
+                        </Text>
+                      </Text>
+                    </View>
+                    <Text style={styles.heldCallPhone}>
+                      {heldPhoneNumber || heldCallBackup?.phone}
+                    </Text>
+                  </View>
+
+                  <View style={styles.heldCallActionRow}>
+                    <TouchableOpacity
+                      style={styles.mergeConfBtn}
+                      onPress={handleMergeConference}
+                      activeOpacity={0.8}
+                    >
+                      <Users size={16} color="#FFFFFF" strokeWidth={2.3} style={{ marginRight: 6 }} />
+                      <Text style={styles.mergeConfText}>Merge Conference 👥</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.swapCallBtn}
+                      onPress={handleSwapCalls}
+                      activeOpacity={0.8}
+                    >
+                      <ArrowLeftRight size={15} color="#2563EB" strokeWidth={2.3} style={{ marginRight: 5 }} />
+                      <Text style={styles.swapCallText}>Swap 🔄</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
               <View style={styles.controlsGrid}>
                 {/* Mute Button */}
                 <TouchableOpacity
@@ -612,8 +858,9 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({ onCallEnde
                 <TouchableOpacity
                   style={styles.dialAddCallBtn}
                   onPress={handleDialSecondCall}
+                  activeOpacity={0.8}
                 >
-                  <Text style={styles.dialAddCallIcon}>📞</Text>
+                  <PhoneCall size={16} color="#FFFFFF" strokeWidth={2.3} style={{ marginRight: 6 }} />
                   <Text style={styles.dialAddCallText}>Dial Second Call</Text>
                 </TouchableOpacity>
               </View>
@@ -672,19 +919,56 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 24,
   },
-  avatarContainer: {
-    marginBottom: 20,
-  },
-  avatarInner: {
-    width: 104,
-    height: 104,
-    borderRadius: 52,
+  avatarWrapper: {
+    width: 140,
+    height: 140,
     alignItems: "center",
     justifyContent: "center",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 8,
+    position: "relative",
+    marginBottom: 16,
+  },
+  radarRing: {
+    position: "absolute",
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    backgroundColor: "rgba(37, 99, 235, 0.22)",
+    borderWidth: 2,
+    borderColor: "rgba(59, 130, 246, 0.45)",
+  },
+  avatarContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarInner: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 10,
+    position: "relative",
+  },
+  floatingIncomingBadge: {
+    position: "absolute",
+    bottom: 2,
+    right: 2,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#10B981",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2.5,
+    borderColor: "#FFFFFF",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 4,
   },
   avatarIncoming: {
     backgroundColor: "#2563EB",
@@ -693,9 +977,6 @@ const styles = StyleSheet.create({
   avatarActive: {
     backgroundColor: "#059669",
     shadowColor: "#059669",
-  },
-  avatarIcon: {
-    fontSize: 44,
   },
   callerName: {
     fontSize: 26,
@@ -719,6 +1000,98 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderWidth: 1,
     borderColor: "#E2E8F0",
+  },
+  incomingBadgePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  liveGreenDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#10B981",
+  },
+  heldCallCard: {
+    backgroundColor: "#F0FDF4",
+    marginHorizontal: 16,
+    marginBottom: 14,
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#86EFAC",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  heldCallHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  heldPulseDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#F59E0B",
+  },
+  heldCallTitle: {
+    fontSize: 13,
+    color: "#166534",
+  },
+  heldCallPhone: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#15803D",
+    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
+  },
+  heldCallActionRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  mergeConfBtn: {
+    flex: 1.4,
+    backgroundColor: "#10B981",
+    borderRadius: 10,
+    paddingVertical: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#10B981",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  mergeConfText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  swapCallBtn: {
+    flex: 1,
+    backgroundColor: "#EFF6FF",
+    borderRadius: 10,
+    paddingVertical: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+  },
+  swapCallText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#2563EB",
   },
   activeTimerRow: {
     flexDirection: "row",

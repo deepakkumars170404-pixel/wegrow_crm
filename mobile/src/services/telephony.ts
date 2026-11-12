@@ -15,6 +15,10 @@ export interface NativeCallStateEvent {
   isAttended?: boolean;
   isSpeaker?: boolean;
   isMuted?: boolean;
+  hasHeldCall?: boolean;
+  heldPhoneNumber?: string;
+  heldContactName?: string;
+  isConference?: boolean;
 }
 
 export const TelephonyService = {
@@ -173,6 +177,17 @@ export const TelephonyService = {
         return await WegrowTelephony.mergeCalls();
       } catch (err) {
         console.warn("WegrowTelephony mergeCalls error:", err);
+      }
+    }
+    return false;
+  },
+
+  async swapCalls(): Promise<boolean> {
+    if (Platform.OS === "android" && WegrowTelephony?.swapCalls) {
+      try {
+        return await WegrowTelephony.swapCalls();
+      } catch (err) {
+        console.warn("WegrowTelephony swapCalls error:", err);
       }
     }
     return false;

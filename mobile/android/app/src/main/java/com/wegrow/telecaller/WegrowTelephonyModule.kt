@@ -5,9 +5,11 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.telecom.TelecomManager
+import android.util.Log
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -17,6 +19,10 @@ import com.facebook.react.modules.core.DeviceEventManagerModule
 
 class WegrowTelephonyModule(private val reactContext: ReactApplicationContext) :
     ReactContextBaseJavaModule(reactContext), WegrowInCallService.Companion.CallStateListener {
+
+    companion object {
+        private const val TAG = "WegrowTelephony"
+    }
 
     init {
         WegrowInCallService.listener = this
@@ -33,7 +39,11 @@ class WegrowTelephonyModule(private val reactContext: ReactApplicationContext) :
         durationSeconds: Int,
         activeTimeMs: Long,
         isSpeaker: Boolean,
-        isMuted: Boolean
+        isMuted: Boolean,
+        hasHeldCall: Boolean,
+        heldPhoneNumber: String,
+        heldContactName: String,
+        isConference: Boolean
     ) {
         try {
             val params = Arguments.createMap().apply {
@@ -47,6 +57,10 @@ class WegrowTelephonyModule(private val reactContext: ReactApplicationContext) :
                 putBoolean("isAttended", activeTimeMs > 0L)
                 putBoolean("isSpeaker", isSpeaker)
                 putBoolean("isMuted", isMuted)
+                putBoolean("hasHeldCall", hasHeldCall)
+                putString("heldPhoneNumber", heldPhoneNumber)
+                putString("heldContactName", heldContactName)
+                putBoolean("isConference", isConference)
             }
             reactContext
                 .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
@@ -111,11 +125,31 @@ class WegrowTelephonyModule(private val reactContext: ReactApplicationContext) :
             WegrowInCallService.callEndTimeMs = 0L
             WegrowInCallService.notifyUpdate("DIALING", 1)
 
-            val intent = Intent(Intent.ACTION_CALL).apply {
-                data = Uri.parse("tel:$cleanDigits")
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            // PRIORITY 1: Use TelecomManager.placeCall (the native way for InCallService to place calls without UI collisions)
+            val telecomManager = reactContext.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
+            val callUri = Uri.fromParts("tel", cleanDigits, null)
+            val extras = Bundle().apply {
+                putBoolean(TelecomManager.EXTRA_START_CALL_WITH_SPEAKERPHONE, false)
             }
-            reactContext.startActivity(intent)
+
+            var placed = false
+            if (telecomManager != null &&
+                androidx.core.content.ContextCompat.checkSelfPermission(reactContext, android.Manifest.permission.CALL_PHONE) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                try {
+                    telecomManager.placeCall(callUri, extras)
+                    placed = true
+                } catch (e: Exception) {
+                    Log.w(TAG, "telecomManager.placeCall fallback to ACTION_CALL: ${e.message}")
+                }
+            }
+
+            if (!placed) {
+                val intent = Intent(Intent.ACTION_CALL).apply {
+                    data = callUri
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                reactContext.startActivity(intent)
+            }
 
             // Re-assert Wegrow Telecaller to foreground so dialer UI is immediately visible
             val bringBackIntent = Intent(reactContext, MainActivity::class.java).apply {
@@ -244,6 +278,16 @@ class WegrowTelephonyModule(private val reactContext: ReactApplicationContext) :
             promise.resolve(res)
         } catch (e: Exception) {
             promise.reject("MERGE_FAILED", e.message)
+        }
+    }
+
+    @ReactMethod
+    fun swapCalls(promise: Promise) {
+        try {
+            val res = WegrowInCallService.swapCalls()
+            promise.resolve(res)
+        } catch (e: Exception) {
+            promise.reject("SWAP_FAILED", e.message)
         }
     }
 
