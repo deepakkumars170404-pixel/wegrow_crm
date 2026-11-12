@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Alert,
   Platform,
+  ScrollView,
 } from "react-native";
 import { THEME } from "../constants/theme";
 import { TelephonyService } from "../services/telephony";
@@ -104,75 +105,85 @@ export const DialerScreen: React.FC = () => {
         <Text style={styles.headerSubtitle}>SIM Card Voice Dialer • Wegrow Skill Campus</Text>
       </View>
 
-      {/* LCD Number Screen */}
-      <View style={styles.screenContainer}>
-        <Text style={styles.screenText}>
-          {phoneNumber || "Enter Phone Number"}
-        </Text>
-        {phoneNumber.length > 0 && (
-          <TouchableOpacity onPress={handleClear} style={styles.clearBadge}>
-            <Text style={styles.clearText}>Clear</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* Instant Recognized Student Banner if number already known in CRM */}
-      {recognizedLead && (
-        <View style={styles.recognizedLeadCard}>
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-            <Text style={styles.recognizedTitle}>
-              🎓 <Text style={{ color: THEME.colors.gold, fontWeight: "bold" }}>{recognizedLead.studentName}</Text>
-            </Text>
-            <View style={styles.recognizedTag}>
-              <Text style={styles.recognizedTagText}>Registered Student</Text>
-            </View>
-          </View>
-          <Text style={styles.recognizedSubtitle} numberOfLines={1}>
-            {recognizedLead.courseInterested || "General Enquiry"} {recognizedLead.qualification ? `• ${recognizedLead.qualification}` : ""}
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
+        {/* LCD Number Screen */}
+        <View style={styles.screenContainer}>
+          <Text style={styles.screenText}>
+            {phoneNumber || "Enter Phone Number"}
           </Text>
+          {phoneNumber.length > 0 && (
+            <TouchableOpacity onPress={handleClear} style={styles.clearBadge}>
+              <Text style={styles.clearText}>Clear</Text>
+            </TouchableOpacity>
+          )}
         </View>
-      )}
 
-      {/* Dialpad Matrix */}
-      <View style={styles.keypadContainer}>
-        {KEYS.map((row, rIdx) => (
-          <View key={rIdx} style={styles.row}>
-            {row.map((k) => (
-              <TouchableOpacity
-                key={k}
-                style={styles.key}
-                onPress={() => handleKeyPress(k)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.keyText}>{k}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        ))}
-
-        {/* Bottom Control Row: Clear / Backspace / Call */}
-        <View style={styles.bottomControlRow}>
+        {/* Instant Recognized Student Banner if number already known in CRM */}
+        {recognizedLead && (
           <TouchableOpacity
-            style={styles.backspaceButton}
-            onPress={handleBackspace}
-            onLongPress={() => setPhoneNumber("")}
-            delayLongPress={350}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.backspaceText}>⌫</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.dialButton}
+            style={styles.recognizedLeadCard}
             onPress={handleCall}
             activeOpacity={0.8}
           >
-            <Text style={styles.dialButtonText}>📞 Call SIM</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <Text style={styles.recognizedTitle} numberOfLines={1}>
+                🎓 <Text style={{ color: "#2563EB", fontWeight: "bold" }}>{recognizedLead.studentName}</Text>
+              </Text>
+              <View style={styles.recognizedTag}>
+                <Text style={styles.recognizedTagText}>Tap to Call 📞</Text>
+              </View>
+            </View>
+            <Text style={styles.recognizedSubtitle} numberOfLines={1}>
+              {recognizedLead.courseInterested || "General Enquiry"} {recognizedLead.qualification ? `• ${recognizedLead.qualification}` : ""}
+            </Text>
           </TouchableOpacity>
+        )}
 
-          <View style={{ width: 64 }} />
+        {/* Dialpad Matrix */}
+        <View style={styles.keypadContainer}>
+          {KEYS.map((row, rIdx) => (
+            <View key={rIdx} style={styles.row}>
+              {row.map((k) => (
+                <TouchableOpacity
+                  key={k}
+                  style={styles.key}
+                  onPress={() => handleKeyPress(k)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.keyText}>{k}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ))}
+
+          {/* Bottom Control Row: Clear / Backspace / Call */}
+          <View style={styles.bottomControlRow}>
+            <TouchableOpacity
+              style={styles.backspaceButton}
+              onPress={handleBackspace}
+              onLongPress={() => setPhoneNumber("")}
+              delayLongPress={350}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.backspaceText}>⌫</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.dialButton}
+              onPress={handleCall}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.dialButtonText}>📞 Call SIM</Text>
+            </TouchableOpacity>
+
+            <View style={{ width: 56 }} />
+          </View>
         </View>
-      </View>
+      </ScrollView>
     </View>
   );
 };
@@ -182,10 +193,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: THEME.colors.background,
   },
+  scrollContent: {
+    paddingBottom: 24,
+    flexGrow: 1,
+    justifyContent: "space-between",
+  },
   header: {
-    paddingTop: 50,
+    paddingTop: 16,
     paddingHorizontal: 20,
-    paddingBottom: 16,
+    paddingBottom: 12,
     backgroundColor: THEME.colors.card,
     borderBottomWidth: 1,
     borderBottomColor: THEME.colors.border,
@@ -217,15 +233,15 @@ const styles = StyleSheet.create({
   screenContainer: {
     backgroundColor: THEME.colors.card,
     marginHorizontal: 20,
-    marginTop: 20,
-    borderRadius: 16,
-    paddingVertical: 20,
-    paddingHorizontal: 20,
+    marginTop: 8,
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderWidth: 1,
     borderColor: THEME.colors.border,
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 85,
+    minHeight: 64,
     position: "relative",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
@@ -235,48 +251,48 @@ const styles = StyleSheet.create({
   },
   recognizedLeadCard: {
     marginHorizontal: 20,
-    marginTop: 8,
-    backgroundColor: "#ECFDF5",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
+    marginTop: 6,
+    backgroundColor: "#EFF6FF",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#A7F3D0",
+    borderColor: "#BFDBFE",
   },
   recognizedTitle: {
-    color: "#065F46",
-    fontSize: 14,
+    color: "#1E3A8A",
+    fontSize: 13,
     fontWeight: "bold",
   },
   recognizedTag: {
-    backgroundColor: "rgba(16, 185, 129, 0.2)",
+    backgroundColor: "rgba(37, 99, 235, 0.15)",
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: THEME.colors.emerald,
+    borderColor: "#3B82F6",
   },
   recognizedTagText: {
-    color: THEME.colors.emerald,
+    color: "#2563EB",
     fontSize: 10,
     fontWeight: "bold",
   },
   recognizedSubtitle: {
-    color: "#047857",
-    fontSize: 12,
+    color: "#475569",
+    fontSize: 11,
     marginTop: 2,
   },
   screenText: {
     color: THEME.colors.textPrimary,
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: "bold",
     letterSpacing: 2,
     fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
   },
   clearBadge: {
     position: "absolute",
-    right: 14,
-    top: 14,
+    right: 12,
+    top: 10,
     backgroundColor: "#F1F5F9",
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -290,18 +306,18 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   keypadContainer: {
-    marginTop: 20,
-    paddingHorizontal: 30,
-    gap: 12,
+    marginTop: 8,
+    paddingHorizontal: 28,
+    gap: 8,
   },
   row: {
     flexDirection: "row",
     justifyContent: "space-between",
   },
   key: {
-    width: 74,
-    height: 74,
-    borderRadius: 37,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     backgroundColor: "#FFFFFF",
     justifyContent: "center",
     alignItems: "center",
@@ -315,19 +331,20 @@ const styles = StyleSheet.create({
   },
   keyText: {
     color: THEME.colors.textPrimary,
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: "bold",
   },
   bottomControlRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 10,
+    marginTop: 6,
+    paddingHorizontal: 4,
   },
   backspaceButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#F1F5F9",
@@ -336,20 +353,20 @@ const styles = StyleSheet.create({
   },
   backspaceText: {
     color: THEME.colors.textSecondary,
-    fontSize: 24,
+    fontSize: 22,
   },
   dialButton: {
     backgroundColor: THEME.colors.emerald,
-    paddingHorizontal: 28,
-    paddingVertical: 16,
-    borderRadius: 32,
+    paddingHorizontal: 30,
+    paddingVertical: 14,
+    borderRadius: 28,
     flexDirection: "row",
     alignItems: "center",
     shadowColor: THEME.colors.emerald,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.35,
     shadowRadius: 8,
-    elevation: 4,
+    elevation: 5,
   },
   dialButtonText: {
     color: "#FFFFFF",
