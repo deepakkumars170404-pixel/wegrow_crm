@@ -8,9 +8,13 @@ export interface NativeCallStateEvent {
   state: "DIALING" | "RINGING" | "CONNECTING" | "ACTIVE" | "DISCONNECTED" | "HOLDING" | "UNKNOWN";
   rawState?: number;
   phoneNumber?: string;
+  contactName?: string;
+  isIncoming?: boolean;
   durationSeconds?: number;
   activeTimeMs?: number;
   isAttended?: boolean;
+  isSpeaker?: boolean;
+  isMuted?: boolean;
 }
 
 export const TelephonyService = {
@@ -86,6 +90,17 @@ export const TelephonyService = {
     }
   },
 
+  async answerCall(): Promise<boolean> {
+    if (Platform.OS === "android" && WegrowTelephony?.answerCall) {
+      try {
+        return await WegrowTelephony.answerCall();
+      } catch (err) {
+        console.warn("WegrowTelephony answerCall error:", err);
+      }
+    }
+    return false;
+  },
+
   async endCall(): Promise<boolean> {
     if (Platform.OS === "android" && WegrowTelephony?.endCall) {
       try {
@@ -95,6 +110,50 @@ export const TelephonyService = {
       }
     }
     return false;
+  },
+
+  async setSpeaker(enabled: boolean): Promise<boolean> {
+    if (Platform.OS === "android" && WegrowTelephony?.setSpeaker) {
+      try {
+        return await WegrowTelephony.setSpeaker(enabled);
+      } catch (err) {
+        console.warn("WegrowTelephony setSpeaker error:", err);
+      }
+    }
+    return false;
+  },
+
+  async setMute(enabled: boolean): Promise<boolean> {
+    if (Platform.OS === "android" && WegrowTelephony?.setMute) {
+      try {
+        return await WegrowTelephony.setMute(enabled);
+      } catch (err) {
+        console.warn("WegrowTelephony setMute error:", err);
+      }
+    }
+    return false;
+  },
+
+  async sendDtmf(digit: string): Promise<boolean> {
+    if (Platform.OS === "android" && WegrowTelephony?.sendDtmf) {
+      try {
+        return await WegrowTelephony.sendDtmf(digit);
+      } catch (err) {
+        console.warn("WegrowTelephony sendDtmf error:", err);
+      }
+    }
+    return false;
+  },
+
+  async getContactName(phoneNumber: string): Promise<string> {
+    if (Platform.OS === "android" && WegrowTelephony?.getContactName) {
+      try {
+        return await WegrowTelephony.getContactName(phoneNumber);
+      } catch {
+        return "";
+      }
+    }
+    return "";
   },
 
   async checkIsDefaultDialer(): Promise<boolean> {
@@ -121,26 +180,16 @@ export const TelephonyService = {
     return false;
   },
 
-  async openWhatsAppChat(phoneNumber: string, studentName?: string, course?: string): Promise<boolean> {
-    if (this.isBlockedNumber(phoneNumber)) {
-      Alert.alert("Blocked", "Messaging 9952337331 is blocked.");
-      return false;
-    }
-
-    const clean10Digits = this.formatIndianPhoneNumber(phoneNumber);
-    const greeting = studentName ? `Hi ${studentName}` : `Hi`;
-    const courseText = course ? `regarding the ${course} program` : `regarding Wegrow courses`;
-    const message = encodeURIComponent(
-      `${greeting}! Greetings from Wegrow Skill Campus. I am contacting you ${courseText}. Please let us know a convenient time to discuss your career goals.`
+  openWhatsAppChat(phone: string, studentName?: string, courseName?: string) {
+    const cleanDigits = phone.replace(/\D/g, "");
+    const formatted = cleanDigits.length === 10 ? `91${cleanDigits}` : cleanDigits;
+    const namePart = studentName ? `Hello ${studentName}! ` : "Vanakkam! ";
+    const coursePart = courseName ? ` regarding the ${courseName} program.` : ".";
+    const msg = encodeURIComponent(
+      `${namePart}This is WeGrow Skill Campus${coursePart} How can we help you regarding career training and admissions?`
     );
-
-    const waUrl = `https://wa.me/91${clean10Digits}?text=${message}`;
-    try {
-      await Linking.openURL(waUrl);
-      return true;
-    } catch {
-      Alert.alert("WhatsApp Error", "Unable to open WhatsApp on this device.");
-      return false;
-    }
+    Linking.openURL(`https://wa.me/${formatted}?text=${msg}`).catch(() => {
+      Alert.alert("Error", "WhatsApp is not installed on this device.");
+    });
   },
 };

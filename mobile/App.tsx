@@ -8,23 +8,89 @@ import { QueueScreen } from "./src/screens/QueueScreen";
 import { DialerScreen } from "./src/screens/DialerScreen";
 import { DashboardScreen } from "./src/screens/DashboardScreen";
 import { SettingsScreen } from "./src/screens/SettingsScreen";
+import { StaffSelectorBar } from "./src/components/StaffSelectorBar";
+import { ActiveCallOverlay } from "./src/components/ActiveCallOverlay";
+import { CallModal } from "./src/screens/CallModal";
+import { Lead, StaffMember } from "./src/types";
 
 type Tab = "queue" | "dialer" | "dashboard" | "settings";
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState<Tab>("queue");
+  const [modalLead, setModalLead] = useState<Lead | null>(null);
+  const [modalDuration, setModalDuration] = useState<number>(0);
+  const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
+  const [activeStaff, setActiveStaff] = useState<StaffMember>("MuthuSelvi");
+
+  const handleCallEnded = (callData: {
+    phoneNumber: string;
+    studentName: string;
+    durationSeconds: number;
+    lead: Lead | null;
+  }) => {
+    const targetLead: Lead = callData.lead || {
+      id: `inq-${Date.now()}`,
+      studentName: callData.studentName || "Student Inquiry",
+      phone: callData.phoneNumber,
+      email: "",
+      courseInterested: "",
+      leadSource: "Direct Phone Call",
+      enquiryDate: new Date().toISOString().split("T")[0],
+      nextFollowUpDate: "",
+      nextFollowUpTime: "",
+      assignedCaller: activeStaff,
+      status: "New",
+      priority: "Warm",
+      stage: "New Enquiry",
+    };
+
+    setModalLead(targetLead);
+    setModalDuration(callData.durationSeconds);
+    setIsModalVisible(true);
+  };
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="light" backgroundColor={THEME.colors.background} />
 
+      {/* 1 Phone / 5 Staff Quick Selector Header */}
+      <StaffSelectorBar onStaffChanged={(staff) => setActiveStaff(staff)} />
+
       {/* Screen Body */}
       <View style={styles.screenArea}>
-        {currentTab === "queue" && <QueueScreen />}
+        {currentTab === "queue" && (
+          <QueueScreen
+            onOpenCallModal={(lead) => {
+              setModalLead(lead);
+              setModalDuration(0);
+              setIsModalVisible(true);
+            }}
+          />
+        )}
         {currentTab === "dialer" && <DialerScreen />}
         {currentTab === "dashboard" && <DashboardScreen />}
         {currentTab === "settings" && <SettingsScreen />}
       </View>
+
+      {/* Global In-Call / Incoming Call Full-Screen UI */}
+      <ActiveCallOverlay onCallEnded={handleCallEnded} />
+
+      {/* Global Post-Call Disposition Modal (Opens after any call ends) */}
+      {modalLead && (
+        <CallModal
+          visible={isModalVisible}
+          lead={modalLead}
+          durationSeconds={modalDuration}
+          onClose={() => {
+            setIsModalVisible(false);
+            setModalLead(null);
+          }}
+          onSaveSuccess={() => {
+            setIsModalVisible(false);
+            setModalLead(null);
+          }}
+        />
+      )}
 
       {/* Bottom Navigation Bar */}
       <View style={styles.bottomNav}>
@@ -98,30 +164,29 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: THEME.colors.border,
     paddingVertical: 10,
-    paddingBottom: 14,
-    justifyContent: "space-around",
-    alignItems: "center",
+    paddingHorizontal: 8,
   },
   navItem: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 16,
+    paddingVertical: 4,
   },
   navIcon: {
     fontSize: 20,
-    marginBottom: 4,
+    marginBottom: 2,
     opacity: 0.6,
-  },
-  navLabel: {
-    color: THEME.colors.textSecondary,
-    fontSize: 11,
-    fontWeight: "600",
   },
   activeNavText: {
     opacity: 1,
   },
+  navLabel: {
+    fontSize: 11,
+    color: THEME.colors.textMuted,
+    fontWeight: "500",
+  },
   activeNavLabel: {
     color: THEME.colors.gold,
-    fontWeight: "bold",
+    fontWeight: "700",
   },
 });

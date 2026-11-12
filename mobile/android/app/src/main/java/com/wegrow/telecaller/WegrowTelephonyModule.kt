@@ -28,17 +28,25 @@ class WegrowTelephonyModule(private val reactContext: ReactApplicationContext) :
         state: String,
         rawState: Int,
         phoneNumber: String,
+        contactName: String,
+        isIncoming: Boolean,
         durationSeconds: Int,
-        activeTimeMs: Long
+        activeTimeMs: Long,
+        isSpeaker: Boolean,
+        isMuted: Boolean
     ) {
         try {
             val params = Arguments.createMap().apply {
                 putString("state", state)
                 putInt("rawState", rawState)
                 putString("phoneNumber", phoneNumber)
+                putString("contactName", contactName)
+                putBoolean("isIncoming", isIncoming)
                 putInt("durationSeconds", durationSeconds)
                 putDouble("activeTimeMs", activeTimeMs.toDouble())
                 putBoolean("isAttended", activeTimeMs > 0L)
+                putBoolean("isSpeaker", isSpeaker)
+                putBoolean("isMuted", isMuted)
             }
             reactContext
                 .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
@@ -72,9 +80,13 @@ class WegrowTelephonyModule(private val reactContext: ReactApplicationContext) :
             val map = Arguments.createMap().apply {
                 putString("state", state)
                 putString("phoneNumber", WegrowInCallService.currentPhoneNumber)
+                putString("contactName", WegrowInCallService.contactName)
+                putBoolean("isIncoming", WegrowInCallService.isIncomingCall)
                 putInt("durationSeconds", durSecs)
                 putDouble("activeTimeMs", activeTime.toDouble())
                 putBoolean("isAttended", activeTime > 0L)
+                putBoolean("isSpeaker", WegrowInCallService.isSpeakerOn)
+                putBoolean("isMuted", WegrowInCallService.isMuted)
             }
             promise.resolve(map)
         } catch (e: Exception) {
@@ -92,6 +104,8 @@ class WegrowTelephonyModule(private val reactContext: ReactApplicationContext) :
             }
 
             WegrowInCallService.currentPhoneNumber = cleanDigits
+            WegrowInCallService.isIncomingCall = false
+            WegrowInCallService.contactName = WegrowInCallService.resolveContactName(reactContext, cleanDigits)
             WegrowInCallService.callDialStartTimeMs = System.currentTimeMillis()
             WegrowInCallService.callActiveTimeMs = 0L
             WegrowInCallService.callEndTimeMs = 0L
@@ -103,9 +117,12 @@ class WegrowTelephonyModule(private val reactContext: ReactApplicationContext) :
             }
             reactContext.startActivity(intent)
 
-            // Re-assert Wegrow Telecaller to foreground so Google Dialer doesn't stay on top
+            // Re-assert Wegrow Telecaller to foreground so dialer UI is immediately visible
             val bringBackIntent = Intent(reactContext, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra("call_action", "ACTIVE_CALL")
+                putExtra("phone_number", cleanDigits)
+                putExtra("contact_name", WegrowInCallService.contactName)
             }
             Handler(Looper.getMainLooper()).postDelayed({
                 try {
@@ -127,6 +144,16 @@ class WegrowTelephonyModule(private val reactContext: ReactApplicationContext) :
             } catch (err: Exception) {
                 promise.reject("CALL_FAILED", err.message)
             }
+        }
+    }
+
+    @ReactMethod
+    fun answerCall(promise: Promise) {
+        try {
+            val success = WegrowInCallService.answerCurrentCall()
+            promise.resolve(success)
+        } catch (e: Exception) {
+            promise.reject("ANSWER_FAILED", e.message)
         }
     }
 
@@ -153,6 +180,50 @@ class WegrowTelephonyModule(private val reactContext: ReactApplicationContext) :
             } catch (err: Exception) {
                 promise.reject("END_CALL_FAILED", e.message)
             }
+        }
+    }
+
+    @ReactMethod
+    fun setSpeaker(enabled: Boolean, promise: Promise) {
+        try {
+            val res = WegrowInCallService.setSpeakerRoute(enabled)
+            promise.resolve(res)
+        } catch (e: Exception) {
+            promise.reject("SPEAKER_FAILED", e.message)
+        }
+    }
+
+    @ReactMethod
+    fun setMute(enabled: Boolean, promise: Promise) {
+        try {
+            val res = WegrowInCallService.setMuteState(enabled)
+            promise.resolve(res)
+        } catch (e: Exception) {
+            promise.reject("MUTE_FAILED", e.message)
+        }
+    }
+
+    @ReactMethod
+    fun sendDtmf(digit: String, promise: Promise) {
+        try {
+            if (digit.isNotEmpty()) {
+                val res = WegrowInCallService.playDtmfTone(digit[0])
+                promise.resolve(res)
+            } else {
+                promise.resolve(false)
+            }
+        } catch (e: Exception) {
+            promise.reject("DTMF_FAILED", e.message)
+        }
+    }
+
+    @ReactMethod
+    fun getContactName(phoneNumber: String, promise: Promise) {
+        try {
+            val name = WegrowInCallService.resolveContactName(reactContext, phoneNumber)
+            promise.resolve(name)
+        } catch (e: Exception) {
+            promise.resolve("")
         }
     }
 

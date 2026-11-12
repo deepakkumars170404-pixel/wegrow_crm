@@ -1,19 +1,16 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   Alert,
-  AppState,
-  AppStateStatus,
   Platform,
 } from "react-native";
 import { THEME } from "../constants/theme";
-import { TelephonyService, NativeCallStateEvent } from "../services/telephony";
+import { TelephonyService } from "../services/telephony";
 import { StorageService } from "../services/storage";
 import { ApiService } from "../services/api";
-import { CallModal } from "./CallModal";
 import { LiveClock } from "../components/LiveClock";
 import { Lead } from "../types";
 
@@ -26,128 +23,8 @@ const KEYS = [
 
 export const DialerScreen: React.FC = () => {
   const [phoneNumber, setPhoneNumber] = useState("");
-  const [callModalVisible, setCallModalVisible] = useState(false);
-  const [activeLead, setActiveLead] = useState<Lead | null>(null);
-  const [callDuration, setCallDuration] = useState(0);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [currentStaff, setCurrentStaff] = useState<string>("Muthumeena");
-
-  // Call phases: "IDLE" -> "RINGING" (timer stays 00:00) -> "CONNECTED" (timer counts up) -> "IDLE"
-  const [callPhase, setCallPhase] = useState<"IDLE" | "RINGING" | "CONNECTED">("IDLE");
-  const [liveTimerSec, setLiveTimerSec] = useState(0);
-
-  const callPhaseRef = useRef<"IDLE" | "RINGING" | "CONNECTED">("IDLE");
-  const activeCallStartRef = useRef<number | null>(null);
-  const dialStartTimeRef = useRef<number | null>(null);
-
-  const formatTimer = (sec: number) => {
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-  };
-
-  // Talk timer ticks ONLY when call is answered (callPhase === "CONNECTED")!
-  useEffect(() => {
-    let interval: any = null;
-    if (callPhase === "CONNECTED") {
-      interval = setInterval(() => {
-        if (activeCallStartRef.current) {
-          const elapsed = Math.max(1, Math.round((Date.now() - activeCallStartRef.current) / 1000));
-          setLiveTimerSec(elapsed);
-        }
-      }, 1000);
-    } else {
-      setLiveTimerSec(0);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [callPhase]);
-
-  // Listen to native Android Telecom InCallService events
-  useEffect(() => {
-    const sub = TelephonyService.onCallStateChanged((event: NativeCallStateEvent) => {
-      if (event.state === "ACTIVE") {
-        // Remote party picked up!
-        if (callPhaseRef.current !== "CONNECTED") {
-          callPhaseRef.current = "CONNECTED";
-          setCallPhase("CONNECTED");
-          activeCallStartRef.current = Date.now();
-          setLiveTimerSec(1);
-        }
-      } else if (
-        event.state === "DIALING" ||
-        event.state === "RINGING" ||
-        event.state === "CONNECTING"
-      ) {
-        if (callPhaseRef.current !== "CONNECTED") {
-          callPhaseRef.current = "RINGING";
-          setCallPhase("RINGING");
-          setLiveTimerSec(0);
-        }
-      } else if (event.state === "DISCONNECTED") {
-        if (callPhaseRef.current !== "IDLE") {
-          const wasConnected = callPhaseRef.current === "CONNECTED";
-          const start = activeCallStartRef.current;
-          let finalSecs = 0;
-
-          if (event.durationSeconds && event.durationSeconds > 0) {
-            finalSecs = event.durationSeconds;
-          } else if (wasConnected && start) {
-            finalSecs = Math.max(1, Math.round((Date.now() - start) / 1000));
-          }
-
-          callPhaseRef.current = "IDLE";
-          setCallPhase("IDLE");
-          setCallDuration(finalSecs);
-          setCallModalVisible(true);
-        }
-      }
-    });
-
-    return () => {
-      sub.remove();
-    };
-  }, []);
-
-  const handleInAppHangup = async () => {
-    await TelephonyService.endCall();
-    const wasConnected = callPhaseRef.current === "CONNECTED";
-    const start = activeCallStartRef.current;
-    let finalSecs = 0;
-    if (wasConnected && start) {
-      finalSecs = Math.max(1, Math.round((Date.now() - start) / 1000));
-    }
-    callPhaseRef.current = "IDLE";
-    setCallPhase("IDLE");
-    setCallDuration(finalSecs);
-    setCallModalVisible(true);
-  };
-
-  // Re-check call state if app returns to foreground
-  useEffect(() => {
-    const subscription = AppState.addEventListener("change", async (nextAppState: AppStateStatus) => {
-      if (nextAppState === "active" && callPhaseRef.current !== "IDLE") {
-        const state = await TelephonyService.getCurrentCallState();
-        if (state && (state.state === "DISCONNECTED" || state.state === "UNKNOWN")) {
-          const wasConnected = callPhaseRef.current === "CONNECTED";
-          const start = activeCallStartRef.current;
-          let finalSecs = 0;
-          if (state.durationSeconds && state.durationSeconds > 0) {
-            finalSecs = state.durationSeconds;
-          } else if (wasConnected && start) {
-            finalSecs = Math.max(1, Math.round((Date.now() - start) / 1000));
-          }
-          callPhaseRef.current = "IDLE";
-          setCallPhase("IDLE");
-          setCallDuration(finalSecs);
-          setCallModalVisible(true);
-        }
-      }
-    });
-
-    return () => subscription.remove();
-  }, []);
 
   // Load registered leads from cache & CRM server and saved staff
   useEffect(() => {
@@ -160,7 +37,7 @@ export const DialerScreen: React.FC = () => {
     ApiService.fetchTodayQueue().then((res) => {
       if (res.leads && res.leads.length > 0) setLeads(res.leads);
     });
-  }, [callModalVisible]);
+  }, []);
 
   // Match dialed phone number against known CRM students
   const cleanNumber = TelephonyService.formatIndianPhoneNumber(phoneNumber);
@@ -211,39 +88,7 @@ export const DialerScreen: React.FC = () => {
       return;
     }
 
-    const now = Date.now();
-    dialStartTimeRef.current = now;
-    activeCallStartRef.current = null;
-    callPhaseRef.current = "RINGING";
-    setCallPhase("RINGING");
-    setLiveTimerSec(0);
-
-    // Use recognized student profile if already registered, otherwise create initial inquiry lead
-    const targetLead: Lead = recognizedLead
-      ? recognizedLead
-      : {
-          id: `LD-MOB-${now}`,
-          studentName: `Inquiry Student (${clean.slice(-10)})`,
-          phone: clean,
-          email: "direct@mobile.local",
-          courseInterested: "General Enquiry",
-          leadSource: "Mobile Dialer",
-          enquiryDate: new Date().toISOString().split("T")[0],
-          nextFollowUpDate: "",
-          nextFollowUpTime: "",
-          assignedCaller: currentStaff || "Muthumeena",
-          status: "New",
-          priority: "Hot",
-          stage: "New Enquiry",
-        };
-
-    setActiveLead(targetLead);
-
-    const res = await TelephonyService.dialViaSIM(clean);
-    if (!res.success) {
-      callPhaseRef.current = "IDLE";
-      setCallPhase("IDLE");
-    }
+    await TelephonyService.dialViaSIM(clean, recognizedLead?.studentName);
   };
 
   return (
@@ -328,75 +173,6 @@ export const DialerScreen: React.FC = () => {
           <View style={{ width: 64 }} />
         </View>
       </View>
-
-      {/* In-App Active Call Screen Overlay */}
-      {callPhase !== "IDLE" && activeLead && (
-        <View style={styles.inAppCallOverlay}>
-          <View style={styles.inAppCallCard}>
-            <View style={styles.inAppCallHeader}>
-              <View
-                style={[
-                  styles.inAppCallLiveBadge,
-                  callPhase === "RINGING" && styles.inAppCallRingingBadge,
-                ]}
-              >
-                <View
-                  style={[
-                    styles.inAppCallLiveDot,
-                    callPhase === "RINGING" && styles.inAppCallRingingDot,
-                  ]}
-                />
-                <Text
-                  style={[
-                    styles.inAppCallLiveText,
-                    callPhase === "RINGING" && styles.inAppCallRingingText,
-                  ]}
-                >
-                  {callPhase === "RINGING" ? "🔔 RINGING... (WAITING FOR ANSWER)" : "🟢 SPEAKING • LIVE CALL"}
-                </Text>
-              </View>
-              <Text
-                style={[
-                  styles.inAppCallTimer,
-                  callPhase === "RINGING" && styles.inAppCallTimerRinging,
-                ]}
-              >
-                ⏱️ {callPhase === "RINGING" ? "00:00" : formatTimer(liveTimerSec)}
-              </Text>
-            </View>
-
-            <Text style={styles.inAppCallName}>{activeLead.studentName}</Text>
-            <Text style={styles.inAppCallPhone}>📞 {activeLead.phone}</Text>
-            <Text style={styles.inAppCallCourse}>Course: {activeLead.courseInterested}</Text>
-            <Text style={styles.inAppCallHint}>
-              {callPhase === "RINGING"
-                ? "Connecting via Wegrow SIM • Timer starts when student answers"
-                : "Call connected • Counting live spoken minutes"}
-            </Text>
-
-            <View style={styles.inAppCallActions}>
-              <TouchableOpacity
-                style={styles.inAppHangupBtn}
-                onPress={handleInAppHangup}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.inAppHangupText}>🔴 Cut Call (Hangup & Save Notes)</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      )}
-
-      {/* Post-Call Message / Disposition Modal */}
-      <CallModal
-        visible={callModalVisible}
-        lead={activeLead}
-        durationSeconds={callDuration}
-        onClose={() => setCallModalVisible(false)}
-        onSaveSuccess={() => {
-          setPhoneNumber("");
-        }}
-      />
     </View>
   );
 };
