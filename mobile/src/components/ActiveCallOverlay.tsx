@@ -25,7 +25,6 @@ import {
   MicOff,
   Volume2,
   Grid3X3,
-  UserPlus,
   Users,
   ArrowLeftRight,
   UserCheck,
@@ -57,8 +56,6 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({ onCallEnde
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [liveDurationSec, setLiveDurationSec] = useState<number>(0);
   const [showKeypad, setShowKeypad] = useState<boolean>(false);
-  const [showAddCallSheet, setShowAddCallSheet] = useState<boolean>(false);
-  const [addCallNumber, setAddCallNumber] = useState<string>("");
   const [recentLeads, setRecentLeads] = useState<Lead[]>([]);
   const [matchedLead, setMatchedLead] = useState<Lead | null>(null);
   const [activeStaff, setActiveStaff] = useState<StaffMember>("MuthuSelvi");
@@ -250,7 +247,6 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({ onCallEnde
         setCallState("IDLE");
         activeCallStartRef.current = null;
         setShowKeypad(false);
-        setShowAddCallSheet(false);
         setHeldCallBackup(null);
         setHasHeldCall(false);
         setIsConference(false);
@@ -300,54 +296,6 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({ onCallEnde
 
   const handleDtmf = async (digit: string) => {
     await TelephonyService.sendDtmf(digit);
-  };
-
-  // Add Call Handler
-  const handleOpenAddCall = async () => {
-    setShowAddCallSheet(true);
-    const leads = await StorageService.getCachedLeads();
-    if (leads && leads.length > 0) setRecentLeads(leads.slice(0, 10));
-  };
-
-  const handleAddCallKeyPress = (digit: string) => {
-    if (addCallNumber.length < 15) {
-      setAddCallNumber((prev) => prev + digit);
-    }
-  };
-
-  const handleDialSecondCall = async () => {
-    if (!addCallNumber || addCallNumber.trim().length < 5) {
-      Alert.alert("Invalid Number", "Please enter a valid phone number to call.");
-      return;
-    }
-    if (TelephonyService.isBlockedNumber(addCallNumber)) {
-      Alert.alert("Blocked", "Calling 9952337331 is permanently blocked.");
-      return;
-    }
-
-    try {
-      // 1. Save backup snapshot of Call 1
-      setHeldCallBackup({
-        phone: phoneNumber,
-        name: displayName,
-        duration: liveDurationSec,
-        lead: matchedLead,
-      });
-
-      // 2. Put first call on hold
-      await TelephonyService.holdCall();
-
-      // 3. 300ms buffer for carrier hold transition
-      await new Promise((r) => setTimeout(r, 300));
-
-      // 4. Dial second call via SIM
-      await TelephonyService.dialViaSIM(addCallNumber.trim());
-
-      setShowAddCallSheet(false);
-      setAddCallNumber("");
-    } catch (e: any) {
-      Alert.alert("Call Error", e.message || "Failed to place second call");
-    }
   };
 
   const handleMergeConference = async () => {
@@ -749,16 +697,6 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({ onCallEnde
                     Keypad
                   </Text>
                 </TouchableOpacity>
-
-                {/* Add Call Button */}
-                <TouchableOpacity
-                  style={styles.controlBtn}
-                  onPress={handleOpenAddCall}
-                  activeOpacity={0.7}
-                >
-                  <UserPlus size={22} color="#334155" strokeWidth={2.2} />
-                  <Text style={styles.controlLabel}>Add Call</Text>
-                </TouchableOpacity>
               </View>
 
               {/* Sleek Crimson End Call Button */}
@@ -773,100 +711,6 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({ onCallEnde
             </View>
           )}
         </View>
-
-        {/* Add Call Modal Sheet */}
-        <Modal
-          visible={showAddCallSheet}
-          animationType="slide"
-          transparent={true}
-          onRequestClose={() => setShowAddCallSheet(false)}
-        >
-          <View style={styles.addCallModalBackdrop}>
-            <View style={styles.addCallSheet}>
-              {/* Sheet Header */}
-              <View style={styles.addCallHeader}>
-                <View>
-                  <Text style={styles.addCallTitle}>➕ Add Second Call</Text>
-                  <Text style={styles.addCallSubtitle}>
-                    Current call ({displayName}) will be put on Hold
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.closeSheetBtn}
-                  onPress={() => setShowAddCallSheet(false)}
-                >
-                  <X size={16} color="#64748B" strokeWidth={2.5} />
-                </TouchableOpacity>
-              </View>
-
-              {/* Phone Number Display */}
-              <View style={styles.addCallInputBox}>
-                <Text style={styles.addCallInputText}>
-                  {addCallNumber || "Enter phone number"}
-                </Text>
-                {addCallNumber.length > 0 && (
-                  <TouchableOpacity
-                    onPress={() => setAddCallNumber((prev) => prev.slice(0, -1))}
-                    style={styles.addCallBackspace}
-                  >
-                    <Delete size={20} color="#64748B" />
-                  </TouchableOpacity>
-                )}
-              </View>
-
-              {/* Quick Select from Today's Leads */}
-              {recentLeads.length > 0 && (
-                <View style={styles.quickLeadSection}>
-                  <Text style={styles.quickLeadTitle}>QUICK SELECT STUDENT:</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    {recentLeads.map((ld) => (
-                      <TouchableOpacity
-                        key={ld.id}
-                        style={styles.quickLeadChip}
-                        onPress={() => setAddCallNumber(ld.phone)}
-                      >
-                        <Text style={styles.quickLeadName}>{ld.studentName}</Text>
-                        <Text style={styles.quickLeadPhone}>{ld.phone}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
-
-              {/* Compact Keypad */}
-              <View style={styles.addCallKeypad}>
-                {["1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#"].map((k) => (
-                  <TouchableOpacity
-                    key={k}
-                    style={styles.addCallKey}
-                    onPress={() => handleAddCallKeyPress(k)}
-                  >
-                    <Text style={styles.addCallKeyText}>{k}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* Action Buttons */}
-              <View style={styles.addCallActionRow}>
-                <TouchableOpacity
-                  style={styles.cancelAddCallBtn}
-                  onPress={() => setShowAddCallSheet(false)}
-                >
-                  <Text style={styles.cancelAddCallText}>Cancel</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.dialAddCallBtn}
-                  onPress={handleDialSecondCall}
-                  activeOpacity={0.8}
-                >
-                  <PhoneCall size={16} color="#FFFFFF" strokeWidth={2.3} style={{ marginRight: 6 }} />
-                  <Text style={styles.dialAddCallText}>Dial Second Call</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
       </SafeAreaView>
     </Modal>
   );
@@ -1305,171 +1149,5 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#FFFFFF",
     letterSpacing: 1,
-  },
-
-  /* Add Call Modal Sheet Styles */
-  addCallModalBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(15, 23, 42, 0.6)",
-    justifyContent: "flex-end",
-  },
-  addCallSheet: {
-    backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 20,
-    borderTopWidth: 2,
-    borderTopColor: "#2563EB",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 20,
-  },
-  addCallHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 14,
-  },
-  addCallTitle: {
-    fontSize: 17,
-    fontWeight: "bold",
-    color: "#0F172A",
-  },
-  addCallSubtitle: {
-    fontSize: 12,
-    color: "#64748B",
-    marginTop: 2,
-  },
-  closeSheetBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#F1F5F9",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  closeSheetText: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#64748B",
-  },
-  addCallInputBox: {
-    backgroundColor: "#F8FAFC",
-    borderWidth: 1,
-    borderColor: "#CBD5E1",
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  addCallInputText: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#0F172A",
-    letterSpacing: 1,
-  },
-  addCallBackspace: {
-    padding: 4,
-  },
-  addCallBackspaceText: {
-    fontSize: 20,
-    color: "#64748B",
-  },
-  quickLeadSection: {
-    marginBottom: 12,
-  },
-  quickLeadTitle: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: "#64748B",
-    letterSpacing: 0.5,
-    marginBottom: 6,
-  },
-  quickLeadChip: {
-    backgroundColor: "#EFF6FF",
-    borderWidth: 1,
-    borderColor: "#BFDBFE",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    marginRight: 8,
-  },
-  quickLeadName: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#1D4ED8",
-  },
-  quickLeadPhone: {
-    fontSize: 10,
-    color: "#64748B",
-  },
-  addCallKeypad: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    gap: 8,
-    marginBottom: 16,
-  },
-  addCallKey: {
-    width: "30%",
-    aspectRatio: 1.8,
-    backgroundColor: "#F8FAFC",
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-  },
-  addCallKeyText: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#0F172A",
-  },
-  addCallActionRow: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  cancelAddCallBtn: {
-    flex: 1,
-    backgroundColor: "#F1F5F9",
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-  },
-  cancelAddCallText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#475569",
-  },
-  dialAddCallBtn: {
-    flex: 2,
-    backgroundColor: "#10B981",
-    borderRadius: 12,
-    paddingVertical: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    shadowColor: "#10B981",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 4,
-  },
-  dialAddCallIcon: {
-    fontSize: 16,
-  },
-  dialAddCallText: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#FFFFFF",
   },
 });
