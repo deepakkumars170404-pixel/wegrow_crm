@@ -9,13 +9,25 @@ import {
   RefreshControl,
   ActivityIndicator,
   Platform,
+  ScrollView,
 } from "react-native";
 import { THEME } from "../constants/theme";
 import { Lead } from "../types";
 import { ApiService } from "../services/api";
 import { TelephonyService } from "../services/telephony";
 import { LiveClock } from "../components/LiveClock";
-import { Phone, MessageCircle, FileEdit, Clock, Search } from "lucide-react-native";
+import {
+  Phone,
+  MessageCircle,
+  FileEdit,
+  Clock,
+  Search,
+  Users,
+  GraduationCap,
+  Building2,
+  X,
+  Filter,
+} from "lucide-react-native";
 
 interface QueueScreenProps {
   onOpenCallModal?: (lead: Lead) => void;
@@ -27,7 +39,7 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({ onOpenCallModal }) => 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [activeLead, setActiveLead] = useState<Lead | null>(null);
+  const [priorityFilter, setPriorityFilter] = useState<"All" | "Hot" | "Warm" | "Follow-up">("All");
 
   const loadQueue = useCallback(async () => {
     setErrorMsg(null);
@@ -52,7 +64,6 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({ onOpenCallModal }) => 
   };
 
   const handleCallLead = async (lead: Lead) => {
-    setActiveLead(lead);
     await TelephonyService.dialViaSIM(lead.phone, lead.studentName);
   };
 
@@ -60,16 +71,34 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({ onOpenCallModal }) => 
     TelephonyService.openWhatsAppChat(lead.phone, lead.studentName, lead.courseInterested);
   };
 
-  // Filter and DEDUPLICATE leads by 10-digit phone number so Deepak never appears twice!
+  // Filter and DEDUPLICATE leads by 10-digit phone number so no student appears twice
   const uniqueLeads = useMemo(() => {
     const q = search.toLowerCase().trim();
     const filtered = leads.filter((l) => {
-      if (!q) return true;
-      return (
-        l.studentName.toLowerCase().includes(q) ||
-        l.phone.includes(q) ||
-        l.courseInterested.toLowerCase().includes(q)
-      );
+      // 1. Search Query
+      if (q) {
+        const student = (l.studentName || "").toLowerCase();
+        const phone = (l.phone || "").toLowerCase();
+        const course = (l.courseInterested || "").toLowerCase();
+        const college = (l.collegeName || "").toLowerCase();
+        const qual = (l.qualification || "").toLowerCase();
+        const matches =
+          student.includes(q) ||
+          phone.includes(q) ||
+          course.includes(q) ||
+          college.includes(q) ||
+          qual.includes(q);
+        if (!matches) return false;
+      }
+
+      // 2. Priority / Stage Filter
+      if (priorityFilter === "Hot" && l.priority !== "Hot") return false;
+      if (priorityFilter === "Warm" && l.priority !== "Warm") return false;
+      if (priorityFilter === "Follow-up" && l.status !== "Follow-up" && l.stage !== "Call Scheduled") {
+        return false;
+      }
+
+      return true;
     });
 
     const seenPhones = new Set<string>();
@@ -83,46 +112,112 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({ onOpenCallModal }) => 
       }
     }
     return result;
-  }, [leads, search]);
+  }, [leads, search, priorityFilter]);
+
+  const totalCount = leads.length;
+  const hotCount = useMemo(() => leads.filter((l) => l.priority === "Hot").length, [leads]);
+  const warmCount = useMemo(() => leads.filter((l) => l.priority === "Warm").length, [leads]);
+  const followUpCount = useMemo(
+    () => leads.filter((l) => l.status === "Follow-up" || l.stage === "Call Scheduled").length,
+    [leads]
+  );
 
   const renderLeadCard = useCallback(({ item }: { item: Lead }) => {
     const isHot = item.priority === "Hot";
+    const initial = (item.studentName || "S").trim().charAt(0).toUpperCase();
+
     return (
       <View style={[styles.card, isHot && styles.hotCardBorder]}>
-        {/* Top Row: Name, Course, Priority Badge */}
+        {/* Top Row: Avatar, Student Name, Phone & Priority */}
         <View style={styles.cardHeader}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.leadName}>{item.studentName}</Text>
-            <Text style={styles.leadPhone}>{item.phone}</Text>
+          <View style={styles.studentInfoLeft}>
+            <View style={[styles.avatarCircle, isHot ? styles.avatarHot : styles.avatarNormal]}>
+              <Text style={styles.avatarText}>{initial}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={styles.nameRow}>
+                <Text style={styles.leadName} numberOfLines={1}>
+                  {item.studentName}
+                </Text>
+                <View style={styles.phonePill}>
+                  <Text style={styles.phoneText}>{item.phone}</Text>
+                </View>
+              </View>
+              <Text style={styles.courseText} numberOfLines={1}>
+                Course: <Text style={styles.courseHighlight}>{item.courseInterested || "General Inquiry"}</Text>
+              </Text>
+            </View>
           </View>
-          <View style={styles.badgeRow}>
+
+          {/* Badges: Priority & Stage */}
+          <View style={styles.badgeCol}>
             <View
               style={[
                 styles.priorityBadge,
-                {
-                  backgroundColor:
-                    item.priority === "Hot"
-                      ? THEME.colors.danger
-                      : item.priority === "Warm"
-                      ? THEME.colors.amber
-                      : THEME.colors.sky,
-                },
+                item.priority === "Hot"
+                  ? styles.badgeHot
+                  : item.priority === "Warm"
+                  ? styles.badgeWarm
+                  : styles.badgeCold,
               ]}
             >
-              <Text style={styles.badgeText}>{item.priority}</Text>
+              <Text
+                style={[
+                  styles.priorityText,
+                  item.priority === "Hot"
+                    ? styles.textHot
+                    : item.priority === "Warm"
+                    ? styles.textWarm
+                    : styles.textCold,
+                ]}
+              >
+                {item.priority || "Warm"}
+              </Text>
             </View>
             <View style={styles.stageBadge}>
-              <Text style={styles.stageText}>{item.stage || item.status}</Text>
+              <Text style={styles.stageText} numberOfLines={1}>
+                {item.stage || item.status || "New"}
+              </Text>
             </View>
           </View>
         </View>
 
-        {/* Middle Row: Course & Source */}
-        <View style={styles.cardDetails}>
-          <Text style={styles.courseText}>Course: {item.courseInterested}</Text>
+        {/* Academic Row (College & Qualification) */}
+        {(item.qualification || item.collegeName) && (
+          <View style={styles.academicRow}>
+            {item.qualification ? (
+              <View style={styles.academicBadge}>
+                <GraduationCap size={11} color="#92400E" strokeWidth={2} />
+                <Text style={styles.academicBadgeText}>
+                  {item.qualification} {item.passedOutYear ? `(${item.passedOutYear})` : ""}
+                </Text>
+              </View>
+            ) : null}
+            {item.collegeName ? (
+              <View style={styles.collegeBadge}>
+                <Building2 size={11} color="#475569" strokeWidth={2} />
+                <Text style={styles.collegeBadgeText} numberOfLines={1}>
+                  {item.collegeName}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        )}
+
+        {/* Counselor & Follow-up Info */}
+        <View style={styles.metaRow}>
           <Text style={styles.metaText}>
-            Counselor: {item.assignedCaller || "Unassigned"} • Calls: {item.callCount || 0}
+            Counselor: <Text style={{ fontWeight: "700", color: "#334155" }}>{item.assignedCaller || "Unassigned"}</Text>
+            {item.callCount !== undefined ? ` • Calls: ${item.callCount}` : ""}
           </Text>
+          {item.nextFollowUpDate ? (
+            <View style={styles.followUpTag}>
+              <Clock size={10} color="#B45309" strokeWidth={2.2} />
+              <Text style={styles.followUpTagText}>
+                Due: {item.nextFollowUpDate} {item.nextFollowUpTime || ""}
+              </Text>
+            </View>
+          ) : null}
         </View>
 
         {/* Action Buttons: 1-Tap SIM Call, 1-Tap WhatsApp, Log */}
@@ -132,10 +227,8 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({ onOpenCallModal }) => 
             onPress={() => handleCallLead(item)}
             activeOpacity={0.8}
           >
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5 }}>
-              <Phone size={14} color="#FFFFFF" strokeWidth={2.5} />
-              <Text style={styles.callButtonText}>Call SIM</Text>
-            </View>
+            <Phone size={13} color="#FFFFFF" strokeWidth={2.5} />
+            <Text style={styles.callButtonText}>Call SIM</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -143,10 +236,8 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({ onOpenCallModal }) => 
             onPress={() => handleWhatsApp(item)}
             activeOpacity={0.8}
           >
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5 }}>
-              <MessageCircle size={14} color="#FFFFFF" strokeWidth={2.5} />
-              <Text style={styles.waButtonText}>WhatsApp</Text>
-            </View>
+            <MessageCircle size={13} color="#FFFFFF" strokeWidth={2.5} />
+            <Text style={styles.waButtonText}>WhatsApp</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -154,29 +245,31 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({ onOpenCallModal }) => 
             onPress={() => {
               if (onOpenCallModal) onOpenCallModal(item);
             }}
+            activeOpacity={0.7}
           >
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4 }}>
-              <FileEdit size={13} color="#334155" strokeWidth={2.2} />
-              <Text style={styles.dispButtonText}>Log</Text>
-            </View>
+            <FileEdit size={13} color="#475569" strokeWidth={2.2} />
+            <Text style={styles.dispButtonText}>Log</Text>
           </TouchableOpacity>
         </View>
       </View>
     );
-  }, []);
+  }, [onOpenCallModal]);
 
   return (
     <View style={styles.container}>
-      {/* Header & Stats Banner */}
+      {/* 1. Header & Live Time Banner */}
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.headerTitle}>Today's Call Queue</Text>
+          <View style={styles.headerTitleRow}>
+            <Users size={20} color="#1E40AF" strokeWidth={2.5} />
+            <Text style={styles.headerTitle}>Student Call Queue</Text>
+          </View>
           <Text style={styles.headerSubtitle}>
-            {uniqueLeads.length} Students in queue • Wegrow Skill Campus
+            {uniqueLeads.length} Students ready to dial • Wegrow Skill Campus
           </Text>
         </View>
         <View style={styles.liveClockBadge}>
-          <Clock size={12} color="#1D4ED8" style={{ marginRight: 4 }} />
+          <Clock size={11} color="#1D4ED8" style={{ marginRight: 4 }} />
           <LiveClock style={styles.liveClockText} />
         </View>
       </View>
@@ -184,28 +277,77 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({ onOpenCallModal }) => 
       {/* Offline Notice if CRM is unreachable */}
       {errorMsg && (
         <View style={styles.noticeBar}>
-          <Text style={styles.noticeText}>Offline Mode: Showing cached leads</Text>
+          <Text style={styles.noticeText}>Offline Mode: Showing cached student queue</Text>
         </View>
       )}
 
-      {/* Search Bar */}
+      {/* 2. Priority Filter Tabs */}
+      <View style={styles.filterTabsRow}>
+        <TouchableOpacity
+          style={[styles.filterTab, priorityFilter === "All" && styles.filterTabActive]}
+          onPress={() => setPriorityFilter("All")}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.filterTabText, priorityFilter === "All" && styles.filterTabTextActive]}>
+            All ({totalCount})
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.filterTab, priorityFilter === "Hot" && styles.filterTabHot]}
+          onPress={() => setPriorityFilter("Hot")}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.filterTabText, priorityFilter === "Hot" && styles.filterTextHot]}>
+            🔥 Hot ({hotCount})
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.filterTab, priorityFilter === "Warm" && styles.filterTabWarm]}
+          onPress={() => setPriorityFilter("Warm")}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.filterTabText, priorityFilter === "Warm" && styles.filterTextWarm]}>
+            ⭐ Warm ({warmCount})
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.filterTab, priorityFilter === "Follow-up" && styles.filterTabFu]}
+          onPress={() => setPriorityFilter("Follow-up")}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.filterTabText, priorityFilter === "Follow-up" && styles.filterTextFu]}>
+            📅 Follow-up ({followUpCount})
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* 3. Search Bar */}
       <View style={styles.searchBox}>
         <View style={styles.searchInputWrapper}>
-          <Search size={16} color="#64748B" style={{ marginRight: 8 }} />
+          <Search size={15} color="#94A3B8" style={{ marginRight: 8 }} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search by student name, phone, course..."
-            placeholderTextColor={THEME.colors.textMuted}
+            placeholderTextColor="#94A3B8"
             value={search}
             onChangeText={setSearch}
+            clearButtonMode="while-editing"
           />
+          {search.length > 0 && (
+            <TouchableOpacity onPress={() => setSearch("")} style={{ padding: 4 }}>
+              <X size={14} color="#64748B" strokeWidth={2.5} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
-      {/* Queue List */}
+      {/* 4. Queue List */}
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={THEME.colors.gold} />
+          <ActivityIndicator size="large" color="#2563EB" />
           <Text style={styles.loadingText}>Syncing leads with Wegrow CRM...</Text>
         </View>
       ) : (
@@ -215,21 +357,25 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({ onOpenCallModal }) => 
           renderItem={renderLeadCard}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
-          initialNumToRender={6}
-          maxToRenderPerBatch={8}
-          windowSize={5}
+          initialNumToRender={8}
+          maxToRenderPerBatch={10}
+          windowSize={7}
           removeClippedSubviews={Platform.OS === "android"}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor={THEME.colors.gold}
+              tintColor="#2563EB"
+              colors={["#2563EB"]}
             />
           }
           ListEmptyComponent={
             <View style={styles.centerEmpty}>
-              <Text style={styles.emptyTitle}>No Leads Found</Text>
-              <Text style={styles.emptySub}>Pull down to refresh from CRM</Text>
+              <Users size={36} color="#CBD5E1" strokeWidth={1.5} />
+              <Text style={styles.emptyTitle}>No Students in Queue</Text>
+              <Text style={styles.emptySub}>
+                {search ? "No leads matched your search query." : "Pull down to refresh from Wegrow Cloud CRM."}
+              </Text>
             </View>
           }
         />
@@ -241,317 +387,418 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({ onOpenCallModal }) => 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: THEME.colors.background,
+    backgroundColor: "#F8FAFC",
   },
   header: {
-    paddingTop: 50,
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    backgroundColor: THEME.colors.card,
+    paddingTop: 14,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
-    borderBottomColor: THEME.colors.border,
+    borderBottomColor: "#E2E8F0",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  headerTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   headerTitle: {
-    color: THEME.colors.textPrimary,
-    fontSize: 22,
-    fontWeight: "bold",
+    color: "#0F172A",
+    fontSize: 18,
+    fontWeight: "900",
+    letterSpacing: -0.3,
   },
   headerSubtitle: {
-    color: THEME.colors.textSecondary,
-    fontSize: 13,
+    color: "#64748B",
+    fontSize: 11,
     marginTop: 2,
   },
   liveClockBadge: {
     backgroundColor: "#EFF6FF",
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 5,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "#BFDBFE",
+    flexDirection: "row",
+    alignItems: "center",
   },
   liveClockText: {
     color: "#1D4ED8",
-    fontSize: 11,
-    fontWeight: "bold",
+    fontSize: 10.5,
+    fontWeight: "800",
     fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
   },
   noticeBar: {
-    backgroundColor: THEME.colors.amber,
+    backgroundColor: "#FEF3C7",
     paddingVertical: 6,
     paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#FDE68A",
   },
   noticeText: {
-    color: "#000",
-    fontSize: 12,
-    fontWeight: "600",
+    color: "#92400E",
+    fontSize: 11,
+    fontWeight: "700",
     textAlign: "center",
   },
+  filterTabsRow: {
+    flexDirection: "row",
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    gap: 6,
+  },
+  filterTab: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    paddingVertical: 6,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  filterTabActive: {
+    backgroundColor: "#1E40AF",
+    borderColor: "#1E40AF",
+  },
+  filterTabHot: {
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FECACA",
+  },
+  filterTabWarm: {
+    backgroundColor: "#FFFBEB",
+    borderColor: "#FDE68A",
+  },
+  filterTabFu: {
+    backgroundColor: "#EEF2FF",
+    borderColor: "#C7D2FE",
+  },
+  filterTabText: {
+    color: "#475569",
+    fontSize: 10.5,
+    fontWeight: "700",
+  },
+  filterTabTextActive: {
+    color: "#FFFFFF",
+    fontWeight: "800",
+  },
+  filterTextHot: {
+    color: "#B91C1C",
+    fontWeight: "800",
+  },
+  filterTextWarm: {
+    color: "#B45309",
+    fontWeight: "800",
+  },
+  filterTextFu: {
+    color: "#4338CA",
+    fontWeight: "800",
+  },
   searchBox: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
   searchInputWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: THEME.colors.card,
-    borderRadius: 10,
-    paddingHorizontal: 14,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 11,
+    paddingHorizontal: 11,
     borderWidth: 1,
-    borderColor: THEME.colors.border,
+    borderColor: "#CBD5E1",
+    height: 38,
   },
   searchInput: {
     flex: 1,
-    color: THEME.colors.textPrimary,
-    paddingVertical: 10,
-    fontSize: 14,
+    color: "#0F172A",
+    fontSize: 12,
+    fontWeight: "500",
+    paddingVertical: 0,
   },
   listContent: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingBottom: 30,
   },
   card: {
-    backgroundColor: THEME.colors.card,
+    backgroundColor: "#FFFFFF",
     borderRadius: 14,
-    padding: 16,
-    marginBottom: 12,
+    padding: 13,
+    marginBottom: 10,
     borderWidth: 1,
-    borderColor: THEME.colors.border,
+    borderColor: "#E2E8F0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1.5,
   },
   hotCardBorder: {
-    borderColor: THEME.colors.gold,
+    borderColor: "#FCA5A5",
+    borderLeftWidth: 3.5,
+    borderLeftColor: "#EF4444",
   },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
+    marginBottom: 4,
+  },
+  studentInfoLeft: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 9,
+    flex: 1,
+  },
+  avatarCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 1,
+  },
+  avatarHot: {
+    backgroundColor: "#DC2626",
+  },
+  avatarNormal: {
+    backgroundColor: "#1E40AF",
+  },
+  avatarText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 6,
   },
   leadName: {
-    color: THEME.colors.textPrimary,
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-  leadPhone: {
-    color: THEME.colors.gold,
+    color: "#0F172A",
     fontSize: 14,
-    marginTop: 2,
-    fontWeight: "600",
+    fontWeight: "800",
   },
-  badgeRow: {
-    alignItems: "flex-end",
-    gap: 4,
+  phonePill: {
+    backgroundColor: "#F1F5F9",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 5,
   },
-  priorityBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  badgeText: {
-    color: "#FFFFFF",
-    fontSize: 10,
-    fontWeight: "bold",
-  },
-  stageBadge: {
-    backgroundColor: THEME.colors.surface,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  stageText: {
-    color: THEME.colors.textSecondary,
-    fontSize: 10,
-  },
-  cardDetails: {
-    marginTop: 10,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: THEME.colors.border,
+  phoneText: {
+    color: "#475569",
+    fontSize: 10.5,
+    fontFamily: "monospace",
+    fontWeight: "700",
   },
   courseText: {
-    color: THEME.colors.textPrimary,
-    fontSize: 13,
-    fontWeight: "500",
+    color: "#64748B",
+    fontSize: 11,
+    marginTop: 2,
+  },
+  courseHighlight: {
+    color: "#1E3A8A",
+    fontWeight: "700",
+  },
+  badgeCol: {
+    alignItems: "flex-end",
+    gap: 3,
+    marginLeft: 6,
+  },
+  priorityBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  badgeHot: {
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FECACA",
+  },
+  badgeWarm: {
+    backgroundColor: "#FFFBEB",
+    borderColor: "#FDE68A",
+  },
+  badgeCold: {
+    backgroundColor: "#F0F9FF",
+    borderColor: "#BAE6FD",
+  },
+  priorityText: {
+    fontSize: 9.5,
+    fontWeight: "800",
+  },
+  textHot: {
+    color: "#DC2626",
+  },
+  textWarm: {
+    color: "#D97706",
+  },
+  textCold: {
+    color: "#0284C7",
+  },
+  stageBadge: {
+    backgroundColor: "#F1F5F9",
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 5,
+  },
+  stageText: {
+    color: "#475569",
+    fontSize: 9.5,
+    fontWeight: "600",
+  },
+  academicRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 5,
+    marginTop: 3,
+    marginBottom: 5,
+  },
+  academicBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3.5,
+    backgroundColor: "#FFFBEB",
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  academicBadgeText: {
+    color: "#92400E",
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  collegeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3.5,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    maxWidth: "90%",
+  },
+  collegeBadgeText: {
+    color: "#475569",
+    fontSize: 10,
+    fontWeight: "600",
+  },
+  metaRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 2,
+    marginBottom: 6,
   },
   metaText: {
-    color: THEME.colors.textMuted,
-    fontSize: 12,
-    marginTop: 2,
+    color: "#64748B",
+    fontSize: 10.5,
+  },
+  followUpTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "#FEF3C7",
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 5,
+  },
+  followUpTagText: {
+    color: "#92400E",
+    fontSize: 9.5,
+    fontWeight: "700",
   },
   actionsRow: {
     flexDirection: "row",
-    gap: 8,
-    marginTop: 14,
+    gap: 7,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#F1F5F9",
   },
   callButton: {
     flex: 2,
-    backgroundColor: THEME.colors.emerald,
+    backgroundColor: "#2563EB",
     borderRadius: 8,
-    paddingVertical: 10,
+    paddingVertical: 7,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    gap: 5,
   },
   callButtonText: {
     color: "#FFFFFF",
-    fontSize: 13,
-    fontWeight: "bold",
+    fontSize: 11.5,
+    fontWeight: "800",
   },
   waButton: {
     flex: 2,
-    backgroundColor: "#25D366",
+    backgroundColor: "#059669",
     borderRadius: 8,
-    paddingVertical: 10,
+    paddingVertical: 7,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    gap: 5,
   },
   waButtonText: {
     color: "#FFFFFF",
-    fontSize: 13,
-    fontWeight: "bold",
+    fontSize: 11.5,
+    fontWeight: "800",
   },
   dispButton: {
     flex: 1,
-    backgroundColor: THEME.colors.surface,
+    backgroundColor: "#F1F5F9",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
     borderRadius: 8,
-    paddingVertical: 10,
+    paddingVertical: 7,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: THEME.colors.border,
+    gap: 4,
   },
   dispButtonText: {
-    color: THEME.colors.textSecondary,
-    fontSize: 12,
-    fontWeight: "600",
+    color: "#334155",
+    fontSize: 11,
+    fontWeight: "700",
   },
   center: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    paddingTop: 60,
   },
   loadingText: {
-    color: THEME.colors.textSecondary,
     marginTop: 12,
-    fontSize: 13,
+    color: "#64748B",
+    fontSize: 12,
+    fontWeight: "600",
   },
   centerEmpty: {
     paddingVertical: 50,
     alignItems: "center",
+    paddingHorizontal: 30,
   },
   emptyTitle: {
-    color: THEME.colors.textPrimary,
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-  emptySub: {
-    color: THEME.colors.textMuted,
-    fontSize: 13,
-    marginTop: 4,
-  },
-  inAppCallOverlay: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: "rgba(10, 17, 40, 0.98)",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    borderWidth: 1.5,
-    borderColor: THEME.colors.gold,
-    padding: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -6 },
-    shadowOpacity: 0.5,
-    shadowRadius: 12,
-    elevation: 30,
-    zIndex: 999,
-  },
-  inAppCallCard: {
-    gap: 8,
-  },
-  inAppCallHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  inAppCallLiveBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(16, 185, 129, 0.2)",
-    paddingVertical: 5,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#10B981",
-    gap: 6,
-  },
-  inAppCallRingingBadge: {
-    backgroundColor: "rgba(245, 158, 11, 0.2)",
-    borderColor: "#F59E0B",
-  },
-  inAppCallLiveDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#10B981",
-  },
-  inAppCallRingingDot: {
-    backgroundColor: "#F59E0B",
-  },
-  inAppCallLiveText: {
-    color: "#10B981",
-    fontSize: 10,
-    fontWeight: "bold",
-    letterSpacing: 0.5,
-  },
-  inAppCallRingingText: {
-    color: "#F59E0B",
-  },
-  inAppCallTimer: {
-    color: THEME.colors.gold,
-    fontSize: 17,
-    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
-    fontWeight: "bold",
-  },
-  inAppCallTimerRinging: {
-    color: "#F59E0B",
-  },
-  inAppCallName: {
-    color: THEME.colors.textPrimary,
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-  inAppCallPhone: {
-    color: THEME.colors.textSecondary,
-    fontSize: 14,
-    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
-  },
-  inAppCallCourse: {
-    color: THEME.colors.textMuted,
-    fontSize: 12,
-  },
-  inAppCallHint: {
-    color: THEME.colors.gold,
-    fontSize: 11,
-    fontStyle: "italic",
-    marginTop: 2,
-  },
-  inAppCallActions: {
+    color: "#475569",
+    fontSize: 15,
+    fontWeight: "800",
     marginTop: 10,
   },
-  inAppHangupBtn: {
-    backgroundColor: THEME.colors.danger,
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: THEME.colors.danger,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  inAppHangupText: {
-    color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "bold",
+  emptySub: {
+    color: "#94A3B8",
+    fontSize: 11.5,
+    textAlign: "center",
+    marginTop: 4,
   },
 });

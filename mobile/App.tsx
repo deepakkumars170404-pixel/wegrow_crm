@@ -9,7 +9,6 @@ import { QueueScreen } from "./src/screens/QueueScreen";
 import { DialerScreen } from "./src/screens/DialerScreen";
 import { DashboardScreen } from "./src/screens/DashboardScreen";
 import { SettingsScreen } from "./src/screens/SettingsScreen";
-import { StaffSelectorBar } from "./src/components/StaffSelectorBar";
 import { ActiveCallOverlay } from "./src/components/ActiveCallOverlay";
 import { CallModal } from "./src/screens/CallModal";
 import { Lead, StaffMember } from "./src/types";
@@ -59,9 +58,6 @@ export default function App() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" backgroundColor="#FFFFFF" />
-
-      {/* 1 Phone / 5 Staff Quick Selector Header */}
-      <StaffSelectorBar onStaffChanged={(staff) => setActiveStaff(staff)} />
 
       {/* Screen Body */}
       <View style={styles.screenArea}>

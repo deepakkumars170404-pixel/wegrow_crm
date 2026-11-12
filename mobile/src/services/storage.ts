@@ -51,9 +51,15 @@ export const StorageService = {
     return [];
   },
 
+  async saveCallHistory(records: CallRecord[]): Promise<void> {
+    try {
+      await AsyncStorage.setItem(KEYS.CALL_HISTORY, JSON.stringify(records.slice(0, 500)));
+    } catch {}
+  },
+
   async addCallRecord(record: CallRecord): Promise<void> {
     const list = await this.getCallHistory();
-    const updated = [record, ...list.slice(0, 99)];
+    const updated = [record, ...list.slice(0, 499)];
     await AsyncStorage.setItem(KEYS.CALL_HISTORY, JSON.stringify(updated));
   },
 

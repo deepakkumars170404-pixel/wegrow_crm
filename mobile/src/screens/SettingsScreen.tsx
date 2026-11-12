@@ -270,7 +270,7 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   header: {
-    paddingTop: 50,
+    paddingTop: 14,
     paddingHorizontal: 20,
     paddingBottom: 16,
     backgroundColor: THEME.colors.card,
