@@ -15,7 +15,6 @@ import { THEME } from "../constants/theme";
 import { Lead } from "../types";
 import { ApiService } from "../services/api";
 import { TelephonyService } from "../services/telephony";
-import { LiveClock } from "../components/LiveClock";
 import {
   Phone,
   MessageCircle,
@@ -27,6 +26,7 @@ import {
   Building2,
   X,
   Filter,
+  RefreshCw,
 } from "lucide-react-native";
 
 interface QueueScreenProps {
@@ -257,21 +257,21 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({ onOpenCallModal }) => 
 
   return (
     <View style={styles.container}>
-      {/* 1. Header & Live Time Banner */}
+      {/* 1. Header Banner */}
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <View style={styles.headerTitleRow}>
-            <Users size={20} color="#1E40AF" strokeWidth={2.5} />
+            <Users size={18} color="#1E40AF" strokeWidth={2.5} />
             <Text style={styles.headerTitle}>Student Call Queue</Text>
           </View>
           <Text style={styles.headerSubtitle}>
-            {uniqueLeads.length} Students ready to dial • Wegrow Skill Campus
+            Wegrow Skill Campus • Daily Telecalling
           </Text>
         </View>
-        <View style={styles.liveClockBadge}>
-          <Clock size={11} color="#1D4ED8" style={{ marginRight: 4 }} />
-          <LiveClock style={styles.liveClockText} />
-        </View>
+        <TouchableOpacity style={styles.refreshHeaderBtn} onPress={onRefresh} activeOpacity={0.7}>
+          <RefreshCw size={12} color="#1D4ED8" strokeWidth={2.4} style={{ marginRight: 4 }} />
+          <Text style={styles.refreshHeaderText}>Refresh</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Offline Notice if CRM is unreachable */}
@@ -416,21 +416,20 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 2,
   },
-  liveClockBadge: {
+  refreshHeaderBtn: {
     backgroundColor: "#EFF6FF",
-    paddingHorizontal: 8,
-    paddingVertical: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "#BFDBFE",
     flexDirection: "row",
     alignItems: "center",
   },
-  liveClockText: {
+  refreshHeaderText: {
     color: "#1D4ED8",
-    fontSize: 10.5,
+    fontSize: 11,
     fontWeight: "800",
-    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
   },
   noticeBar: {
     backgroundColor: "#FEF3C7",

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, LogBox } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, LogBox, Platform, StatusBar as RNStatusBar } from "react-native";
 import { ListFilter, PhoneCall, BarChart3, Settings } from "lucide-react-native";
 
 LogBox.ignoreAllLogs(true);
@@ -164,7 +164,8 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: THEME.colors.background,
+    backgroundColor: "#F8FAFC",
+    paddingTop: Platform.OS === "android" ? (RNStatusBar.currentHeight || 28) : 0,
   },
   screenArea: {
     flex: 1,

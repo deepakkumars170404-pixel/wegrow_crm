@@ -13,7 +13,6 @@ import { THEME } from "../constants/theme";
 import { TelephonyService } from "../services/telephony";
 import { StorageService } from "../services/storage";
 import { ApiService } from "../services/api";
-import { LiveClock } from "../components/LiveClock";
 import { Lead } from "../types";
 
 const KEYS = [
@@ -97,12 +96,7 @@ export const DialerScreen: React.FC = () => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-          <Text style={styles.headerTitle}>Direct Dialpad</Text>
-          <View style={styles.liveClockBadge}>
-            <LiveClock style={styles.liveClockText} prefix="🕒 " />
-          </View>
-        </View>
+        <Text style={styles.headerTitle}>Direct Dialpad</Text>
         <Text style={styles.headerSubtitle}>SIM Card Voice Dialer • Wegrow Skill Campus</Text>
       </View>
 
