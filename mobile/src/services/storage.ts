@@ -73,4 +73,8 @@ export const StorageService = {
   async clearPendingCalls(): Promise<void> {
     await AsyncStorage.removeItem(KEYS.PENDING_CALLS);
   },
+
+  async savePendingCalls(records: CallRecord[]): Promise<void> {
+    await AsyncStorage.setItem(KEYS.PENDING_CALLS, JSON.stringify(records));
+  },
 };

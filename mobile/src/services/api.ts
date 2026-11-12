@@ -117,20 +117,59 @@ export const ApiService = {
   async logCallOutcome(record: CallRecord): Promise<{ success: boolean; error?: string }> {
     let cloudSynced = false;
 
+    // Ensure a safe, valid lead ID exists
+    const safeLeadId = record.leadId || `LD-MOB-${Date.now()}`;
+    record.leadId = safeLeadId;
+
+    const mappedStatus =
+      record.disposition === "Not Interested"
+        ? "Lost"
+        : record.disposition === "Visit to Institute"
+        ? "Counselling Scheduled"
+        : record.disposition === "Joined"
+        ? "Admitted"
+        : record.disposition;
+
+    const dateStr = new Date().toISOString().split("T")[0];
+    const timeStr =
+      record.callStartTime ||
+      new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+
     // 1. DIRECT SYNC TO SUPABASE CLOUD (Zero dependency on same Wi-Fi!)
     // Works wherever phone is connected: Jio/Airtel 4G/5G, Hotspot, or any Wi-Fi!
     if (isSupabaseReady() && supabaseMobile) {
       try {
-        const dateStr = new Date().toISOString().split("T")[0];
-        const timeStr =
-          record.callStartTime ||
-          new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+        // STEP 1: UPSERT LEAD FIRST (CRITICAL: Satisfies foreign key constraint in calls table!)
+        const { error: lErr } = await supabaseMobile.from("leads").upsert(
+          {
+            id: safeLeadId,
+            student_name: record.studentName,
+            phone: record.phone,
+            course_interested: record.courseInterested || null,
+            status: mappedStatus,
+            stage: mappedStatus,
+            assigned_caller: record.callerName,
+            last_call_date: dateStr,
+            last_call_outcome: record.disposition,
+            qualification: record.qualification || null,
+            passed_out_year: record.passedOutYear || null,
+            college_name: record.collegeName || null,
+            next_follow_up_date: record.nextFollowUpDate || null,
+            next_follow_up_time: record.nextFollowUpTime || null,
+          },
+          { onConflict: "id" }
+        );
 
-        // Upsert call record in Supabase
+        if (lErr) {
+          console.warn("Mobile Supabase lead upsert error:", lErr);
+        }
+
+        // STEP 2: UPSERT CALL SECOND (with valid lead_id)
+        const callId = record.id || `cr-mob-${Date.now()}`;
         const { error: cErr } = await supabaseMobile.from("calls").upsert(
           {
-            id: record.id || `cr-mob-${Date.now()}`,
-            lead_id: record.leadId,
+            id: callId,
+            lead_id: safeLeadId,
             student_name: record.studentName,
             phone: record.phone,
             caller_name: record.callerName,
@@ -152,56 +191,30 @@ export const ApiService = {
           { onConflict: "id" }
         );
 
-        const mappedStatus =
-          record.disposition === "Not Interested"
-            ? "Lost"
-            : record.disposition === "Visit to Institute"
-            ? "Counselling Scheduled"
-            : record.disposition === "Joined"
-            ? "Admitted"
-            : record.disposition;
+        if (cErr) {
+          console.warn("Mobile Supabase call upsert error:", cErr);
+        }
 
-        // Upsert lead in Supabase
-        await supabaseMobile.from("leads").upsert(
-          {
-            id: record.leadId,
-            student_name: record.studentName,
-            phone: record.phone,
-            course_interested: record.courseInterested,
-            status: mappedStatus,
-            stage: mappedStatus,
-            assigned_caller: record.callerName,
-            last_call_date: dateStr,
-            last_call_outcome: record.disposition,
-            qualification: record.qualification,
-            passed_out_year: record.passedOutYear,
-            college_name: record.collegeName,
-            next_follow_up_date: record.nextFollowUpDate || null,
-            next_follow_up_time: record.nextFollowUpTime || null,
-          },
-          { onConflict: "id" }
-        );
-
-        // Upsert follow-up task if scheduled
+        // STEP 3: UPSERT FOLLOW-UP TASK IF SCHEDULED
         if (record.nextFollowUpDate) {
           await supabaseMobile.from("follow_ups").upsert(
             {
-              id: `fu-${record.leadId}-${Date.now()}`,
-              lead_id: record.leadId,
+              id: `fu-${safeLeadId}-${Date.now()}`,
+              lead_id: safeLeadId,
               student_name: record.studentName,
               phone: record.phone,
               caller_name: record.callerName,
-              course: record.courseInterested,
+              course: record.courseInterested || null,
               scheduled_date: record.nextFollowUpDate,
               scheduled_time: record.nextFollowUpTime || "10:30 AM",
               status: "Pending",
-              remarks: record.notes,
+              remarks: record.notes || null,
             },
             { onConflict: "id" }
           );
         }
 
-        if (!cErr) {
+        if (!cErr && !lErr) {
           cloudSynced = true;
         }
       } catch (sbErr) {
@@ -209,34 +222,41 @@ export const ApiService = {
       }
     }
 
-    // 2. Also try Local CRM Server (if on same Wi-Fi)
+    // 2. Also try CRM Server API (Vercel or local Wi-Fi) with timeout
     try {
       const baseUrl = await this.getBaseUrl();
-      const res = await fetch(`${baseUrl}/api/calls/log`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          leadId: record.leadId,
-          studentName: record.studentName,
-          phone: record.phone,
-          callerName: record.callerName,
-          disposition: record.disposition,
-          durationSeconds: record.durationSeconds,
-          courseInterested: record.courseInterested,
-          callStartTime: record.callStartTime,
-          callEndTime: record.callEndTime,
-          qualification: record.qualification,
-          passedOutYear: record.passedOutYear,
-          collegeName: record.collegeName,
-          notes: record.notes,
-          nextFollowUpDate: record.nextFollowUpDate,
-          nextFollowUpTime: record.nextFollowUpTime,
-          channel: "Mobile SIM Dialer",
-        }),
-      });
+      if (baseUrl && baseUrl.startsWith("http")) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
 
-      if (res.ok) {
-        cloudSynced = true;
+        const res = await fetch(`${baseUrl}/api/calls/log`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({
+            leadId: safeLeadId,
+            studentName: record.studentName,
+            phone: record.phone,
+            callerName: record.callerName,
+            disposition: record.disposition,
+            durationSeconds: record.durationSeconds,
+            courseInterested: record.courseInterested,
+            callStartTime: record.callStartTime,
+            callEndTime: record.callEndTime,
+            qualification: record.qualification,
+            passedOutYear: record.passedOutYear,
+            collegeName: record.collegeName,
+            notes: record.notes,
+            nextFollowUpDate: record.nextFollowUpDate,
+            nextFollowUpTime: record.nextFollowUpTime,
+            channel: "Mobile SIM Dialer",
+          }),
+        });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+          cloudSynced = true;
+        }
       }
     } catch {}
 
@@ -270,6 +290,8 @@ export const ApiService = {
 
     if (remaining.length === 0) {
       await StorageService.clearPendingCalls();
+    } else {
+      await StorageService.savePendingCalls(remaining);
     }
     return { syncedCount: successCount };
   },

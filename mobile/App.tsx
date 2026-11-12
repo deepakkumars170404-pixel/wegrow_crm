@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, LogBox } from "react-native";
 
 LogBox.ignoreAllLogs(true);
@@ -12,6 +12,7 @@ import { StaffSelectorBar } from "./src/components/StaffSelectorBar";
 import { ActiveCallOverlay } from "./src/components/ActiveCallOverlay";
 import { CallModal } from "./src/screens/CallModal";
 import { Lead, StaffMember } from "./src/types";
+import { ApiService } from "./src/services/api";
 
 type Tab = "queue" | "dialer" | "dashboard" | "settings";
 
@@ -21,6 +22,11 @@ export default function App() {
   const [modalDuration, setModalDuration] = useState<number>(0);
   const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
   const [activeStaff, setActiveStaff] = useState<StaffMember>("MuthuSelvi");
+
+  // Auto-sync any offline pending calls whenever app opens
+  useEffect(() => {
+    ApiService.syncPendingCalls().catch(() => {});
+  }, []);
 
   const handleCallEnded = (callData: {
     phoneNumber: string;
