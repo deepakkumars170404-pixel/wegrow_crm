@@ -43,7 +43,7 @@ const STAGES: StageConfig[] = [
 
 // Approximate tuition deal values by course
 const COURSE_TUITION_MAP: Record<string, number> = {
-  "AI Explorer": 48000,
+  "Java Full Stack Program": 48000,
   "Full Stack Web Development": 42000,
   "Data Analytics & Python": 38000,
   "Digital Marketing Pro": 32000,

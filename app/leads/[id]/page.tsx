@@ -760,13 +760,17 @@ export default function LeadDetailPage() {
 
               {/* Quick Action Buttons */}
               <div className="pt-2 space-y-2">
-                <button
-                  onClick={startSimulatedCall}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 px-3 bg-[#142B52] hover:bg-[#1E3B6E] text-white rounded-xl text-xs font-bold transition-all shadow-sm"
+                <a
+                  href={`https://wa.me/91${lead.phone.replace(/\D/g, "").slice(-10)}?text=${encodeURIComponent(
+                    `Hello ${lead.studentName}, greeting from Wegrow Academy.`
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
                 >
-                  <PhoneCall className="w-4 h-4 text-[#D5A52B]" />
-                  <span>Call Student (Softphone)</span>
-                </button>
+                  <MessageSquare className="w-4 h-4 text-emerald-200" />
+                  <span>Chat on WhatsApp</span>
+                </a>
 
                 <button
                   onClick={() => setIsScheduleModalOpen(true)}
@@ -894,7 +898,7 @@ export default function LeadDetailPage() {
                 </label>
                 <textarea
                   rows={2}
-                  placeholder="e.g. Student interested in weekend AI Explorer batch..."
+                  placeholder="e.g. Student interested in weekend Full Stack batch..."
                   value={callRemarks}
                   onChange={(e) => setCallRemarks(e.target.value)}
                   className="w-full px-3 py-2 border rounded-xl"

@@ -16,6 +16,7 @@ import {
   LeadStatus,
   LeadPriority,
   PipelineStage,
+  CallRecord,
 } from "@/types";
 import {
   initialLeads,
@@ -25,6 +26,7 @@ import {
   initialTelecallers,
   initialUsers,
 } from "@/data/dummy-data";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 export interface ToastMessage {
   id: string;
@@ -45,7 +47,7 @@ export interface TelephonyStatus {
   checkedAt?: string;
 }
 
-export type TelephonyMode = "jio" | "airtel" | "presentation";
+export type TelephonyMode = "mobile" | "jio" | "airtel" | "presentation";
 
 interface CRMContextType {
   leads: Lead[];
@@ -69,12 +71,13 @@ interface CRMContextType {
   closeCallModal: () => void;
   isCallConnected: boolean;
   setIsCallConnected: (connected: boolean) => void;
-  callPhase: "idle" | "ringing" | "connected";
+  callPhase: "idle" | "ringing" | "connected" | "ended";
   callDuration: number;
   lastCallDuration: string | null;
   setLastCallDuration: (dur: string | null) => void;
   activePhoneNumber: string;
   initiateCall: (lead: Lead) => void;
+  answerCall: () => void;
   endCallSession: () => void;
 
   // Telephony Presence & Reconnect
@@ -84,18 +87,7 @@ interface CRMContextType {
   refreshTelephonyStatus: (force?: boolean) => Promise<void>;
   reconnectTelephony: () => Promise<void>;
 
-  // AI Voice Telecalling & Batch Auto-Dialer Session State
-  isAiCallModalOpen: boolean;
-  aiCallLead: Lead | null;
-  aiCallPhone: string;
-  isAiInbound: boolean;
-  openAiCallModal: (lead?: Lead | null, phone?: string, isInbound?: boolean) => void;
-  closeAiCallModal: () => void;
-  isAiBatchDialerOpen: boolean;
-  aiBatchSelectedLeadIds: string[];
-  openAiBatchDialer: (leadIds?: string[]) => void;
-  closeAiBatchDialer: () => void;
-
+  
   // Leads & Data Actions
   addLead: (lead: Omit<Lead, "id" | "callCount">) => void;
   updateLead: (id: string, updated: Partial<Lead>) => void;
@@ -107,10 +99,15 @@ interface CRMContextType {
     record: {
       callerName: string;
       outcome: string;
+      mindset?: string;
       duration: string;
       remarks: string;
       nextFollowUpDate?: string;
       nextFollowUpTime?: string;
+      qualification?: string;
+      passedOutYear?: string;
+      collegeName?: string;
+      studentName?: string;
     }
   ) => void;
   markFollowUpCompleted: (id: string) => void;
@@ -124,11 +121,16 @@ interface CRMContextType {
 
 const CRMContext = createContext<CRMContextType | undefined>(undefined);
 
-const LOCAL_STORAGE_LEADS_KEY = "wegrow_crm_leads_v2";
-const LOCAL_STORAGE_FOLLOWUPS_KEY = "wegrow_crm_followups_v2";
+const LOCAL_STORAGE_LEADS_KEY = "wegrow_crm_leads_v5_clean";
+const LOCAL_STORAGE_FOLLOWUPS_KEY = "wegrow_crm_followups_v5";
 
 export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [leads, setLeads] = useState<Lead[]>(initialLeads);
+  const leadsRef = useRef<Lead[]>(initialLeads);
+  useEffect(() => {
+    leadsRef.current = leads;
+  }, [leads]);
+
   const [followUps, setFollowUps] = useState<FollowUpTask[]>(initialFollowUps);
   const [whatsappChats, setWhatsappChats] = useState<WhatsAppChat[]>(initialWhatsAppChats);
   const [courses] = useState<Course[]>(initialCourses);
@@ -137,11 +139,42 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activeUserRole, setActiveUserRole] = useState<string>("Owner");
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
+  const dismissToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  const showToast = useCallback((toast: Omit<ToastMessage, "id">) => {
+    const id = "t-" + Math.random().toString(36).substring(2, 9);
+    setToasts((prev) => [...prev, { ...toast, id }]);
+    setTimeout(() => {
+      dismissToast(id);
+    }, 4500);
+  }, [dismissToast]);
+
+  const addToast = useCallback((title: string, type: "success" | "info" | "warning" | "error" = "info") => {
+    showToast({ title, type });
+  }, [showToast]);
+
   // Live Calling Session State
-  const [activeCallLead, setActiveCallLead] = useState<Lead | null>(null);
+  const [activeCallLead, setActiveCallLeadState] = useState<Lead | null>(null);
+  const activeCallLeadRef = useRef<Lead | null>(null);
+  const setActiveCallLead = useCallback((lead: Lead | null) => {
+    activeCallLeadRef.current = lead;
+    setActiveCallLeadState(lead);
+  }, []);
+
   const [isCallModalOpen, setIsCallModalOpen] = useState(false);
   const [isCallConnected, setIsCallConnected] = useState(false);
-  const [callPhase, setCallPhase] = useState<"idle" | "ringing" | "connected">("idle");
+  const [callPhase, setCallPhase] = useState<"idle" | "ringing" | "connected" | "ended">("idle");
+  const callPhaseRef = useRef<"idle" | "ringing" | "connected" | "ended">("idle");
+  const callConnectedAtRef = useRef<number | null>(null);
+  const consecutiveIdleCountRef = useRef<number>(0);
+
+  const setCallPhaseSynced = useCallback((phase: "idle" | "ringing" | "connected" | "ended") => {
+    callPhaseRef.current = phase;
+    setCallPhase(phase);
+  }, []);
+
   const [callDuration, setCallDuration] = useState(0);
   const [lastCallDuration, setLastCallDuration] = useState<string | null>(null);
   const [activePhoneNumber, setActivePhoneNumber] = useState<string>("");
@@ -149,60 +182,38 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const callStartTimeRef = useRef<number>(0);
   const activePhoneRef = useRef<string>("");
   const callDurationRef = useRef<number>(0);
+  const lastProcessedCallTimestampRef = useRef<number>(0);
 
-  // AI Voice Telecalling & Batch Auto-Dialer State
-  const [isAiCallModalOpen, setIsAiCallModalOpen] = useState(false);
-  const [aiCallLead, setAiCallLead] = useState<Lead | null>(null);
-  const [aiCallPhone, setAiCallPhone] = useState<string>("+91 98431 73678");
-  const [isAiInbound, setIsAiInbound] = useState(false);
-  const [isAiBatchDialerOpen, setIsAiBatchDialerOpen] = useState(false);
-  const [aiBatchSelectedLeadIds, setAiBatchSelectedLeadIds] = useState<string[]>([]);
-
-  const openAiCallModal = useCallback(
-    (lead?: Lead | null, phone?: string, isInbound?: boolean) => {
-      setAiCallLead(lead || null);
-      setAiCallPhone(phone || lead?.phone || "+91 98431 73678");
-      setIsAiInbound(Boolean(isInbound));
-      setIsAiCallModalOpen(true);
-    },
-    []
-  );
-
-  const closeAiCallModal = useCallback(() => {
-    setIsAiCallModalOpen(false);
-  }, []);
-
-  const openAiBatchDialer = useCallback((leadIds?: string[]) => {
-    setAiBatchSelectedLeadIds(leadIds || []);
-    setIsAiBatchDialerOpen(true);
-  }, []);
-
-  const closeAiBatchDialer = useCallback(() => {
-    setIsAiBatchDialerOpen(false);
-  }, []);
-
-  // Live MicroSIP Telephony & Wi-Fi Network Presence
-  const [telephonyMode, setTelephonyModeState] = useState<TelephonyMode>("jio");
-  const telephonyModeRef = useRef<TelephonyMode>("jio");
+  
+  // Live Telephony & Network Presence (Mobile SIM Bridge / MicroSIP / Demo)
+  const [telephonyMode, setTelephonyModeState] = useState<TelephonyMode>("mobile");
+  const telephonyModeRef = useRef<TelephonyMode>("mobile");
 
   const [telephonyStatus, setTelephonyStatus] = useState<TelephonyStatus>({
     connected: true,
     status: "online",
-    message: "JioFiber SIP Online (+91 4562 355214) • Ready to Call",
-    wifiSSID: "WegrowskillCampus",
+    message: "Mobile SIM Bridge Online • Direct SIM Calling Ready",
+    wifiSSID: "Mobile Bridge (ADB)",
     wifiState: "connected",
     gatewayReachable: true,
-    microsipRunning: true,
-    account: "+914562355214@tn.wln.ims.jio.com",
+    microsipRunning: false,
+    account: "Android SIM Dialer",
   });
 
   useEffect(() => {
     try {
       if (typeof window !== "undefined") {
         const savedMode = localStorage.getItem("wegrow_telephony_mode") as TelephonyMode;
-        if (savedMode === "jio" || savedMode === "airtel" || savedMode === "presentation") {
+        if (savedMode === "airtel" || savedMode === "presentation" || savedMode === "mobile") {
           setTelephonyModeState(savedMode);
           telephonyModeRef.current = savedMode;
+        } else {
+          // Default to mobile (Mobile Phone SIM Bridge)
+          setTelephonyModeState("mobile");
+          telephonyModeRef.current = "mobile";
+          try {
+            localStorage.setItem("wegrow_telephony_mode", "mobile");
+          } catch {}
         }
       }
     } catch {}
@@ -216,7 +227,32 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         localStorage.setItem("wegrow_telephony_mode", mode);
       }
     } catch {}
-    if (mode === "airtel") {
+    if (mode === "mobile") {
+      setTelephonyStatus({
+        connected: true,
+        status: "online",
+        message: "Mobile SIM Bridge Online • Direct SIM Calling Ready",
+        wifiSSID: "Mobile Bridge (ADB)",
+        wifiState: "connected",
+        gatewayReachable: true,
+        microsipRunning: false,
+        account: "Android SIM Dialer",
+      });
+      addToast("Switched to Mobile Phone SIM Bridge (No MicroSIP)", "success");
+      fetch("/api/mobile/status")
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.connected) {
+            setTelephonyStatus((prev) => ({
+              ...prev,
+              message: `Mobile SIM Bridge Online (${data.model || "Android"} • ${data.device})`,
+            }));
+          } else {
+            addToast("Warning: No mobile device connected via ADB.", "warning");
+          }
+        })
+        .catch(() => {});
+    } else if (mode === "airtel") {
       setTelephonyStatus({
         connected: true,
         status: "online",
@@ -241,7 +277,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
       addToast("Switched to Presentation / Demo Mode", "success");
     } else {
-      addToast("Switched to Local Branch (JioFiber SIP)", "info");
+      addToast("Switched to Local Branch (JioFiber SIP MicroSIP)", "info");
       refreshTelephonyStatus(true);
     }
   };
@@ -250,10 +286,16 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     try {
       if (typeof window !== "undefined") {
+        // Clear any old legacy dummy localStorage caches from previous tests
+        ["wegrow_crm_leads_v1", "wegrow_crm_leads_v2", "wegrow_crm_leads_v3", "wegrow_crm_leads_v4", "wegrow_crm_followups_v1", "wegrow_crm_followups_v2"].forEach((k) => {
+          localStorage.removeItem(k);
+        });
+
         const localLeads = localStorage.getItem(LOCAL_STORAGE_LEADS_KEY);
         if (localLeads) {
           const parsed = JSON.parse(localLeads);
-          if (Array.isArray(parsed) && parsed.length > 0) {
+          const isDummy = Array.isArray(parsed) && parsed.some((l: any) => l.id?.startsWith("LD-00") || l.studentName?.includes("Ramesh"));
+          if (!isDummy && Array.isArray(parsed) && parsed.length > 0) {
             setLeads(parsed);
           }
         }
@@ -267,11 +309,11 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     } catch {}
 
-    // Also fetch server storage
+    // Also fetch server storage (Supabase backed)
     fetch("/api/leads")
       .then((res) => res.json())
       .then((data) => {
-        if (data && Array.isArray(data.leads) && data.leads.length > 0) {
+        if (data && Array.isArray(data.leads)) {
           setLeads(data.leads);
           try {
             if (typeof window !== "undefined") {
@@ -284,6 +326,43 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       })
       .catch(() => {});
+
+    // Supabase Cloud Realtime Channel for instant live updates across devices
+    const sb = supabase;
+    if (isSupabaseConfigured() && sb) {
+      const channel = sb
+        .channel("realtime:crm-live")
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "leads" },
+          () => {
+            fetch("/api/leads")
+              .then((res) => res.json())
+              .then((data) => {
+                if (data && Array.isArray(data.leads)) setLeads(data.leads);
+                if (data && Array.isArray(data.followUps)) setFollowUps(data.followUps);
+              })
+              .catch(() => {});
+          }
+        )
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "calls" },
+          () => {
+            fetch("/api/leads")
+              .then((res) => res.json())
+              .then((data) => {
+                if (data && Array.isArray(data.leads)) setLeads(data.leads);
+              })
+              .catch(() => {});
+          }
+        )
+        .subscribe();
+
+      return () => {
+        sb.removeChannel(channel);
+      };
+    }
   }, []);
 
   // Helper to persist leads to localStorage and backend
@@ -308,23 +387,47 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Telephony Refresh Function
   const refreshTelephonyStatus = useCallback(async (force = false) => {
+    if (telephonyModeRef.current === "mobile") {
+      try {
+        const res = await fetch("/api/mobile/status", { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.connected) {
+            setTelephonyStatus({
+              connected: true,
+              status: "online",
+              message: `Mobile SIM Bridge Online (${data.model || "Android"} • ${data.device})`,
+              wifiSSID: "Mobile Bridge (ADB)",
+              wifiState: "connected",
+              gatewayReachable: true,
+              microsipRunning: false,
+              account: "Android SIM Dialer",
+            });
+            return;
+          }
+        }
+      } catch {}
+
+      setTelephonyStatus({
+        connected: false,
+        status: "offline",
+        message: "Mobile Phone Disconnected (ADB)",
+        wifiSSID: "Mobile Bridge",
+        wifiState: "disconnected",
+        gatewayReachable: false,
+        microsipRunning: false,
+        account: "Android SIM Dialer",
+      });
+      return;
+    }
+
     try {
       const url = force ? "/api/microsip/status?force=true" : "/api/microsip/status";
       const res = await fetch(url, { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
         setTelephonyStatus(data);
-        if (data.connected) {
-          // If Office JioFiber Wi-Fi is actively connected, always ensure JioFiber SIP mode
-          setTelephonyModeState("jio");
-          telephonyModeRef.current = "jio";
-          try {
-            if (typeof window !== "undefined") {
-              localStorage.setItem("wegrow_telephony_mode", "jio");
-            }
-          } catch {}
-          return;
-        }
+        return;
       }
     } catch {}
 
@@ -364,8 +467,46 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   }, []);
 
-  // Office Reconnect Function (Triggered when user arrives at office from home)
+  // Reconnect Function (Mobile Phone Bridge or Office Wi-Fi)
   const reconnectTelephony = useCallback(async () => {
+    if (telephonyModeRef.current === "mobile") {
+      showToast({
+        type: "info",
+        title: "Connecting Mobile Bridge...",
+        message: "Checking ADB connection to Android Phone SIM...",
+      });
+      try {
+        const res = await fetch("/api/mobile/status?refresh=true", { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.connected) {
+            setTelephonyStatus({
+              connected: true,
+              status: "online",
+              message: `Mobile SIM Bridge Online (${data.model || "Android"} • ${data.device})`,
+              wifiSSID: "Mobile Bridge (ADB)",
+              wifiState: "connected",
+              gatewayReachable: true,
+              microsipRunning: false,
+              account: "Android SIM Dialer",
+            });
+            showToast({
+              type: "success",
+              title: "Mobile Phone Connected!",
+              message: `Device: ${data.model || "Android Phone"} • SIM Call Ready`,
+            });
+            return;
+          }
+        }
+      } catch {}
+      showToast({
+        type: "error",
+        title: "Phone Disconnected",
+        message: "Please check Wireless Debugging or plug phone via USB.",
+      });
+      return;
+    }
+
     showToast({
       type: "info",
       title: "Connecting to Office JioFiber...",
@@ -415,117 +556,269 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   };
 
+  // Convert seconds into human-readable duration like "1 minute 30 seconds"
+  const formatHumanDuration = (totalSeconds: number): string => {
+    if (totalSeconds <= 0) return "0 seconds";
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    if (m > 0 && s > 0) {
+      return `${m} minute${m > 1 ? "s" : ""} ${s} second${s > 1 ? "s" : ""}`;
+    }
+    if (m > 0) {
+      return `${m} minute${m > 1 ? "s" : ""}`;
+    }
+    return `${s} second${s > 1 ? "s" : ""}`;
+  };
+
+  // Master Monotonic Call Timer - Strictly derived from hardware wall-clock (Date.now())
+  // Never jumps backwards, never resets to 0 mid-call
   useEffect(() => {
     let timer: any = null;
     if (isCallConnected && callPhase === "connected") {
+      if (!callConnectedAtRef.current) {
+        callConnectedAtRef.current = Date.now();
+      }
       timer = setInterval(() => {
-        setCallDuration((prev) => {
-          const next = prev + 1;
-          callDurationRef.current = next;
-          return next;
-        });
-      }, 1000);
+        const elapsed = Math.max(
+          1,
+          Math.floor((Date.now() - (callConnectedAtRef.current || Date.now())) / 1000)
+        );
+        setCallDuration(elapsed);
+        callDurationRef.current = elapsed;
+      }, 500);
+    } else if (callPhase === "idle") {
+      callConnectedAtRef.current = null;
     }
     return () => clearInterval(timer);
   }, [isCallConnected, callPhase]);
 
-  const hasRungOnceRef = useRef<boolean>(false);
-  const idleConfirmCountRef = useRef<number>(0);
-
-  // Real-time MicroSIP Call State Detector (Automatic answer detection & automatic hangup on remote cut)
+  // Real-time Mobile SIM Call State & Remote Cut / Hangup Detector
   useEffect(() => {
     let interval: any = null;
     if (isCallConnected) {
       interval = setInterval(async () => {
         try {
           const targetPhone = activePhoneRef.current || "";
-          const res = await fetch(
-            `/api/microsip/call-state?phone=${encodeURIComponent(targetPhone)}&_t=${Date.now()}`,
-            {
-              cache: "no-store",
-              headers: { "Cache-Control": "no-cache, no-store, must-revalidate" },
-            }
-          );
+          const url =
+            telephonyModeRef.current === "mobile"
+              ? `/api/mobile/status?_t=${Date.now()}`
+              : `/api/microsip/call-state?phone=${encodeURIComponent(targetPhone)}&_t=${Date.now()}`;
+          const res = await fetch(url, {
+            cache: "no-store",
+            headers: { "Cache-Control": "no-cache, no-store, must-revalidate" },
+          });
           if (!res.ok) return;
           const data = await res.json();
 
-          if (data.state === "connected") {
-            // Opposite person has ANSWERED the call! Locked in active state.
-            idleConfirmCountRef.current = 0;
-            hasRungOnceRef.current = true;
-            stopRingbackCadence();
-            setCallPhase("connected");
-          } else if (data.state === "ringing") {
-            idleConfirmCountRef.current = 0;
-            hasRungOnceRef.current = true;
-            setCallPhase("ringing");
+          const timeSinceStart = Date.now() - (callStartTimeRef.current || 0);
 
-            // Automatic 50-second ring timeout if recipient never answers
-            const timeRinging = Date.now() - (callStartTimeRef.current || 0);
-            if (timeRinging > 50000) {
-              stopRingbackCadence();
-              playCallEndTone();
-              setCallPhase("idle");
-              setIsCallConnected(false);
-              hasRungOnceRef.current = false;
-              addToast("Ring Timeout • Student did not answer the phone", "warning");
-              fetch("/api/microsip/hangup", { method: "POST" }).catch(() => {});
-            }
-          } else if (data.state === "idle") {
-            const timeSinceStart = Date.now() - (callStartTimeRef.current || 0);
+          // CRITICAL SAFETY GUARD:
+          // If the phone is NOT connected via ADB (Wi-Fi drop, packet loss, or proximity sleep),
+          // NEVER cut the call! The user is actively speaking on their mobile SIM card!
+          if (!data.connected) {
+            consecutiveIdleCountRef.current = 0;
+            return;
+          }
 
-            // While initial dialing, give MicroSIP up to 3 seconds to initiate the SIP transaction
-            if (!hasRungOnceRef.current && timeSinceStart < 3000) {
+          // 1. If call is IDLE on phone -> user cut call on phone, or remote party hung up!
+          if (data.state === "idle") {
+            const isCallActive = callPhaseRef.current === "connected";
+
+            // If still in dialing/ringing phase, give modem initial 5s to dispatch dialing
+            if (!isCallActive && timeSinceStart < 5000) {
               return;
             }
 
-            // If call is actively connected, require 3 consecutive idle polls (~1.2s) to prevent any premature blip
-            idleConfirmCountRef.current += 1;
-            const threshold = callPhase === "connected" ? 3 : 2;
-            if (idleConfirmCountRef.current < threshold) {
+            // Once the call was connected (active talk), fast instant cut:
+            // 2 consecutive confirmed idle polls (~800ms) is enough to immediately cut the web call!
+            consecutiveIdleCountRef.current += 1;
+            const requiredIdlePolls = isCallActive ? 2 : 3;
+            if (consecutiveIdleCountRef.current < requiredIdlePolls) {
               return;
             }
 
-            // Remote party has CUT / REJECTED / ENDED the call (or call dropped)
-            idleConfirmCountRef.current = 0;
+            consecutiveIdleCountRef.current = 0;
             stopRingbackCadence();
             playCallEndTone();
-            const dur = callDurationRef.current;
-            const formatted = formatTimer(dur > 0 ? dur : 0);
-            setLastCallDuration(formatted);
-            setCallPhase("idle");
-            setIsCallConnected(false);
-            hasRungOnceRef.current = false;
 
-            if (data.lastOutcome) {
-              addToast(data.lastOutcome, "warning");
+            // Accurate duration: ALWAYS prioritize the phone's official hardware duration if > 0!
+            const spokenSecs = callConnectedAtRef.current
+              ? Math.max(1, Math.floor((Date.now() - callConnectedAtRef.current) / 1000))
+              : callDurationRef.current || 0;
+            const finalSecs =
+              data.lastCallDurationSeconds && data.lastCallDurationSeconds > 0
+                ? data.lastCallDurationSeconds
+                : spokenSecs;
+            const formatted = formatTimer(finalSecs);
+
+            setLastCallDuration(formatted);
+            callDurationRef.current = finalSecs;
+            setCallDuration(finalSecs);
+            callConnectedAtRef.current = null;
+            setCallPhaseSynced("idle");
+            setIsCallConnected(false);
+
+            // Stamp baseline so background poller NEVER adds a duplicate record!
+            if (data.lastCallTimestamp) {
+              lastProcessedCallTimestampRef.current = data.lastCallTimestamp;
             } else {
-              addToast(`Call ended (${formatted})`, "info");
+              lastProcessedCallTimestampRef.current = Date.now();
+            }
+
+            // IMMEDIATELY AUTO-ADD TALK TIMING TO CRM Call History
+            const currentLead =
+              activeCallLeadRef.current ||
+              leadsRef.current.find((l) => {
+                const targetDigits = (data.lastCallNumber || activePhoneRef.current || "").replace(/\D/g, "");
+                return targetDigits && l.phone.replace(/\D/g, "").endsWith(targetDigits.slice(-10));
+              });
+
+            if (currentLead) {
+              const endNow = new Date();
+              const startNow = new Date(endNow.getTime() - Math.max(1, finalSecs) * 1000);
+              const dateStr = endNow.toISOString().split("T")[0];
+              const fromTime = startNow.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+              const endTime = endNow.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+              const timeStr = fromTime;
+              const durationLong = formatHumanDuration(finalSecs);
+
+              const autoCallRecord: CallRecord = {
+                id: "ch-" + Date.now(),
+                callDate: dateStr,
+                callTime: timeStr,
+                callerName: currentLead.assignedCaller || telecallers?.[0]?.name || "Muthumeena",
+                duration: formatted,
+                durationFormatted: durationLong,
+                fromTime: fromTime,
+                endTime: endTime,
+                outcome: finalSecs > 0 ? "Attended Call" : "Not Attended Call",
+                remarks:
+                  finalSecs > 0
+                    ? `Mobile SIM Call (Attended): Spoke for ${durationLong} (${fromTime} - ${endTime}).`
+                    : "Mobile SIM Call (Not Attended): Cut before connecting.",
+              };
+
+              setLeads((prevLeads) => {
+                const targetDigits = (currentLead.phone || data.lastCallNumber || activePhoneRef.current || "").replace(/\D/g, "");
+                const exists = prevLeads.some(
+                  (l) => l.id === currentLead.id || (targetDigits && l.phone.replace(/\D/g, "").endsWith(targetDigits.slice(-10)))
+                );
+                let updated: Lead[];
+                if (exists) {
+                  updated = prevLeads.map((l) => {
+                    if (l.id === currentLead.id || (targetDigits && l.phone.replace(/\D/g, "").endsWith(targetDigits.slice(-10)))) {
+                      return {
+                        ...l,
+                        callCount: (l.callCount || 0) + 1,
+                        lastCallDate: dateStr,
+                        lastCallOutcome: autoCallRecord.outcome,
+                        callHistory: [autoCallRecord, ...(l.callHistory || [])],
+                      };
+                    }
+                    return l;
+                  });
+                } else {
+                  // Direct Dial New Lead: Auto-create permanently in CRM database
+                  const newCreatedLead: Lead = {
+                    ...currentLead,
+                    id: currentLead.id && !currentLead.id.startsWith("LD-DIRECT") ? currentLead.id : `LD-${Date.now()}`,
+                    phone: currentLead.phone.startsWith("+91") ? currentLead.phone : `+91 ${targetDigits.slice(-10)}`,
+                    callCount: 1,
+                    lastCallDate: dateStr,
+                    lastCallOutcome: autoCallRecord.outcome,
+                    callHistory: [autoCallRecord],
+                  };
+                  activeCallLeadRef.current = newCreatedLead;
+                  updated = [newCreatedLead, ...prevLeads];
+                }
+                persistLeads(updated);
+                return updated;
+              });
+
+              addToast(
+                `⚡ Talk time (${formatted}) automatically added to ${currentLead.studentName}'s CRM profile!`,
+                "success"
+              );
+            } else {
+              addToast(`Call ended (${formatted}). Duration: ${formatted}`, "info");
+            }
+            return;
+          }
+
+          // Reset idle count when phone is in call
+          consecutiveIdleCountRef.current = 0;
+
+          // 2. Call answered: explicit connected state from Android modem
+          const isAnswered = data.state === "connected";
+
+          if (isAnswered) {
+            if (callPhaseRef.current !== "connected") {
+              stopRingbackCadence();
+              if (!callConnectedAtRef.current) {
+                callConnectedAtRef.current = Date.now();
+              }
+              setCallPhaseSynced("connected");
+              setCallDuration(1);
+              callDurationRef.current = 1;
+            }
+          } else {
+            // Still ringing / dialing on phone - NEVER downgrade if already answered/connected!
+            if (callPhaseRef.current === "idle") {
+              setCallPhaseSynced("ringing");
             }
           }
         } catch {}
-      }, 400); // Fast 400ms polling for instant UI reactivity
+      }, 400);
     } else {
-      hasRungOnceRef.current = false;
-      idleConfirmCountRef.current = 0;
+      consecutiveIdleCountRef.current = 0;
+      setCallPhaseSynced("idle");
     }
     return () => clearInterval(interval);
-  }, [isCallConnected, callPhase]);
+  }, [isCallConnected, setCallPhaseSynced]);
 
-  // Unified Call Initiator with Real Audio & Smooth SIP Bridging
+  // Explicitly Answer Call (User clicks Pick Up button or Auto-connects)
+  const answerCall = useCallback(() => {
+    if (ringingTimeoutRef.current) {
+      clearTimeout(ringingTimeoutRef.current);
+      ringingTimeoutRef.current = null;
+    }
+    stopRingbackCadence();
+    if (!callConnectedAtRef.current) {
+      callConnectedAtRef.current = Date.now();
+    }
+    setCallPhaseSynced("connected");
+    setIsCallConnected(true);
+    setCallDuration(1);
+    callDurationRef.current = 1;
+    addToast("📞 Call Connected! Live conversation active.", "success");
+  }, [addToast, setCallPhaseSynced]);
+
+  // Unified Call Initiator with Real Indian Telecom Audio Cadence & Softphone
   const initiateCall = (lead: Lead) => {
     callStartTimeRef.current = Date.now();
     callDurationRef.current = 0;
-    hasRungOnceRef.current = false;
-    idleConfirmCountRef.current = 0;
+    callConnectedAtRef.current = null;
+    consecutiveIdleCountRef.current = 0;
     setActiveCallLead(lead);
     setIsCallConnected(true);
-    setCallPhase("ringing");
+    setCallPhaseSynced("ringing");
     setCallDuration(0);
     setLastCallDuration(null);
+    setIsCallModalOpen(true);
 
-    // Ensure any leftover browser ringback audio is completely stopped so it doesn't clash with MicroSIP
+    // Play authentic Indian Ringback audio cadence (Trrrr... Trrrr...)
     stopRingbackCadence();
+    startIndianRingbackCadence();
+
+    // In demo/presentation mode only: auto-connect after ~3.2s
+    if (telephonyModeRef.current !== "mobile") {
+      if (ringingTimeoutRef.current) {
+        clearTimeout(ringingTimeoutRef.current);
+      }
+      ringingTimeoutRef.current = setTimeout(() => {
+        answerCall();
+      }, 3200);
+    }
 
     // Format phone with mandatory +91 or 0 for JioFiber SIP (+91XXXXXXXXXX) - strictly remove all spaces/symbols
     const rawDigits = lead.phone.replace(/\D/g, "");
@@ -533,64 +826,63 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // STRICT SAFETY CHECK: PERMANENTLY BLOCK 9952337331 (NEVER CALL)
     if (rawDigits.includes("9952337331")) {
       stopRingbackCadence();
-      setCallPhase("idle");
+      setCallPhaseSynced("idle");
       setIsCallConnected(false);
       addToast("Calling 9952337331 is strictly and permanently blocked.", "error");
       return;
     }
 
     let cleanPhone = "";
-    if (rawDigits.length === 10) {
-      cleanPhone = `0${rawDigits}`;
-    } else if (rawDigits.length === 12 && rawDigits.startsWith("91")) {
-      cleanPhone = `0${rawDigits.substring(2)}`;
-    } else if (rawDigits.length === 11 && rawDigits.startsWith("0")) {
-      cleanPhone = rawDigits;
+    if (telephonyModeRef.current === "mobile") {
+      // For Mobile Phone Cellular SIM: Standard 10-digit Indian mobile number
+      if (rawDigits.length === 10) {
+        cleanPhone = rawDigits;
+      } else if (rawDigits.length === 12 && rawDigits.startsWith("91")) {
+        cleanPhone = rawDigits.substring(2);
+      } else if (rawDigits.length === 11 && rawDigits.startsWith("0")) {
+        cleanPhone = rawDigits.substring(1);
+      } else if (rawDigits.length > 10) {
+        cleanPhone = rawDigits.slice(-10);
+      } else {
+        cleanPhone = rawDigits;
+      }
     } else {
-      cleanPhone = rawDigits;
+      // For Landline SIP Trunk (MicroSIP): Require leading 0
+      if (rawDigits.length === 10) {
+        cleanPhone = `0${rawDigits}`;
+      } else if (rawDigits.length === 12 && rawDigits.startsWith("91")) {
+        cleanPhone = `0${rawDigits.substring(2)}`;
+      } else if (rawDigits.length === 11 && rawDigits.startsWith("0")) {
+        cleanPhone = rawDigits;
+      } else {
+        cleanPhone = rawDigits;
+      }
     }
 
     activePhoneRef.current = cleanPhone;
     setActivePhoneNumber(cleanPhone);
 
-    // Presentation / Airtel Demo Mode (ONLY if JioFiber is NOT connected)
-    if (!telephonyStatus.connected && (telephonyMode === "airtel" || telephonyMode === "presentation")) {
-      addToast(
-        telephonyMode === "airtel"
-          ? `Airtel Office Mode (Simulation): Calling ${lead.studentName} (${cleanPhone})...`
-          : `Presentation Mode (Simulation): Calling ${lead.studentName} (${cleanPhone})...`,
-        "info"
-      );
-      // Realistic Indian telecom ringback tone
-      startIndianRingbackCadence();
+    // For mobile SIM bridge, ALWAYS send clean 10-digit phone
+    const mobileDigits = rawDigits.length >= 10 ? rawDigits.slice(-10) : rawDigits;
 
-      // Automatically connect call after 2.8s for presentation demo
-      ringingTimeoutRef.current = setTimeout(() => {
-        stopRingbackCadence();
-        hasRungOnceRef.current = true;
-        setCallPhase("connected");
-        addToast(`Call connected with ${lead.studentName}`, "success");
-      }, 2800);
-      return;
-    }
-
-    if (!telephonyStatus.connected && telephonyStatus.status === "wifi_disconnected") {
-      addToast(
-        "Warning: Wi-Fi disconnected from JioFiber. Please connect to Office Wi-Fi to call.",
-        "warning"
-      );
-    } else {
-      addToast(`Dialing ${lead.studentName} (${cleanPhone}) via JioFiber MicroSIP...`, "info");
-    }
-
-    // Trigger local MicroSIP Bridge (100% background, zero visible window)
-    fetch("/api/microsip/call", {
+    // Trigger direct mobile device SIM call bridge
+    fetch("/api/mobile/call", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone: cleanPhone }),
-    }).catch((err) => {
-      console.warn("Direct MicroSIP API call error:", err);
-    });
+      body: JSON.stringify({ phone: mobileDigits, studentName: lead.studentName }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          addToast(`📲 SIM Call triggered on mobile phone! (${mobileDigits})`, "success");
+        } else {
+          console.warn("Mobile call bridge note:", data.error);
+          addToast(`⚠️ Mobile Bridge: ${data.error || "Phone not reachable. Check phone Wi-Fi."}`, "warning");
+        }
+      })
+      .catch((err) => {
+        console.warn("Direct Mobile Call API note:", err);
+      });
   };
 
   // Unified Call Hangup (Stops audio, plays disconnect chime, triggers SIP hangup)
@@ -599,20 +891,83 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       clearTimeout(ringingTimeoutRef.current);
       ringingTimeoutRef.current = null;
     }
-    hasRungOnceRef.current = false;
-    idleConfirmCountRef.current = 0;
     stopRingbackCadence();
     playCallEndTone();
 
-    const formatted = formatTimer(callDuration > 0 ? callDuration : 1);
+    const wasConnected = callPhaseRef.current === "connected";
+    const spokenSecs = wasConnected && callConnectedAtRef.current
+      ? Math.max(1, Math.floor((Date.now() - callConnectedAtRef.current) / 1000))
+      : wasConnected ? Math.max(1, callDurationRef.current || callDuration) : 0;
+    const finalSecs = spokenSecs;
+    const formatted = formatTimer(finalSecs);
     setLastCallDuration(formatted);
-    setCallPhase("idle");
+    callConnectedAtRef.current = null;
+    consecutiveIdleCountRef.current = 0;
+    setCallPhaseSynced("ended");
     setIsCallConnected(false);
     setActivePhoneNumber("");
 
-    // Always trigger background MicroSIP hangup
-    fetch("/api/microsip/hangup", { method: "POST" }).catch(() => {});
-    addToast(`Call ended (${formatted}). Please log disposition.`, "info");
+    // Trigger hangup on mobile phone
+    fetch("/api/mobile/hangup", { method: "POST" }).catch(() => {});
+
+    // IMMEDIATELY AUTO-ADD TALK TIMING TO CRM Call History
+    const currentLead =
+      activeCallLeadRef.current ||
+      leadsRef.current.find((l) => {
+        const cleanTarget = activePhoneRef.current.replace(/\D/g, "");
+        const leadClean = l.phone.replace(/\D/g, "");
+        return cleanTarget && (leadClean.endsWith(cleanTarget.slice(-10)) || cleanTarget.endsWith(leadClean.slice(-10)));
+      });
+
+    if (currentLead) {
+      const endNow = new Date();
+      const startNow = new Date(endNow.getTime() - Math.max(1, finalSecs) * 1000);
+      const dateStr = endNow.toISOString().split("T")[0];
+      const fromTime = startNow.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      const endTime = endNow.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      const timeStr = fromTime;
+      const durationLong = formatHumanDuration(finalSecs);
+
+      const autoCallRecord: CallRecord = {
+        id: "ch-" + Date.now(),
+        callDate: dateStr,
+        callTime: timeStr,
+        callerName: currentLead.assignedCaller || "Priya Sharma (Mobile SIM)",
+        duration: formatted,
+        durationFormatted: durationLong,
+        fromTime: fromTime,
+        endTime: endTime,
+        outcome: finalSecs > 0 ? "Attended Call" : "Not Attended Call",
+        remarks:
+          finalSecs > 0
+            ? `Mobile SIM Call (Attended): Spoke for ${durationLong} (${fromTime} - ${endTime}).`
+            : "Mobile SIM Call (Not Attended): Cut before connecting.",
+      };
+
+      setLeads((prevLeads) => {
+        const updated = prevLeads.map((l) => {
+          if (l.id === currentLead.id) {
+            return {
+              ...l,
+              callCount: (l.callCount || 0) + 1,
+              lastCallDate: dateStr,
+              lastCallOutcome: autoCallRecord.outcome,
+              callHistory: [autoCallRecord, ...(l.callHistory || [])],
+            };
+          }
+          return l;
+        });
+        persistLeads(updated);
+        return updated;
+      });
+
+      addToast(
+        `⚡ Spoken duration (${formatted}) automatically saved to ${currentLead.studentName}'s Call History!`,
+        "success"
+      );
+    } else {
+      addToast(`Call ended (${formatted}). Duration: ${formatted}`, "info");
+    }
   };
 
   const openCallModal = () => {
@@ -620,24 +975,14 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const closeCallModal = () => {
+    if (ringingTimeoutRef.current) {
+      clearTimeout(ringingTimeoutRef.current);
+      ringingTimeoutRef.current = null;
+    }
+    stopRingbackCadence();
+    setCallPhaseSynced("idle");
     setIsCallConnected(false);
     setIsCallModalOpen(false);
-  };
-
-  const showToast = (toast: Omit<ToastMessage, "id">) => {
-    const id = "t-" + Math.random().toString(36).substring(2, 9);
-    setToasts((prev) => [...prev, { ...toast, id }]);
-    setTimeout(() => {
-      dismissToast(id);
-    }, 4500);
-  };
-
-  const addToast = (title: string, type: "success" | "info" | "warning" | "error" = "info") => {
-    showToast({ title, type });
-  };
-
-  const dismissToast = (id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
   // Add Lead with permanent persistence
@@ -730,23 +1075,47 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     record: {
       callerName: string;
       outcome: string;
+      mindset?: string;
       duration: string;
       remarks: string;
       nextFollowUpDate?: string;
       nextFollowUpTime?: string;
+      qualification?: string;
+      passedOutYear?: string;
+      collegeName?: string;
+      studentName?: string;
     }
   ) => {
-    const now = new Date();
-    const dateStr = now.toISOString().split("T")[0];
-    const timeStr = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const endNow = new Date();
+    const parts = (record.duration || "").split(":").map(Number);
+    let totalSecs = 0;
+    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+      totalSecs = parts[0] * 60 + parts[1];
+    } else {
+      totalSecs = parseInt(record.duration, 10) || 0;
+    }
+    const startNow = new Date(endNow.getTime() - Math.max(1, totalSecs) * 1000);
+    const dateStr = endNow.toISOString().split("T")[0];
+    const fromTime = startNow.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    const endTime = endNow.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    const timeStr = fromTime;
+    const durationLong = formatHumanDuration(totalSecs);
 
-    const newRecord = {
+    const newRecord: CallRecord = {
       id: "ch-" + Date.now(),
       callDate: dateStr,
       callTime: timeStr,
       callerName: record.callerName,
       duration: record.duration,
+      durationFormatted: durationLong,
+      fromTime: fromTime,
+      endTime: endTime,
       outcome: record.outcome,
+      mindset: record.mindset,
+      qualification: record.qualification || "",
+      passedOutYear: record.passedOutYear || "",
+      collegeName: record.collegeName || "",
+      studentName: record.studentName || "",
       remarks: record.remarks,
     };
 
@@ -773,20 +1142,125 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
 
-    const newLeads = leads.map((lead) => {
-      if (lead.id === leadId) {
-        return {
-          ...lead,
-          callCount: lead.callCount + 1,
-          lastCallDate: dateStr,
-          lastCallOutcome: record.remarks || record.outcome,
-          nextFollowUpDate: record.nextFollowUpDate || lead.nextFollowUpDate,
-          nextFollowUpTime: record.nextFollowUpTime || lead.nextFollowUpTime,
-          callHistory: [newRecord, ...(lead.callHistory || [])],
-        };
-      }
-      return lead;
-    });
+    const exists = leads.some((lead) => lead.id === leadId);
+    let newLeads: Lead[];
+    if (exists) {
+      newLeads = leads.map((lead) => {
+        if (lead.id === leadId) {
+          const history = lead.callHistory ? [...lead.callHistory] : [];
+          let isRecentMerge = false;
+
+          if (history.length > 0) {
+            const latest = history[0];
+            const idTimestampMatch = latest.id.match(/\d{10,}/);
+            const recordAgeMs = idTimestampMatch ? Date.now() - parseInt(idTimestampMatch[0], 10) : 9999999;
+
+            if (recordAgeMs < 300000 || (latest.callDate === dateStr && recordAgeMs < 600000)) {
+              isRecentMerge = true;
+              const latestParts = (latest.duration || "").split(":").map(Number);
+              const latestSecs = latestParts.length === 2 ? latestParts[0] * 60 + latestParts[1] : 0;
+              const mergedSecs = Math.max(latestSecs, totalSecs);
+              const mergedFormatted = formatTimer(mergedSecs);
+              const mergedLong = formatHumanDuration(mergedSecs);
+
+              history[0] = {
+                ...latest,
+                callerName: record.callerName || latest.callerName,
+                mindset: record.mindset || latest.mindset,
+                duration: mergedFormatted,
+                durationFormatted: mergedLong,
+                outcome: mergedSecs > 0 ? "Attended Call" : "Not Attended Call",
+                qualification: record.qualification || latest.qualification || lead.qualification || "",
+                passedOutYear: record.passedOutYear || latest.passedOutYear || lead.passedOutYear || "",
+                collegeName: record.collegeName || latest.collegeName || lead.collegeName || "",
+                studentName: record.studentName || latest.studentName || lead.studentName || "",
+                remarks: record.remarks || latest.remarks,
+              };
+            }
+          }
+
+          if (!isRecentMerge) {
+            history.unshift({
+              ...newRecord,
+              qualification: record.qualification || lead.qualification || "",
+              passedOutYear: record.passedOutYear || lead.passedOutYear || "",
+              collegeName: record.collegeName || lead.collegeName || "",
+              studentName: record.studentName || lead.studentName || "",
+            });
+          }
+
+          let mappedStatus: LeadStatus = lead.status;
+          let mappedStage: PipelineStage = lead.stage || "New Enquiry";
+          if (record.mindset === "Not Interested") {
+            mappedStatus = "Lost";
+            mappedStage = "Lost";
+          } else if (record.mindset === "Interested") {
+            mappedStatus = "Interested";
+            mappedStage = "Interested";
+          } else if (record.mindset === "Visit to Institute") {
+            mappedStatus = "Counselling Scheduled";
+            mappedStage = "Counselling Scheduled";
+          } else if (record.mindset === "Joined") {
+            mappedStatus = "Admitted";
+            mappedStage = "Admitted";
+          } else if (record.mindset === "Call Later") {
+            mappedStatus = "Call Later";
+            mappedStage = "Contacted";
+          } else if (record.mindset === "Busy") {
+            mappedStatus = "Busy";
+            mappedStage = "Contacted";
+          }
+
+          return {
+            ...lead,
+            studentName: record.studentName && !record.studentName.startsWith("Inquiry") ? record.studentName : lead.studentName,
+            assignedCaller: record.callerName || lead.assignedCaller,
+            status: mappedStatus,
+            stage: mappedStage,
+            callCount: isRecentMerge ? lead.callCount : (lead.callCount || 0) + 1,
+            lastCallDate: dateStr,
+            lastCallOutcome: record.mindset || record.remarks || record.outcome,
+            qualification: record.qualification || lead.qualification || "",
+            passedOutYear: record.passedOutYear || lead.passedOutYear || "",
+            collegeName: record.collegeName || lead.collegeName || "",
+            nextFollowUpDate: record.nextFollowUpDate || lead.nextFollowUpDate,
+            nextFollowUpTime: record.nextFollowUpTime || lead.nextFollowUpTime,
+            callHistory: history,
+          };
+        }
+        return lead;
+      });
+    } else {
+      const fallback = activeCallLeadRef.current || {
+        id: leadId,
+        studentName: `Inquiry (${leadId})`,
+        phone: leadId,
+        email: `inquiry.${leadId}@wegrow.local`,
+        courseInterested: "Full Stack Web Development (MERN + Next.js)",
+        leadSource: "Phone" as const,
+        enquiryDate: dateStr,
+        nextFollowUpDate: record.nextFollowUpDate || "",
+        nextFollowUpTime: record.nextFollowUpTime || "",
+        assignedCaller: record.callerName,
+        status: "Interested" as const,
+        priority: "Hot" as const,
+        stage: "Interested" as const,
+        notes: [],
+        callHistory: [],
+        callCount: 0,
+      };
+      const createdLead: Lead = {
+        ...fallback,
+        assignedCaller: record.callerName || fallback.assignedCaller,
+        callCount: (fallback.callCount || 0) + 1,
+        lastCallDate: dateStr,
+        lastCallOutcome: record.remarks || record.outcome,
+        nextFollowUpDate: record.nextFollowUpDate || fallback.nextFollowUpDate,
+        nextFollowUpTime: record.nextFollowUpTime || fallback.nextFollowUpTime,
+        callHistory: [newRecord, ...(fallback.callHistory || [])],
+      };
+      newLeads = [createdLead, ...leads];
+    }
 
     setLeads(newLeads);
     persistLeads(newLeads, updatedFu);
@@ -955,23 +1429,14 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setLastCallDuration,
         activePhoneNumber,
         initiateCall,
+        answerCall,
         endCallSession,
         telephonyStatus,
         telephonyMode,
         setTelephonyMode,
         refreshTelephonyStatus,
         reconnectTelephony,
-        isAiCallModalOpen,
-        aiCallLead,
-        aiCallPhone,
-        isAiInbound,
-        openAiCallModal,
-        closeAiCallModal,
-        isAiBatchDialerOpen,
-        aiBatchSelectedLeadIds,
-        openAiBatchDialer,
-        closeAiBatchDialer,
-        addLead,
+                addLead,
         updateLead,
         updateLeadStatus,
         assignCaller,

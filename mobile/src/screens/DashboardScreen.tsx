@@ -125,7 +125,7 @@ export const DashboardScreen: React.FC = () => {
 
       <FlatList
         data={history}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item, index) => `${item.id}-${index}`}
         renderItem={renderHistoryItem}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}

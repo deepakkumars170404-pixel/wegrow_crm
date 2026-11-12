@@ -10,7 +10,7 @@ const KEYS = {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   crmServerUrl: "http://192.168.29.60:3000",
-  callerName: "Priya Sharma",
+  callerName: "MuthuSelvi",
   autoPopupDisposition: true,
   strictSafetyBlock: true,
   vibrateOnCall: true,
@@ -25,8 +25,10 @@ export const StorageService = {
     return DEFAULT_SETTINGS;
   },
 
-  async saveSettings(settings: AppSettings): Promise<void> {
-    await AsyncStorage.setItem(KEYS.SETTINGS, JSON.stringify(settings));
+  async saveSettings(settings: Partial<AppSettings>): Promise<void> {
+    const current = await StorageService.getSettings();
+    const merged = { ...current, ...settings };
+    await AsyncStorage.setItem(KEYS.SETTINGS, JSON.stringify(merged));
   },
 
   async getCachedLeads(): Promise<Lead[]> {

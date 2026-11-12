@@ -34,7 +34,7 @@ import { useCRM } from "@/context/CRMContext";
 import { formatINR } from "@/lib/utils";
 
 const courseWiseEnquiriesData = [
-  { course: "AI Explorer & GenAI", enquiries: 345, admissions: 28, revenue: 1260000 },
+  { course: "Python Full Stack", enquiries: 345, admissions: 28, revenue: 1260000 },
   { course: "Full Stack (MERN)", enquiries: 298, admissions: 24, revenue: 1320000 },
   { course: "Data Science & ML", enquiries: 220, admissions: 16, revenue: 768000 },
   { course: "Digital Marketing", enquiries: 190, admissions: 11, revenue: 352000 },
@@ -162,7 +162,7 @@ export default function ReportsPage() {
             </div>
             <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-soft">
               <span className="text-slate-500 font-semibold uppercase text-[10px]">Top Performing Course</span>
-              <h3 className="text-base font-bold text-[#142B52] mt-1">AI Explorer & GenAI</h3>
+              <h3 className="text-base font-bold text-[#142B52] mt-1">Python Full Stack</h3>
               <p className="text-slate-400 mt-1">345 enquiries (27.6%)</p>
             </div>
             <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-soft">

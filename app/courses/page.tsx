@@ -28,7 +28,12 @@ export default function CourseLibraryPage() {
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [categoryFilter, setCategoryFilter] = useState("All");
 
-  const categories = ["All", "Artificial Intelligence", "Software Development", "Data & Analytics", "Digital Marketing", "Design & Media", "Cloud & DevOps"];
+  const categories = [
+    "All",
+    "01 IT & Development",
+    "02 Tech, Business & Communication",
+    "03 Creative, AI & Future Tech",
+  ];
 
   const filteredCourses = courses.filter((c) => {
     if (categoryFilter === "All") return true;

@@ -21,6 +21,8 @@ import {
   Wifi,
   WifiOff,
   RefreshCw,
+  Smartphone,
+  Zap,
 } from "lucide-react";
 import { useCRM } from "@/context/CRMContext";
 import { Lead } from "@/types";
@@ -92,21 +94,19 @@ export const PhoneBridgeWidget: React.FC = () => {
     activeCallLead || leads[0] || null
   );
 
-  // Dialpad popup state
+  // Dialpad popup state - starts clean so typing any number dials THAT number
   const [isDialpadOpen, setIsDialpadOpen] = useState(false);
-  const [dialerNumber, setDialerNumber] = useState(
-    selectedLead ? selectedLead.phone.replace(/[^0-9+]/g, "") : "+91"
-  );
+  const [dialerNumber, setDialerNumber] = useState("");
+  const [isWidgetDialing, setIsWidgetDialing] = useState(false);
 
-  // Softphone modes
-  const [dndActive, setDndActive] = useState(false);
-  const [autoAnswer, setAutoAnswer] = useState(false);
-  const [recordingActive, setRecordingActive] = useState(false);
-  const [speakerTested, setSpeakerTested] = useState(false);
+  useEffect(() => {
+    if (callPhase === "idle" && !isCallConnected) {
+      setIsWidgetDialing(false);
+    }
+  }, [callPhase, isCallConnected]);
 
-  // Real Mic & Speaker state
-  const [isMuted, setIsMuted] = useState(false);
-  const [audioLevel, setAudioLevel] = useState(0);
+  const isInActiveCall = isCallConnected || isWidgetDialing || callPhase !== "idle";
+
   const dialInputRef = useRef<HTMLInputElement | null>(null);
 
   // Auto-focus input and capture physical keyboard / numpad strokes when dialpad is open
@@ -172,60 +172,12 @@ export const PhoneBridgeWidget: React.FC = () => {
     return () => window.removeEventListener("keydown", handleGlobalKey);
   }, [isCallConnected, callPhase]);
 
-  // Sync selected lead when activeCallLead changes
+  // Sync selected lead when activeCallLead changes (preserves custom dialer input)
   useEffect(() => {
     if (activeCallLead) {
       setSelectedLead(activeCallLead);
-      setDialerNumber(activeCallLead.phone.replace(/[^0-9+]/g, ""));
     }
   }, [activeCallLead]);
-
-  // Live voice activity animation during active call (leaves Windows hardware mic 100% free for MicroSIP)
-  useEffect(() => {
-    let animInterval: any = null;
-    if (callPhase === "connected" && !isMuted) {
-      animInterval = setInterval(() => {
-        // Natural speech modulation simulation between 35% and 85%
-        const simulated = Math.floor(35 + Math.random() * 50);
-        setAudioLevel(simulated);
-      }, 120);
-    } else {
-      setAudioLevel(0);
-    }
-    return () => {
-      if (animInterval) clearInterval(animInterval);
-    };
-  }, [callPhase, isMuted]);
-
-  const toggleMute = () => {
-    const next = !isMuted;
-    setIsMuted(next);
-    addToast(next ? "Microphone Muted" : "Microphone Live", "info");
-  };
-
-  const testSpeaker = () => {
-    try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (AudioCtx) {
-        const ctx = new AudioCtx();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(587.33, ctx.currentTime);
-        osc.frequency.setValueAtTime(880.0, ctx.currentTime + 0.15);
-        gain.gain.setValueAtTime(0.1, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.45);
-
-        setSpeakerTested(true);
-        addToast("Speaker / Headset chime played", "success");
-        setTimeout(() => setSpeakerTested(false), 2000);
-      }
-    } catch (e) {}
-  };
 
   // Dialpad Key Click
   const handleKeyClick = (key: string) => {
@@ -238,7 +190,7 @@ export const PhoneBridgeWidget: React.FC = () => {
   };
 
   const handleClear = () => {
-    setDialerNumber("+91");
+    setDialerNumber("");
     setSelectedLead(null);
   };
 
@@ -257,22 +209,25 @@ export const PhoneBridgeWidget: React.FC = () => {
       return;
     }
 
-    // 1. Check if number matches any existing lead in the CRM database
+    // Always take the exact 10 digits entered
+    const exact10 = cleanDigits.slice(-10);
+
+    // 1. Check if number matches any existing lead in the CRM database (EXACT 10-digit match ONLY)
     const matchingLead = leads.find((l) => {
-      const leadDigits = l.phone.replace(/\D/g, "");
-      return leadDigits.endsWith(cleanDigits) || cleanDigits.endsWith(leadDigits);
+      const leadDigits = l.phone.replace(/\D/g, "").slice(-10);
+      return leadDigits === exact10;
     });
 
     // 2. Always bind to the EXACT number entered by the user
     const validLead: Lead = matchingLead
       ? {
           ...matchingLead,
-          phone: num, // Always use the exact number requested!
+          phone: exact10, // Always use the exact number requested!
         }
       : {
           id: `LD-DIRECT-${Date.now()}`,
-          studentName: `Direct Dial (${num})`,
-          phone: num,
+          studentName: `Direct Dial (${exact10})`,
+          phone: exact10,
           email: "direct@dial.local",
           courseInterested: "Direct Dial",
           leadSource: "Phone" as const,
@@ -290,11 +245,13 @@ export const PhoneBridgeWidget: React.FC = () => {
 
     setSelectedLead(validLead);
     setActiveCallLead(validLead);
+    setIsWidgetDialing(true);
     initiateCall(validLead);
     // Keep dialpad open so caller can see in-call controls and cut button
   };
 
   const handleHangup = () => {
+    setIsWidgetDialing(false);
     endCallSession();
   };
 
@@ -321,7 +278,7 @@ export const PhoneBridgeWidget: React.FC = () => {
   return (
     <>
       {/* 0. Floating Top In-Call Action Bar (Always visible on all screens during any call / IVR announcement) */}
-      {(isCallConnected || callPhase !== "idle") && (
+      {isCallConnected && callPhase !== "idle" && (
         <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[9999] animate-in slide-in-from-top-4 duration-200 pointer-events-auto select-none">
           <div className={`bg-[#0B1528] text-white px-6 py-3 rounded-full shadow-2xl border-2 ${
             callPhase === "connected" ? "border-emerald-500 ring-4 ring-emerald-500/20" : "border-rose-500 ring-4 ring-rose-500/20"
@@ -367,7 +324,7 @@ export const PhoneBridgeWidget: React.FC = () => {
                   ) : isCallConnected || callPhase === "connected" ? (
                     <span className="text-emerald-400">Live Call Active</span>
                   ) : (
-                    <span>MicroSIP Executive Dialer</span>
+                    <span>📱 Mobile SIM Dialer</span>
                   )}
                   <span
                     className={`w-2 h-2 rounded-full ${
@@ -399,13 +356,13 @@ export const PhoneBridgeWidget: React.FC = () => {
                     </>
                   ) : telephonyStatus.connected ? (
                     <>
-                      <Wifi className="w-2.5 h-2.5" />
-                      <span>Online • {telephonyStatus.wifiSSID}</span>
+                      <Wifi className="w-2.5 h-2.5 text-emerald-400" />
+                      <span>Online • {telephonyStatus.wifiSSID || "Mobile SIM Online"}</span>
                     </>
                   ) : (
                     <>
-                      <WifiOff className="w-2.5 h-2.5" />
-                      <span>Wi-Fi Offline • No Calling</span>
+                      <WifiOff className="w-2.5 h-2.5 text-rose-400" />
+                      <span>Phone Disconnected • Click Refresh</span>
                     </>
                   )}
                 </p>
@@ -416,8 +373,8 @@ export const PhoneBridgeWidget: React.FC = () => {
               <button
                 type="button"
                 onClick={() => reconnectTelephony()}
-                className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 transition-colors"
-                title="Sync / Reconnect Office JioFiber Wi-Fi"
+                className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                title="Sync / Reconnect Mobile Phone SIM Bridge"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
               </button>
@@ -544,110 +501,47 @@ export const PhoneBridgeWidget: React.FC = () => {
 
           {/* Action Call & Hangup Button: Strictly Green when idle, Strictly Red when in call */}
           <div className="p-3 bg-[#0B1728] flex items-center">
-            {isCallConnected || callPhase !== "idle" ? (
+            {isInActiveCall ? (
               <button
                 type="button"
                 onClick={handleHangup}
-                className="w-full py-3.5 bg-rose-600 hover:bg-rose-500 active:scale-98 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-rose-950/40 transition-all animate-pulse"
+                className="w-full py-3.5 bg-rose-600 hover:bg-rose-500 active:scale-98 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-rose-950/40 transition-all animate-pulse cursor-pointer"
                 title="Cut Call / End Call"
               >
                 <PhoneOff className="w-4 h-4" />
                 <span>
-                  Hangup Call (Cut) •{" "}
+                  🔴 Hangup Call (Cut) •{" "}
                   {callPhase === "ringing" ? "Ringing..." : formatTimer(callDuration)}
                 </span>
-              </button>
-            ) : telephonyMode === "jio" && !telephonyStatus.connected && telephonyStatus.status === "wifi_disconnected" ? (
-              <button
-                type="button"
-                onClick={() => reconnectTelephony()}
-                className="w-full py-3.5 bg-amber-600 hover:bg-amber-500 active:scale-98 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-amber-950/40 transition-all"
-                title="JioFiber Wi-Fi is disconnected. Click to sync."
-              >
-                <WifiOff className="w-4 h-4" />
-                <span>Sync Office Jio Wi-Fi</span>
               </button>
             ) : (
               <button
                 type="button"
                 onClick={() => handleCall()}
-                className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 active:scale-98 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40 transition-all"
-                title="Call via JioFiber MicroSIP in Background"
+                className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 active:scale-98 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40 transition-all cursor-pointer"
+                title="Call via Mobile SIM"
               >
                 <Phone className="w-4 h-4 fill-white" />
-                <span>Call via MicroSIP</span>
+                <span>🟢 Call via Mobile SIM</span>
               </button>
             )}
           </div>
 
-          {/* Audio Sliders & Status Strip */}
-          <div className="p-3 bg-[#0B1728] border-t border-white/10 space-y-2">
-            <div className="flex items-center justify-between text-[10px] text-slate-400">
-              <div className="flex items-center gap-1.5">
-                <Volume2 className="w-3 h-3 text-[#E5B842]" />
-                <button
-                  type="button"
-                  onClick={testSpeaker}
-                  className="hover:text-white underline font-semibold"
-                >
-                  {speakerTested ? "Chime Playing..." : "Test Speaker"}
-                </button>
-              </div>
-
-              <div className="flex items-center gap-1.5">
-                <Mic className="w-3 h-3 text-emerald-400" />
-                <span>Live Mic Level:</span>
-                <div className="w-12 h-1.5 bg-black/40 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-emerald-400 transition-all duration-75"
-                    style={{ width: `${audioLevel}%` }}
-                  />
-                </div>
-              </div>
+          {/* Mobile Calling Auto-Sync Info Strip */}
+          <div className="p-3 bg-[#0B1728] border-t border-white/10 space-y-1">
+            <div className="flex items-center justify-between text-[11px] text-slate-300">
+              <span className="flex items-center gap-1.5 font-semibold text-emerald-400">
+                <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Mobile SIM Calling</span>
+              </span>
+              <span className="text-[10px] text-amber-300 font-mono font-medium flex items-center gap-1">
+                <Zap className="w-3 h-3 text-amber-400" />
+                <span>Auto-Saves Talk Time</span>
+              </span>
             </div>
-
-            {/* Toggle Modes: DND, AA, CONF, REC */}
-            <div className="flex items-center justify-between gap-1 pt-1 border-t border-white/5 text-[10px] font-bold">
-              <button
-                type="button"
-                onClick={() => setDndActive(!dndActive)}
-                className={`flex-1 py-1 rounded border transition-colors ${
-                  dndActive
-                    ? "bg-rose-500/20 text-rose-300 border-rose-500/40"
-                    : "bg-white/5 text-slate-400 border-white/10 hover:text-white"
-                }`}
-              >
-                DND
-              </button>
-              <button
-                type="button"
-                onClick={() => setAutoAnswer(!autoAnswer)}
-                className={`flex-1 py-1 rounded border transition-colors ${
-                  autoAnswer
-                    ? "bg-emerald-500/20 text-emerald-300 border-emerald-400/40"
-                    : "bg-white/5 text-slate-400 border-white/10 hover:text-white"
-                }`}
-              >
-                AA
-              </button>
-              <button
-                type="button"
-                className="flex-1 py-1 rounded border bg-white/5 text-slate-400 border-white/10 hover:text-white"
-              >
-                CONF
-              </button>
-              <button
-                type="button"
-                onClick={() => setRecordingActive(!recordingActive)}
-                className={`flex-1 py-1 rounded border transition-colors ${
-                  recordingActive
-                    ? "bg-red-500/20 text-red-300 border-red-500/40"
-                    : "bg-white/5 text-slate-400 border-white/10 hover:text-white"
-                }`}
-              >
-                REC
-              </button>
-            </div>
+            <p className="text-[10px] text-slate-400 leading-snug">
+              Speak directly on your mobile phone. Immediately after cutting the call on your phone, the exact spoken duration will be automatically added to the CRM!
+            </p>
           </div>
         </div>
       )}
@@ -689,66 +583,32 @@ export const PhoneBridgeWidget: React.FC = () => {
             </span>
           </div>
 
-          {/* Control Buttons Row (Mic, Dialpad, Speaker, End Call) */}
+          {/* Control Buttons Row (Dialpad & Call/End) */}
           <div className="flex items-center gap-1.5">
-            {/* Microphone Toggle */}
-            <button
-              type="button"
-              onClick={toggleMute}
-              className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${
-                isMuted
-                  ? "bg-rose-500/20 text-rose-300 border border-rose-500/40"
-                  : "bg-white/10 hover:bg-white/20 text-white"
-              }`}
-              title={isMuted ? "Unmute Mic" : "Mute Mic"}
-            >
-              {isMuted ? <MicOff className="w-4 h-4 text-rose-400" /> : <Mic className="w-4 h-4" />}
-            </button>
-
             {/* Dialpad Toggle Button */}
             <button
               type="button"
               onClick={() => setIsDialpadOpen(!isDialpadOpen)}
-              className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${
+              className={`w-9 h-9 rounded-full flex items-center justify-center transition-all cursor-pointer ${
                 isDialpadOpen
                   ? "bg-[#E5B842] text-[#142B52] shadow-md shadow-[#E5B842]/30"
                   : "bg-white/10 hover:bg-white/20 text-white"
               }`}
-              title="Toggle MicroSIP Calling Dialpad"
+              title="Toggle Mobile Dialpad"
             >
               <Grid className="w-4 h-4" />
             </button>
 
-            {/* Speaker Test Button */}
-            <button
-              type="button"
-              onClick={testSpeaker}
-              className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all"
-              title="Test Headset Speaker Audio"
-            >
-              <Volume2 className="w-4 h-4" />
-            </button>
-
             {/* End Call Button / Start Call Button: Strictly Green when idle, Strictly Red when in call */}
-            {isCallConnected || callPhase !== "idle" ? (
+            {isInActiveCall ? (
               <button
                 type="button"
                 onClick={handleHangup}
-                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-full shadow-md shadow-rose-950/40 transition-transform active:scale-95 flex items-center gap-1.5 animate-pulse"
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-full shadow-md shadow-rose-950/40 transition-transform active:scale-95 flex items-center gap-1.5 animate-pulse cursor-pointer"
                 title="End Active Call (Cut)"
               >
                 <PhoneOff className="w-3.5 h-3.5" />
-                <span>Cut Call ({callPhase === "ringing" ? "Ringing..." : formatTimer(callDuration)})</span>
-              </button>
-            ) : telephonyMode === "jio" && !telephonyStatus.connected && telephonyStatus.status === "wifi_disconnected" ? (
-              <button
-                type="button"
-                onClick={() => reconnectTelephony()}
-                className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded-full shadow-md shadow-amber-950/40 transition-transform active:scale-95 flex items-center gap-1.5"
-                title="JioFiber Wi-Fi is disconnected. Click to sync."
-              >
-                <WifiOff className="w-3.5 h-3.5" />
-                <span>Sync Wi-Fi</span>
+                <span>🔴 Cut Call ({callPhase === "ringing" ? "Ringing..." : formatTimer(callDuration)})</span>
               </button>
             ) : (
               <button
@@ -768,36 +628,36 @@ export const PhoneBridgeWidget: React.FC = () => {
                     handleCall(dialerNumber);
                   }
                 }}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-full shadow-md shadow-emerald-950/40 transition-transform active:scale-95 flex items-center gap-1.5"
-                title="Start Call via MicroSIP"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-full shadow-md shadow-emerald-950/40 transition-transform active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                title="Start Call via Mobile SIM"
               >
                 <Phone className="w-3.5 h-3.5 fill-white" />
-                <span>Call Lead</span>
+                <span>🟢 Call SIM</span>
               </button>
             )}
           </div>
 
-          {/* MicroSIP JioFiber Presence Indicator & Quick Sync */}
+          {/* Telephony Presence Indicator & Quick Sync */}
           {telephonyStatus.connected ? (
             <button
               type="button"
-              onClick={() => reconnectTelephony()}
+              onClick={() => refreshTelephonyStatus(true)}
               className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-[11px] font-semibold text-emerald-300 hover:bg-emerald-500/20 transition-all"
-              title="Click to Refresh JioFiber connection"
+              title="Click to Refresh telephony connection"
             >
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span>JioFiber Online ({telephonyStatus.wifiSSID})</span>
+              <span>{telephonyMode === "mobile" ? "Mobile SIM Online" : `JioFiber Online (${telephonyStatus.wifiSSID})`}</span>
               <RefreshCw className="w-2.5 h-2.5 text-emerald-400 ml-0.5" />
             </button>
-          ) : telephonyStatus.status === "wifi_disconnected" ? (
+          ) : telephonyStatus.status === "wifi_disconnected" || !telephonyStatus.connected ? (
             <button
               type="button"
               onClick={() => reconnectTelephony()}
-              className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-500/15 border border-rose-500/40 text-[11px] font-semibold text-rose-300 animate-pulse hover:bg-rose-500/25 transition-all"
-              title="Click to Connect Office JioFiber Wi-Fi"
+              className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-500/15 border border-rose-500/40 text-[11px] font-semibold text-rose-300 animate-pulse hover:bg-rose-500/25 transition-all cursor-pointer"
+              title="Click to Connect Phone"
             >
               <WifiOff className="w-3 h-3 text-rose-400" />
-              <span>Sync Office Wi-Fi</span>
+              <span>{telephonyMode === "mobile" ? "Sync Mobile Phone" : "Sync Office Wi-Fi"}</span>
               <RefreshCw className="w-2.5 h-2.5 text-rose-400 ml-0.5" />
             </button>
           ) : (

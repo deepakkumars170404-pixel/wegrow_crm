@@ -1,3 +1,27 @@
+export const WEGROW_STAFF_MEMBERS = [
+  "Devi Priya",
+  "Subhashini",
+  "MuthuSelvi",
+  "LakshmiPriya",
+  "Muthumeena",
+] as const;
+
+export const WEGROW_MANAGEMENT = {
+  owner: "Thavabalan",
+  adminGM: "LakshmiPriya",
+  hr: "Gopi",
+  telecallHead: "Muthumeena",
+  telecallers: [
+    "Devi Priya",
+    "MuthuSelvi",
+    "LakshmiPriya",
+    "Subhashini",
+    "Muthumeena",
+  ],
+} as const;
+
+export type StaffMember = (typeof WEGROW_STAFF_MEMBERS)[number];
+
 export type LeadPriority = "Hot" | "Warm" | "Cold";
 
 export type LeadStatus =
@@ -38,6 +62,9 @@ export interface Lead {
   nextFollowUpTime: string;
   city?: string;
   education?: string;
+  qualification?: string;
+  passedOutYear?: string;
+  collegeName?: string;
   callCount: number;
   lastCallDate?: string;
   lastCallOutcome?: string;
@@ -59,8 +86,17 @@ export interface CallRecord {
   callTime: string;
   callerName: string;
   duration: string;
-  outcome: string;
+  outcome: string; // "Attended Call" | "Not Attended Call"
+  mindset?: string; // e.g. "Interested", "Visit to Institute", "Joined"
+  qualification?: string;
+  passedOutYear?: string;
+  collegeName?: string;
+  courseInterested?: string;
+  studentName?: string;
   remarks: string;
+  fromTime?: string;
+  endTime?: string;
+  durationFormatted?: string;
 }
 
 export interface FollowUpTask {
@@ -133,7 +169,7 @@ export interface Telecaller {
 export interface Course {
   id: string;
   name: string;
-  category: "Artificial Intelligence" | "Software Development" | "Digital Marketing" | "Design & Media" | "Cloud & DevOps" | "Data & Analytics";
+  category: string;
   duration: string;
   fee: number;
   shortDescription: string;

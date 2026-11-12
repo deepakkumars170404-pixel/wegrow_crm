@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   View,
   Text,
@@ -8,12 +8,16 @@ import {
   TextInput,
   RefreshControl,
   ActivityIndicator,
+  AppState,
+  AppStateStatus,
+  Platform,
 } from "react-native";
 import { THEME } from "../constants/theme";
 import { Lead } from "../types";
 import { ApiService } from "../services/api";
-import { TelephonyService } from "../services/telephony";
+import { TelephonyService, NativeCallStateEvent } from "../services/telephony";
 import { CallModal } from "./CallModal";
+import { LiveClock } from "../components/LiveClock";
 
 export const QueueScreen: React.FC = () => {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -25,8 +29,125 @@ export const QueueScreen: React.FC = () => {
   // Active call session tracking
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
   const [callModalVisible, setCallModalVisible] = useState(false);
-  const [callStartTime, setCallStartTime] = useState<number | null>(null);
   const [callDuration, setCallDuration] = useState(0);
+
+  // Precise call phases: "IDLE" -> "RINGING" -> "CONNECTED" -> "IDLE"
+  const [callPhase, setCallPhase] = useState<"IDLE" | "RINGING" | "CONNECTED">("IDLE");
+  const [liveTimerSec, setLiveTimerSec] = useState(0);
+
+  const callPhaseRef = useRef<"IDLE" | "RINGING" | "CONNECTED">("IDLE");
+  const activeCallStartRef = useRef<number | null>(null);
+  const dialStartTimeRef = useRef<number | null>(null);
+
+  const formatTimer = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  };
+
+  // Live talk timer: ticks ONLY while call is answered & active (callPhase === "CONNECTED")!
+  // Timer stays at 00:00 while ringing!
+  useEffect(() => {
+    let interval: any = null;
+    if (callPhase === "CONNECTED") {
+      interval = setInterval(() => {
+        if (activeCallStartRef.current) {
+          const elapsed = Math.max(1, Math.round((Date.now() - activeCallStartRef.current) / 1000));
+          setLiveTimerSec(elapsed);
+        }
+      }, 1000);
+    } else {
+      setLiveTimerSec(0);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [callPhase]);
+
+  // Listen to native Android Telecom InCallService events (RINGING vs. ACTIVE vs. DISCONNECTED)
+  useEffect(() => {
+    const sub = TelephonyService.onCallStateChanged((event: NativeCallStateEvent) => {
+      if (event.state === "ACTIVE") {
+        // Remote party picked up / answered!
+        if (callPhaseRef.current !== "CONNECTED") {
+          callPhaseRef.current = "CONNECTED";
+          setCallPhase("CONNECTED");
+          activeCallStartRef.current = Date.now();
+          setLiveTimerSec(1);
+        }
+      } else if (
+        event.state === "DIALING" ||
+        event.state === "RINGING" ||
+        event.state === "CONNECTING"
+      ) {
+        if (callPhaseRef.current !== "CONNECTED") {
+          callPhaseRef.current = "RINGING";
+          setCallPhase("RINGING");
+          setLiveTimerSec(0);
+        }
+      } else if (event.state === "DISCONNECTED") {
+        if (callPhaseRef.current !== "IDLE") {
+          const wasConnected = callPhaseRef.current === "CONNECTED";
+          const start = activeCallStartRef.current;
+          let finalSecs = 0;
+
+          if (event.durationSeconds && event.durationSeconds > 0) {
+            finalSecs = event.durationSeconds;
+          } else if (wasConnected && start) {
+            finalSecs = Math.max(1, Math.round((Date.now() - start) / 1000));
+          }
+
+          callPhaseRef.current = "IDLE";
+          setCallPhase("IDLE");
+          setCallDuration(finalSecs);
+          setCallModalVisible(true);
+        }
+      }
+    });
+
+    return () => {
+      sub.remove();
+    };
+  }, []);
+
+  const handleInAppHangup = async () => {
+    await TelephonyService.endCall();
+    const wasConnected = callPhaseRef.current === "CONNECTED";
+    const start = activeCallStartRef.current;
+    let finalSecs = 0;
+    if (wasConnected && start) {
+      finalSecs = Math.max(1, Math.round((Date.now() - start) / 1000));
+    }
+    callPhaseRef.current = "IDLE";
+    setCallPhase("IDLE");
+    setCallDuration(finalSecs);
+    setCallModalVisible(true);
+  };
+
+  // Re-check call state if app returns from background / default dialer
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", async (nextAppState: AppStateStatus) => {
+      if (nextAppState === "active" && callPhaseRef.current !== "IDLE") {
+        const state = await TelephonyService.getCurrentCallState();
+        if (state && (state.state === "DISCONNECTED" || state.state === "UNKNOWN")) {
+          const wasConnected = callPhaseRef.current === "CONNECTED";
+          const start = activeCallStartRef.current;
+          let finalSecs = 0;
+          if (state.durationSeconds && state.durationSeconds > 0) {
+            finalSecs = state.durationSeconds;
+          } else if (wasConnected && start) {
+            finalSecs = Math.max(1, Math.round((Date.now() - start) / 1000));
+          }
+          callPhaseRef.current = "IDLE";
+          setCallPhase("IDLE");
+          setCallDuration(finalSecs);
+          setCallModalVisible(true);
+        }
+      }
+    });
+
+    return () => subscription.remove();
+  }, []);
 
   const loadQueue = useCallback(async () => {
     setErrorMsg(null);
@@ -51,21 +172,19 @@ export const QueueScreen: React.FC = () => {
   };
 
   const handleCallLead = async (lead: Lead) => {
-    // 1. Dial directly via Android SIM card
-    const res = await TelephonyService.dialViaSIM(lead.phone, lead.studentName);
-    if (res.success) {
-      // Record start time and prepare post-call disposition modal
-      setActiveLead(lead);
-      const start = Date.now();
-      setCallStartTime(start);
-      setCallDuration(1); // will be updated when user returns to app
+    setActiveLead(lead);
+    const now = Date.now();
+    dialStartTimeRef.current = now;
+    activeCallStartRef.current = null;
+    callPhaseRef.current = "RINGING";
+    setCallPhase("RINGING");
+    setLiveTimerSec(0);
 
-      // Open disposition modal after call returns
-      setTimeout(() => {
-        const elapsed = Math.round((Date.now() - start) / 1000);
-        setCallDuration(elapsed > 0 ? elapsed : 1);
-        setCallModalVisible(true);
-      }, 1000);
+    // Dial directly via Android SIM card
+    const res = await TelephonyService.dialViaSIM(lead.phone, lead.studentName);
+    if (!res.success) {
+      callPhaseRef.current = "IDLE";
+      setCallPhase("IDLE");
     }
   };
 
@@ -73,16 +192,32 @@ export const QueueScreen: React.FC = () => {
     TelephonyService.openWhatsAppChat(lead.phone, lead.studentName, lead.courseInterested);
   };
 
-  const filteredLeads = leads.filter((l) => {
-    const q = search.toLowerCase();
-    return (
-      l.studentName.toLowerCase().includes(q) ||
-      l.phone.includes(q) ||
-      l.courseInterested.toLowerCase().includes(q)
-    );
-  });
+  // Filter and DEDUPLICATE leads by 10-digit phone number so Deepak never appears twice!
+  const uniqueLeads = useMemo(() => {
+    const q = search.toLowerCase().trim();
+    const filtered = leads.filter((l) => {
+      if (!q) return true;
+      return (
+        l.studentName.toLowerCase().includes(q) ||
+        l.phone.includes(q) ||
+        l.courseInterested.toLowerCase().includes(q)
+      );
+    });
 
-  const renderLeadCard = ({ item }: { item: Lead }) => {
+    const seenPhones = new Set<string>();
+    const result: Lead[] = [];
+    for (const lead of filtered) {
+      const cleanPhone = (lead.phone || "").replace(/\D/g, "").slice(-10);
+      const key = cleanPhone || lead.id;
+      if (!seenPhones.has(key)) {
+        seenPhones.add(key);
+        result.push(lead);
+      }
+    }
+    return result;
+  }, [leads, search]);
+
+  const renderLeadCard = useCallback(({ item }: { item: Lead }) => {
     const isHot = item.priority === "Hot";
     return (
       <View style={[styles.card, isHot && styles.hotCardBorder]}>
@@ -109,7 +244,7 @@ export const QueueScreen: React.FC = () => {
               <Text style={styles.badgeText}>{item.priority}</Text>
             </View>
             <View style={styles.stageBadge}>
-              <Text style={styles.stageText}>{item.stage}</Text>
+              <Text style={styles.stageText}>{item.stage || item.status}</Text>
             </View>
           </View>
         </View>
@@ -117,17 +252,19 @@ export const QueueScreen: React.FC = () => {
         {/* Middle Row: Course & Source */}
         <View style={styles.cardDetails}>
           <Text style={styles.courseText}>Course: {item.courseInterested}</Text>
-          <Text style={styles.metaText}>Source: {item.leadSource} • Calls: {item.callCount || 0}</Text>
+          <Text style={styles.metaText}>
+            Counselor: {item.assignedCaller || "Unassigned"} • Calls: {item.callCount || 0}
+          </Text>
         </View>
 
-        {/* Action Buttons: 1-Tap SIM Call & 1-Tap WhatsApp */}
+        {/* Action Buttons: 1-Tap SIM Call, 1-Tap WhatsApp, Log */}
         <View style={styles.actionsRow}>
           <TouchableOpacity
             style={styles.callButton}
             onPress={() => handleCallLead(item)}
             activeOpacity={0.8}
           >
-            <Text style={styles.callButtonText}>📞 Call via SIM</Text>
+            <Text style={styles.callButtonText}>📞 Call SIM</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -151,17 +288,20 @@ export const QueueScreen: React.FC = () => {
         </View>
       </View>
     );
-  };
+  }, []);
 
   return (
     <View style={styles.container}>
       {/* Header & Stats Banner */}
       <View style={styles.header}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={styles.headerTitle}>Today's Call Queue</Text>
           <Text style={styles.headerSubtitle}>
-            {filteredLeads.length} Leads in queue • Wegrow Skill Campus
+            {uniqueLeads.length} Students in queue • Wegrow Skill Campus
           </Text>
+        </View>
+        <View style={styles.liveClockBadge}>
+          <LiveClock style={styles.liveClockText} prefix="🕒 " />
         </View>
       </View>
 
@@ -191,11 +331,15 @@ export const QueueScreen: React.FC = () => {
         </View>
       ) : (
         <FlatList
-          data={filteredLeads}
+          data={uniqueLeads}
           keyExtractor={(item) => item.id}
           renderItem={renderLeadCard}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+          initialNumToRender={6}
+          maxToRenderPerBatch={8}
+          windowSize={5}
+          removeClippedSubviews={Platform.OS === "android"}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -210,6 +354,64 @@ export const QueueScreen: React.FC = () => {
             </View>
           }
         />
+      )}
+
+      {/* In-App Active Call Screen Overlay: keeps Wegrow Telecaller in foreground */}
+      {callPhase !== "IDLE" && activeLead && (
+        <View style={styles.inAppCallOverlay}>
+          <View style={styles.inAppCallCard}>
+            <View style={styles.inAppCallHeader}>
+              <View
+                style={[
+                  styles.inAppCallLiveBadge,
+                  callPhase === "RINGING" && styles.inAppCallRingingBadge,
+                ]}
+              >
+                <View
+                  style={[
+                    styles.inAppCallLiveDot,
+                    callPhase === "RINGING" && styles.inAppCallRingingDot,
+                  ]}
+                />
+                <Text
+                  style={[
+                    styles.inAppCallLiveText,
+                    callPhase === "RINGING" && styles.inAppCallRingingText,
+                  ]}
+                >
+                  {callPhase === "RINGING" ? "🔔 RINGING... (WAITING FOR ANSWER)" : "🟢 SPEAKING • LIVE CALL"}
+                </Text>
+              </View>
+              <Text
+                style={[
+                  styles.inAppCallTimer,
+                  callPhase === "RINGING" && styles.inAppCallTimerRinging,
+                ]}
+              >
+                ⏱️ {callPhase === "RINGING" ? "00:00" : formatTimer(liveTimerSec)}
+              </Text>
+            </View>
+
+            <Text style={styles.inAppCallName}>{activeLead.studentName}</Text>
+            <Text style={styles.inAppCallPhone}>📞 {activeLead.phone}</Text>
+            <Text style={styles.inAppCallCourse}>Course: {activeLead.courseInterested}</Text>
+            <Text style={styles.inAppCallHint}>
+              {callPhase === "RINGING"
+                ? "Connecting via Wegrow SIM • Timer starts when student answers"
+                : "Call connected • Counting live spoken minutes"}
+            </Text>
+
+            <View style={styles.inAppCallActions}>
+              <TouchableOpacity
+                style={styles.inAppHangupBtn}
+                onPress={handleInAppHangup}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.inAppHangupText}>🔴 Cut Call (Hangup & Save Notes)</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       )}
 
       {/* Post-Call Disposition Modal */}
@@ -248,6 +450,20 @@ const styles = StyleSheet.create({
     color: THEME.colors.textSecondary,
     fontSize: 13,
     marginTop: 2,
+  },
+  liveClockBadge: {
+    backgroundColor: "#0d1b2a",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: THEME.colors.gold,
+  },
+  liveClockText: {
+    color: THEME.colors.gold,
+    fontSize: 11,
+    fontWeight: "bold",
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
   },
   noticeBar: {
     backgroundColor: THEME.colors.amber,
@@ -365,7 +581,7 @@ const styles = StyleSheet.create({
   },
   waButton: {
     flex: 2,
-    backgroundColor: "#25D366", // WhatsApp Green
+    backgroundColor: "#25D366",
     borderRadius: 8,
     paddingVertical: 10,
     alignItems: "center",
@@ -414,5 +630,113 @@ const styles = StyleSheet.create({
     color: THEME.colors.textMuted,
     fontSize: 13,
     marginTop: 4,
+  },
+  inAppCallOverlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "rgba(10, 17, 40, 0.98)",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderWidth: 1.5,
+    borderColor: THEME.colors.gold,
+    padding: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    elevation: 30,
+    zIndex: 999,
+  },
+  inAppCallCard: {
+    gap: 8,
+  },
+  inAppCallHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  inAppCallLiveBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(16, 185, 129, 0.2)",
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#10B981",
+    gap: 6,
+  },
+  inAppCallRingingBadge: {
+    backgroundColor: "rgba(245, 158, 11, 0.2)",
+    borderColor: "#F59E0B",
+  },
+  inAppCallLiveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#10B981",
+  },
+  inAppCallRingingDot: {
+    backgroundColor: "#F59E0B",
+  },
+  inAppCallLiveText: {
+    color: "#10B981",
+    fontSize: 10,
+    fontWeight: "bold",
+    letterSpacing: 0.5,
+  },
+  inAppCallRingingText: {
+    color: "#F59E0B",
+  },
+  inAppCallTimer: {
+    color: THEME.colors.gold,
+    fontSize: 17,
+    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
+    fontWeight: "bold",
+  },
+  inAppCallTimerRinging: {
+    color: "#F59E0B",
+  },
+  inAppCallName: {
+    color: THEME.colors.textPrimary,
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+  inAppCallPhone: {
+    color: THEME.colors.textSecondary,
+    fontSize: 14,
+    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
+  },
+  inAppCallCourse: {
+    color: THEME.colors.textMuted,
+    fontSize: 12,
+  },
+  inAppCallHint: {
+    color: THEME.colors.gold,
+    fontSize: 11,
+    fontStyle: "italic",
+    marginTop: 2,
+  },
+  inAppCallActions: {
+    marginTop: 10,
+  },
+  inAppHangupBtn: {
+    backgroundColor: THEME.colors.danger,
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: THEME.colors.danger,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  inAppHangupText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "bold",
   },
 });

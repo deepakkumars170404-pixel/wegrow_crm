@@ -27,7 +27,6 @@ import {
   Wifi,
   WifiOff,
   RefreshCw,
-  Bot,
 } from "lucide-react";
 import { useCRM } from "@/context/CRMContext";
 import { recentActivityTimeline } from "@/data/dummy-data";
@@ -43,7 +42,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const pathname = usePathname();
   const router = useRouter();
-  const { leads, activeUserRole, addToast, telephonyStatus, reconnectTelephony, openAiCallModal } = useCRM();
+  const { leads, activeUserRole, addToast, telephonyStatus, reconnectTelephony } = useCRM();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -223,17 +222,6 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Right side: Telephony Status (Staff only), Quick Create, Setup, Notifications, Profile */}
       <div className="flex items-center gap-2 sm:gap-2.5">
-        {/* 🤖 AI Receptionist Active Pill & Inbound Simulator Trigger */}
-        <button
-          type="button"
-          onClick={() => openAiCallModal(null, "+91 98431 73678", true)}
-          className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-[11px] font-bold text-emerald-800 transition-all shadow-2xs hover:scale-105 active:scale-95"
-          title="AI Voice Receptionist is Active 24/7. Click to simulate incoming student call!"
-        >
-          <Bot className="w-3.5 h-3.5 text-emerald-600" />
-          <span>AI Receptionist: Active</span>
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-        </button>
         {/* Telephony Agent Status Selector (For calling staff / telecallers only) */}
         {!isOwnerMD ? (
           <div className="relative hidden sm:block">
@@ -515,8 +503,24 @@ export const Header: React.FC<HeaderProps> = ({
           {isProfileOpen && (
             <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-2xl shadow-dropdown border border-slate-200/90 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
               <div className="px-4 py-2 border-b border-slate-100">
-                <p className="text-xs font-bold text-slate-900">Priya Sharma</p>
-                <p className="text-[11px] text-slate-500">priya.sharma@wegrow.edu</p>
+                <p className="text-xs font-bold text-slate-900">
+                  {activeUserRole === "Owner" || activeUserRole === "Owner / MD"
+                    ? "Thavabalan"
+                    : activeUserRole === "Admin"
+                    ? "LakshmiPriya (GM)"
+                    : activeUserRole === "HR"
+                    ? "Gopi (HR)"
+                    : "Muthumeena (Head Telecaller)"}
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  {activeUserRole === "Owner" || activeUserRole === "Owner / MD"
+                    ? "thavabalan@wegrow.edu"
+                    : activeUserRole === "Admin"
+                    ? "lakshmipriya@wegrow.edu"
+                    : activeUserRole === "HR"
+                    ? "gopi@wegrow.edu"
+                    : "muthumeena@wegrow.edu"}
+                </p>
                 <div className="flex items-center gap-1.5 mt-1">
                   <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#D5A52B]/15 text-[#B88A1B]">
                     Role: {activeUserRole}

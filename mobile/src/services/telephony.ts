@@ -1,7 +1,17 @@
 import * as Linking from "expo-linking";
-import { Alert, NativeModules, Platform } from "react-native";
+import { Alert, NativeEventEmitter, NativeModules, Platform } from "react-native";
 
 const { WegrowTelephony } = NativeModules;
+const telephonyEmitter = WegrowTelephony ? new NativeEventEmitter(WegrowTelephony) : null;
+
+export interface NativeCallStateEvent {
+  state: "DIALING" | "RINGING" | "CONNECTING" | "ACTIVE" | "DISCONNECTED" | "HOLDING" | "UNKNOWN";
+  rawState?: number;
+  phoneNumber?: string;
+  durationSeconds?: number;
+  activeTimeMs?: number;
+  isAttended?: boolean;
+}
 
 export const TelephonyService = {
   // STRICT PERMANENT SAFETY GUARD
@@ -16,6 +26,22 @@ export const TelephonyService = {
     if (clean.length === 12 && clean.startsWith("91")) return clean.substring(2);
     if (clean.length === 11 && clean.startsWith("0")) return clean.substring(1);
     return clean;
+  },
+
+  onCallStateChanged(callback: (event: NativeCallStateEvent) => void) {
+    if (!telephonyEmitter) return { remove: () => {} };
+    return telephonyEmitter.addListener("onCallStateChanged", callback);
+  },
+
+  async getCurrentCallState(): Promise<NativeCallStateEvent | null> {
+    if (Platform.OS === "android" && WegrowTelephony?.getCurrentCallState) {
+      try {
+        return await WegrowTelephony.getCurrentCallState();
+      } catch {
+        return null;
+      }
+    }
+    return null;
   },
 
   async dialViaSIM(phoneNumber: string, studentName?: string): Promise<{ success: boolean; error?: string }> {
@@ -39,7 +65,7 @@ export const TelephonyService = {
       return { success: false, error: "Number too short" };
     }
 
-    // Try direct native SIM call first (places call directly without extra keypad)
+    // Direct native SIM call
     if (Platform.OS === "android" && WegrowTelephony?.directCall) {
       try {
         await WegrowTelephony.directCall(clean10Digits);
@@ -58,6 +84,17 @@ export const TelephonyService = {
       Alert.alert("Dialing Error", err.message || "Failed to launch phone dialer");
       return { success: false, error: err.message };
     }
+  },
+
+  async endCall(): Promise<boolean> {
+    if (Platform.OS === "android" && WegrowTelephony?.endCall) {
+      try {
+        return await WegrowTelephony.endCall();
+      } catch (err) {
+        console.warn("WegrowTelephony endCall error:", err);
+      }
+    }
+    return false;
   },
 
   async checkIsDefaultDialer(): Promise<boolean> {

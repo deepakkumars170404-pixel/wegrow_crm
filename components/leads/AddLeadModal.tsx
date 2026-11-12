@@ -16,7 +16,7 @@ export const AddLeadModal: React.FC<AddLeadModalProps> = ({ isOpen, onClose }) =
   const [studentName, setStudentName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [courseInterested, setCourseInterested] = useState(courses[0]?.name || "AI Explorer & Generative AI");
+  const [courseInterested, setCourseInterested] = useState(courses[0]?.name || "01. Java Full Stack Program (6 Months)");
   const [leadSource, setLeadSource] = useState<any>("Website");
   const [assignedCaller, setAssignedCaller] = useState(telecallers[0]?.name || "Priya Sharma");
   const [priority, setPriority] = useState<LeadPriority>("Hot");

@@ -14,14 +14,30 @@ export interface Lead {
   stage: "New Enquiry" | "Call Scheduled" | "Demo Booked" | "Decision Pending" | "Admission Done" | "Lost";
   notes?: string[];
   callCount?: number;
+  qualification?: string;
+  passedOutYear?: string;
+  collegeName?: string;
 }
+
+export const WEGROW_STAFF_MEMBERS = [
+  "Devi Priya",
+  "Subhashini",
+  "MuthuSelvi",
+  "LakshmiPriya",
+  "Muthumeena",
+] as const;
+
+export type StaffMember = (typeof WEGROW_STAFF_MEMBERS)[number];
 
 export type CallDisposition =
   | "Interested"
-  | "Busy"
+  | "Visit to Institute"
+  | "Joined"
+  | "Not Interested"
   | "Call Later"
-  | "Counselling Scheduled"
+  | "Busy"
   | "Not Answered"
+  | "Counselling Scheduled"
   | "Lost";
 
 export interface CallRecord {
@@ -33,6 +49,12 @@ export interface CallRecord {
   disposition: CallDisposition;
   durationSeconds: number;
   formattedDuration: string;
+  qualification?: string;
+  passedOutYear?: string;
+  collegeName?: string;
+  courseInterested?: string;
+  callStartTime?: string;
+  callEndTime?: string;
   notes: string;
   nextFollowUpDate?: string;
   nextFollowUpTime?: string;

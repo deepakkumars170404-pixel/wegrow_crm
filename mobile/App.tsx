@@ -1,5 +1,7 @@
 import React, { useState } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, LogBox } from "react-native";
+
+LogBox.ignoreAllLogs(true);
 import { StatusBar } from "expo-status-bar";
 import { THEME } from "./src/constants/theme";
 import { QueueScreen } from "./src/screens/QueueScreen";

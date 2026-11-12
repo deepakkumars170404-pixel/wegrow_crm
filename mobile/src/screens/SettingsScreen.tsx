@@ -13,13 +13,14 @@ import { THEME } from "../constants/theme";
 import { StorageService } from "../services/storage";
 import { ApiService } from "../services/api";
 import { TelephonyService } from "../services/telephony";
-import { AppSettings } from "../types";
+import { AppSettings, WEGROW_STAFF_MEMBERS } from "../types";
 
 export const SettingsScreen: React.FC = () => {
   const [serverUrl, setServerUrl] = useState("http://192.168.29.60:3000");
-  const [callerName, setCallerName] = useState("Priya Sharma");
+  const [callerName, setCallerName] = useState("Muthumeena");
   const [testing, setTesting] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
+  const [isDefaultDialer, setIsDefaultDialer] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -28,8 +29,27 @@ export const SettingsScreen: React.FC = () => {
       setCallerName(s.callerName);
       const pending = await StorageService.getPendingCalls();
       setPendingCount(pending.length);
+      const isDef = await TelephonyService.checkIsDefaultDialer();
+      setIsDefaultDialer(isDef);
     })();
   }, []);
+
+  const handleSetDefaultDialer = async () => {
+    const isAlready = await TelephonyService.checkIsDefaultDialer();
+    if (isAlready) {
+      Alert.alert(
+        "Already Default",
+        "Wegrow Telecaller is already your phone's default phone app! All calls stay inside Wegrow Telecaller."
+      );
+      setIsDefaultDialer(true);
+      return;
+    }
+    await TelephonyService.promptSetAsDefaultDialer();
+    setTimeout(async () => {
+      const check = await TelephonyService.checkIsDefaultDialer();
+      setIsDefaultDialer(check);
+    }, 1500);
+  };
 
   const handleSave = async () => {
     const updated: AppSettings = {
@@ -116,16 +136,45 @@ export const SettingsScreen: React.FC = () => {
 
       {/* Telecaller Identity */}
       <View style={styles.card}>
-        <Text style={styles.label}>TELECALLER NAME</Text>
+        <Text style={styles.label}>TELECALLER NAME (SELECT OR TYPE)</Text>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+          {WEGROW_STAFF_MEMBERS.map((staff) => {
+            const isSel = callerName === staff;
+            return (
+              <TouchableOpacity
+                key={staff}
+                style={{
+                  paddingVertical: 6,
+                  paddingHorizontal: 12,
+                  borderRadius: 8,
+                  backgroundColor: isSel ? THEME.colors.gold : "#1e293b",
+                  borderWidth: 1,
+                  borderColor: isSel ? THEME.colors.gold : THEME.colors.border,
+                }}
+                onPress={() => setCallerName(staff)}
+              >
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontWeight: isSel ? "bold" : "600",
+                    color: isSel ? "#0A1128" : THEME.colors.textPrimary,
+                  }}
+                >
+                  {staff === "Muthumeena" ? "👑 Muthumeena (Head)" : staff}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
         <TextInput
           style={styles.input}
-          placeholder="e.g. Priya Sharma"
+          placeholder="e.g. Muthumeena"
           placeholderTextColor={THEME.colors.textMuted}
           value={callerName}
           onChangeText={setCallerName}
         />
         <Text style={styles.helpText}>
-          This name will appear on all call logs and follow-up activities in the CRM.
+          This staff name will be automatically tagged on all call logs and follow-up activities in Supabase CRM.
         </Text>
       </View>
 
@@ -144,15 +193,26 @@ export const SettingsScreen: React.FC = () => {
 
       {/* Default Dialer Section */}
       <View style={styles.card}>
-        <Text style={styles.label}>DEFAULT PHONE APP / DIALER</Text>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+          <Text style={styles.label}>DEFAULT PHONE APP (BYPASS GOOGLE DIALER)</Text>
+          {isDefaultDialer && (
+            <View style={{ backgroundColor: "rgba(16, 185, 129, 0.2)", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12, borderWidth: 1, borderColor: "#10B981" }}>
+              <Text style={{ color: "#10B981", fontSize: 10, fontWeight: "bold" }}>ACTIVE DEFAULT</Text>
+            </View>
+          )}
+        </View>
         <Text style={styles.helpText}>
-          Make Wegrow Telecaller your phone's default dialer for 1-tap direct SIM calls.
+          {isDefaultDialer
+            ? "✅ Wegrow Telecaller is currently the Default Phone App on this device! Calls will stay strictly inside Wegrow Telecaller without Google Dialer opening."
+            : "Set Wegrow Telecaller as your phone's default Phone App so all SIM calls stay inside Wegrow Telecaller without Google Dialer ever opening."}
         </Text>
         <TouchableOpacity
-          style={[styles.button, { backgroundColor: THEME.colors.primary, marginTop: 12 }]}
-          onPress={() => TelephonyService.promptSetAsDefaultDialer()}
+          style={[styles.saveBtn, { backgroundColor: isDefaultDialer ? THEME.colors.emerald : THEME.colors.gold, marginTop: 12 }]}
+          onPress={handleSetDefaultDialer}
         >
-          <Text style={styles.buttonText}>📱 Set as Default Phone App</Text>
+          <Text style={styles.saveBtnText}>
+            {isDefaultDialer ? "✅ Default Phone App Active" : "📱 Set Wegrow Telecaller as Default Phone App"}
+          </Text>
         </TouchableOpacity>
       </View>
 

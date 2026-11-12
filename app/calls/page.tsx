@@ -1,701 +1,490 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import Link from "next/link";
 import {
   PhoneCall,
-  Phone,
-  PhoneOff,
-  PhoneForwarded,
-  PhoneMissed,
-  CheckCircle2,
   Clock,
-  Mic,
-  MicOff,
-  Volume2,
-  VolumeX,
-  Grid,
-  Calendar,
-  Sparkles,
-  ArrowRight,
-  UserCheck,
   Search,
-  AlertCircle,
   MessageSquare,
-  ChevronRight,
-  ShieldAlert,
-  Wifi,
-  WifiOff,
-  RefreshCw,
-  AlertTriangle,
-  Bot,
-  PhoneIncoming,
+  User,
+  GraduationCap,
+  ShieldCheck,
+  Filter,
+  ArrowRight,
+  Smartphone,
+  CheckCircle2,
 } from "lucide-react";
 import { useCRM } from "@/context/CRMContext";
-import { StatusBadge } from "@/components/shared/StatusBadge";
-import { Lead } from "@/types";
+import { CallRecord, WEGROW_STAFF_MEMBERS } from "@/types";
 
 export default function CallManagementPage() {
-  const {
-    leads,
-    addCallRecord,
-    initiateCall,
-    endCallSession,
-    isCallConnected,
-    callPhase,
-    callDuration,
-    lastCallDuration,
-    openCallModal,
-    updateLeadStatus,
-    activeCallLead,
-    setActiveCallLead,
-    telephonyStatus,
-    refreshTelephonyStatus,
-    reconnectTelephony,
-    openAiCallModal,
-    openAiBatchDialer,
-  } = useCRM();
+  const { leads, activeUserRole } = useCRM();
 
-  // Calling Interface Type Switcher: "station" (Image 3) or "modal" (Image 2)
-  const [callingMode, setCallingMode] = useState<"station" | "modal">("station");
+  // Filters for Audit Oversight Desk
+  const [ownerStaffFilter, setOwnerStaffFilter] = useState<string>("All");
+  const [ownerStatusFilter, setOwnerStatusFilter] = useState<"All" | "Attended" | "Not Attended">("All");
+  const [ownerSearch, setOwnerSearch] = useState<string>("");
 
-  // Selected lead in call queue
-  const [selectedLeadId, setSelectedLeadId] = useState<string>(
-    activeCallLead?.id || leads[0]?.id || "LD-1001"
-  );
-  const selectedLead = leads.find((l) => l.id === selectedLeadId) || activeCallLead || leads[0];
-
-  // Queue Filter
-  const [queueFilter, setQueueFilter] = useState<"All" | "Hot" | "Today" | "Pending">("All");
-  const [queueSearch, setQueueSearch] = useState("");
-
-  // Call Result Form State
-  const [selectedOutcome, setSelectedOutcome] = useState("Interested");
-  const [callRemarks, setCallRemarks] = useState("");
-  const [nextFollowUpDate, setNextFollowUpDate] = useState("");
-  const [nextFollowUpTime, setNextFollowUpTime] = useState("03:30 PM");
-
-  // Format mm:ss
-  const formatTimer = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  // Determine if call was attended (spoken duration > 0) or not attended
+  const isCallAttended = (call: CallRecord) => {
+    const raw = String(call.duration || "").replace(/[^\d:]/g, "");
+    let isSpoken = false;
+    if (raw.includes(":")) {
+      const [m, s] = raw.split(":").map(Number);
+      isSpoken = (m || 0) > 0 || (s || 0) > 0;
+    } else {
+      const num = parseInt(raw, 10);
+      isSpoken = !isNaN(num) && num > 0;
+    }
+    if (
+      call.outcome === "Not Attended Call" ||
+      call.outcome === "Missed" ||
+      call.outcome === "Missed / Cut" ||
+      call.outcome === "Not Answered"
+    ) {
+      return false;
+    }
+    if (call.outcome === "Attended Call" || isSpoken) {
+      return true;
+    }
+    return false;
   };
 
-  // Sync selected lead when activeCallLead changes elsewhere (e.g. from dock or search)
-  useEffect(() => {
-    if (activeCallLead && activeCallLead.id !== selectedLeadId) {
-      setSelectedLeadId(activeCallLead.id);
+  const parseCallDurationSec = (c: { duration?: string; durationSeconds?: number; duration_seconds?: number }): number => {
+    if (typeof c.durationSeconds === "number" && c.durationSeconds >= 0) return c.durationSeconds;
+    if (typeof c.duration_seconds === "number" && c.duration_seconds >= 0) return c.duration_seconds;
+    const raw = String(c.duration || "").trim();
+    if (raw.includes(":")) {
+      const parts = raw.split(":").map((n) => parseInt(n.replace(/\D/g, ""), 10) || 0);
+      if (parts.length === 2) return parts[0] * 60 + parts[1];
+      if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
     }
-  }, [activeCallLead]);
+    const digits = parseInt(raw.replace(/\D/g, ""), 10);
+    return isNaN(digits) ? 0 : digits;
+  };
 
-  // Filtered Queue
-  const queueLeads = leads.filter((l) => {
-    const matchesSearch =
-      queueSearch === "" ||
-      l.studentName.toLowerCase().includes(queueSearch.toLowerCase()) ||
-      l.phone.includes(queueSearch) ||
-      l.courseInterested.toLowerCase().includes(queueSearch.toLowerCase());
+  const formatSpokenMinutes = (totalSec: number) => {
+    if (totalSec <= 0) return "0s";
+    const mins = Math.floor(totalSec / 60);
+    const secs = totalSec % 60;
+    if (mins === 0) return `${secs}s`;
+    return `${mins}m ${secs.toString().padStart(2, "0")}s`;
+  };
 
-    if (!matchesSearch) return false;
+  // Get clear From Time -> End Time range
+  const getCallTimeRange = (call: CallRecord) => {
+    if (call.fromTime && call.endTime) {
+      return `${call.fromTime} → ${call.endTime}`;
+    }
+    if (call.callTime) {
+      return `Started at ${call.callTime}`;
+    }
+    return "";
+  };
 
-    if (queueFilter === "Hot") return l.priority === "Hot";
-    if (queueFilter === "Today") return l.nextFollowUpDate === "2026-10-30";
-    if (queueFilter === "Pending") return l.status === "New" || l.status === "Call Later" || l.status === "Busy";
-    return true;
-  });
+  // Aggregate all calls from all leads across the CRM
+  const allCalls = useMemo(() => {
+    const list: (CallRecord & {
+      studentName: string;
+      studentPhone: string;
+      studentCourse: string;
+      leadId: string;
+    })[] = [];
 
-  const handleStartCall = () => {
-    setCallRemarks("");
-    if (selectedLead) {
-      setActiveCallLead(selectedLead);
-      initiateCall(selectedLead);
-      if (callingMode === "modal") {
-        openCallModal();
+    leads.forEach((l) => {
+      if (l.callHistory) {
+        l.callHistory.forEach((c) => {
+          list.push({
+            ...c,
+            studentName: c.studentName || l.studentName,
+            studentPhone: l.phone,
+            studentCourse: l.courseInterested,
+            qualification: c.qualification || l.qualification || "",
+            passedOutYear: c.passedOutYear || l.passedOutYear || "",
+            collegeName: c.collegeName || l.collegeName || "",
+            leadId: l.id,
+          });
+        });
       }
-    }
-  };
-
-  const handleEndCall = () => {
-    endCallSession();
-  };
-
-  const handleSaveCall = (e?: React.FormEvent) => {
-    if (e && e.preventDefault) e.preventDefault();
-    if (!selectedLead) return;
-
-    const finalDuration = lastCallDuration || formatTimer(callDuration || 1);
-
-    addCallRecord(selectedLead.id, {
-      callerName: selectedLead.assignedCaller || "Priya Sharma",
-      outcome: selectedOutcome,
-      duration: finalDuration,
-      remarks: callRemarks || `Call logged as ${selectedOutcome}`,
-      nextFollowUpDate: nextFollowUpDate || undefined,
-      nextFollowUpTime: nextFollowUpTime || undefined,
     });
 
-    if (selectedOutcome === "Interested") {
-      updateLeadStatus(selectedLead.id, "Interested", "Interested");
-    } else if (selectedOutcome === "Counselling") {
-      updateLeadStatus(selectedLead.id, "Counselling Scheduled", "Counselling Scheduled");
-    } else if (selectedOutcome === "Busy" || selectedOutcome === "Call Later") {
-      updateLeadStatus(selectedLead.id, "Call Later");
-    } else if (selectedOutcome === "Lost") {
-      updateLeadStatus(selectedLead.id, "Lost", "Lost");
-    }
+    return list.sort((a, b) => {
+      const aTime = a.id ? parseInt(a.id.replace(/\D/g, ""), 10) || 0 : 0;
+      const bTime = b.id ? parseInt(b.id.replace(/\D/g, ""), 10) || 0 : 0;
+      return bTime - aTime;
+    });
+  }, [leads]);
 
-    endCallSession();
-    setCallRemarks("");
+  // Filtered Calls for Audit View
+  const filteredOwnerCalls = useMemo(() => {
+    return allCalls.filter((c) => {
+      if (ownerStaffFilter !== "All") {
+        if (!c.callerName || !c.callerName.toLowerCase().includes(ownerStaffFilter.toLowerCase())) {
+          return false;
+        }
+      }
+      const attended = isCallAttended(c);
+      if (ownerStatusFilter === "Attended" && !attended) return false;
+      if (ownerStatusFilter === "Not Attended" && attended) return false;
 
-    // Advance to next lead in queue automatically (Advance Queue)
-    const currentIndex = queueLeads.findIndex((l) => l.id === selectedLead.id);
-    if (currentIndex >= 0 && currentIndex < queueLeads.length - 1) {
-      const nextLead = queueLeads[currentIndex + 1];
-      setSelectedLeadId(nextLead.id);
-      setActiveCallLead(nextLead);
-    }
-  };
+      if (ownerSearch.trim()) {
+        const q = ownerSearch.toLowerCase();
+        const matches =
+          c.studentName.toLowerCase().includes(q) ||
+          c.studentPhone.includes(q) ||
+          c.studentCourse.toLowerCase().includes(q) ||
+          (c.qualification && c.qualification.toLowerCase().includes(q)) ||
+          (c.collegeName && c.collegeName.toLowerCase().includes(q)) ||
+          (c.callerName && c.callerName.toLowerCase().includes(q)) ||
+          (c.remarks && c.remarks.toLowerCase().includes(q));
+        if (!matches) return false;
+      }
+      return true;
+    });
+  }, [allCalls, ownerStaffFilter, ownerStatusFilter, ownerSearch]);
+
+  const ownerTotalCalls = allCalls.length;
+  const ownerAttendedCalls = allCalls.filter((c) => isCallAttended(c)).length;
+  const ownerNotAttendedCalls = ownerTotalCalls - ownerAttendedCalls;
+  const totalAcademySeconds = useMemo(() => {
+    return allCalls.reduce((acc, c) => acc + parseCallDurationSec(c), 0);
+  }, [allCalls]);
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Top Banner & Telecaller Status */}
-      <div className="bg-white rounded-2xl p-6 border border-slate-200/90 shadow-soft flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* 1. Header Banner */}
+      <div className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200/90 shadow-soft flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-xl font-bold text-slate-900">
-              Telecaller Calling Workspace
-            </h2>
-
-            {/* Live MicroSIP & JioFiber Presence Indicator */}
-            {telephonyStatus.connected ? (
-              <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 flex items-center gap-1.5 border border-emerald-200 shadow-xs">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shadow-sm" />
-                <span>JioFiber SIP: Online</span>
-              </span>
-            ) : telephonyStatus.status === "wifi_disconnected" ? (
-              <span className="px-3 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800 flex items-center gap-1.5 border border-rose-200 shadow-xs animate-pulse">
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-600 shadow-sm" />
-                <span>Wi-Fi Disconnected • Offline</span>
-              </span>
-            ) : (
-              <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 flex items-center gap-1.5 border border-amber-200 shadow-xs">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />
-                <span>Connecting Telephony...</span>
-              </span>
-            )}
-
-            {/* Wi-Fi SSID Badge */}
-            <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
-              {telephonyStatus.connected ? (
-                <Wifi className="w-3 h-3 text-emerald-600" />
-              ) : (
-                <WifiOff className="w-3 h-3 text-rose-600" />
-              )}
-              <span>{telephonyStatus.wifiSSID}</span>
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+              <PhoneCall className="w-6 h-6 text-[#142B52]" />
+              <span>Staff Telecalling Audit Feed & Live Monitor</span>
+            </h1>
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-300 flex items-center gap-1.5 shadow-xs">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>Mobile SIM Calls Live</span>
             </span>
-
-            {/* Office Reconnect & Sync Button */}
-            <button
-              type="button"
-              onClick={() => reconnectTelephony()}
-              title="Connect or Reconnect to Office JioFiber Wi-Fi"
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#142B52] hover:bg-[#1E3B6E] text-white transition-all shadow-xs active:scale-95"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>Sync Office JioFiber</span>
-            </button>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            {telephonyStatus.connected
-              ? `Connected via ${telephonyStatus.account} • Outcome disposition & follow-up tracking active`
-              : telephonyStatus.message}
+            Real-time feed of calls made from the Wegrow Telecaller phone app. Displays spoken staff, student academic details, exact phone duration, and counsellor remarks.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Calling Interface Mode Switcher: In-Page Station (Image 3) vs In-Browser Modal (Image 2) */}
-          <div className="bg-slate-100 p-1 rounded-xl flex items-center text-xs font-bold text-slate-600 border border-slate-200">
-            <button
-              type="button"
-              onClick={() => setCallingMode("station")}
-              className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
-                callingMode === "station"
-                  ? "bg-[#142B52] text-white shadow-xs"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-              title="Calling Station directly on page (Image 3)"
-            >
-              <span className={`w-1.5 h-1.5 rounded-full ${callingMode === "station" ? "bg-emerald-400" : "bg-slate-400"}`} />
-              <span>In-Page Station</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setCallingMode("modal")}
-              className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
-                callingMode === "modal"
-                  ? "bg-[#142B52] text-white shadow-xs"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-              title="Softphone Modal Popup (Image 2)"
-            >
-              <span className={`w-1.5 h-1.5 rounded-full ${callingMode === "modal" ? "bg-emerald-400" : "bg-slate-400"}`} />
-              <span>In-Browser Modal</span>
-            </button>
-          </div>
-
+        <div className="flex items-center gap-2.5">
           <Link
             href="/whatsapp"
-            className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-semibold"
+            className="flex items-center gap-1.5 px-3.5 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-semibold transition-colors"
           >
-            <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Open WhatsApp Desk</span>
+            <MessageSquare className="w-4 h-4 text-emerald-600" />
+            <span>WhatsApp Desk</span>
           </Link>
+          <span className="text-xs font-bold text-slate-700 bg-slate-100 px-3.5 py-2 rounded-xl border border-slate-200">
+            📊 {ownerTotalCalls} Calls Recorded
+          </span>
         </div>
       </div>
 
-      {/* Gemini AI Voice Telecalling Suite Banner */}
-      <div className="bg-gradient-to-r from-emerald-600 via-teal-700 to-indigo-800 rounded-2xl p-4 sm:p-5 text-white shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur border border-white/20 flex items-center justify-center shrink-0 shadow-inner">
-            <Bot className="w-6 h-6 text-emerald-200" />
+      {/* 2. Top 5 Executive KPI Cards including Total Talk Time */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-soft space-y-1">
+          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Academy Calls</span>
+          <div className="flex items-baseline justify-between">
+            <span className="text-2xl font-black text-[#142B52]">{ownerTotalCalls}</span>
+            <span className="text-xs font-semibold text-slate-500">All Telecallers</span>
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-base font-bold">Kavya — Gemini AI Telecalling Suite</h3>
-              <span className="bg-white/20 text-emerald-100 text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
-                <Sparkles className="w-2.5 h-2.5 text-amber-300" />
-                24/7 AI Counselor
-              </span>
-            </div>
-            <p className="text-xs text-emerald-100/90 mt-0.5">
-              Automated Tanglish/English call answering, course counseling, lead qualification & demo booking
-            </p>
-          </div>
+          <p className="text-[11px] text-slate-400">Total calls recorded across CRM</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            type="button"
-            onClick={() => openAiCallModal(selectedLead, selectedLead?.phone, false)}
-            className="px-3.5 py-2 rounded-xl text-xs font-bold bg-white text-emerald-900 hover:bg-emerald-50 transition-all shadow-sm flex items-center gap-1.5 hover:scale-105 active:scale-95"
-            title="AI Voice Agent calls this selected lead"
-          >
-            <PhoneCall className="w-3.5 h-3.5 text-emerald-600" />
-            <span>AI Call (This Lead)</span>
-          </button>
+        <div className="bg-white rounded-2xl p-5 border border-emerald-300/80 shadow-soft space-y-1 bg-gradient-to-br from-white to-emerald-50/50">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-extrabold text-emerald-800 uppercase tracking-wider">Total Spoken Minutes</span>
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          </div>
+          <div className="flex items-baseline justify-between">
+            <span className="text-2xl font-black text-emerald-700">{formatSpokenMinutes(totalAcademySeconds)}</span>
+            <span className="text-xs font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full">
+              Live Talk
+            </span>
+          </div>
+          <p className="text-[11px] text-emerald-600/90 font-medium">Synced from Wegrow Telecaller App</p>
+        </div>
 
-          <button
-            type="button"
-            onClick={() => openAiCallModal(null, "+91 98431 73678", true)}
-            className="px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-500/30 hover:bg-emerald-500/40 text-white border border-white/20 transition-all flex items-center gap-1.5 active:scale-95"
-            title="Simulate incoming student call to test 24/7 AI Auto-Answer"
-          >
-            <PhoneIncoming className="w-3.5 h-3.5 text-emerald-200" />
-            <span>Simulate Inbound Call</span>
-          </button>
+        <div className="bg-white rounded-2xl p-5 border border-emerald-200/80 shadow-soft space-y-1 bg-gradient-to-br from-white to-emerald-50/30">
+          <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Attended Calls (Spoken)</span>
+          <div className="flex items-baseline justify-between">
+            <span className="text-2xl font-black text-emerald-700">{ownerAttendedCalls}</span>
+            <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+              {ownerTotalCalls > 0 ? ((ownerAttendedCalls / ownerTotalCalls) * 100).toFixed(0) : 0}% Picked
+            </span>
+          </div>
+          <p className="text-[11px] text-emerald-600/80">Students who attended and spoke</p>
+        </div>
 
-          <button
-            type="button"
-            onClick={() => openAiBatchDialer()}
-            className="px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-500/40 hover:bg-indigo-500/60 text-white border border-white/20 transition-all flex items-center gap-1.5 active:scale-95"
-            title="Open Bulk Outbound Auto-Dialer"
-          >
-            <Bot className="w-3.5 h-3.5 text-indigo-200" />
-            <span>AI Batch Auto-Dialer</span>
-          </button>
+        <div className="bg-white rounded-2xl p-5 border border-rose-200/80 shadow-soft space-y-1 bg-gradient-to-br from-white to-rose-50/30">
+          <span className="text-[11px] font-bold text-rose-800 uppercase tracking-wider">Not Attended / Rejected</span>
+          <div className="flex items-baseline justify-between">
+            <span className="text-2xl font-black text-rose-700">{ownerNotAttendedCalls}</span>
+            <span className="text-xs font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded-full">
+              {ownerTotalCalls > 0 ? ((ownerNotAttendedCalls / ownerTotalCalls) * 100).toFixed(0) : 0}% Missed
+            </span>
+          </div>
+          <p className="text-[11px] text-rose-600/80">Disconnected / Not Answered</p>
+        </div>
+
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-soft space-y-1">
+          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Telecaller Staff</span>
+          <div className="flex items-baseline justify-between">
+            <span className="text-2xl font-black text-slate-900">{WEGROW_STAFF_MEMBERS.length} Active</span>
+            <span className="text-xs font-semibold text-emerald-600">Online</span>
+          </div>
+          <p className="text-[11px] text-slate-400 truncate">{WEGROW_STAFF_MEMBERS.join(", ")}</p>
         </div>
       </div>
 
-      {/* Wi-Fi Disconnected Critical Warning Alert */}
-      {!telephonyStatus.connected && telephonyStatus.status === "wifi_disconnected" && (
-        <div className="bg-gradient-to-r from-rose-50 via-amber-50 to-rose-50 border-2 border-rose-300 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm animate-in fade-in duration-200">
-          <div className="flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-2xl bg-rose-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-rose-500/20">
-              <WifiOff className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h4 className="text-sm font-bold text-rose-900">
-                  MicroSIP Offline: Registered Wi-Fi Disconnected
-                </h4>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-200 text-rose-800">
-                  No Calling
-                </span>
-              </div>
-              <p className="text-xs text-rose-800 mt-0.5">
-                JioFiber landline calls cannot be initiated because your PC is disconnected from your office Wi-Fi. Please connect to <strong>WegrowskillCampus</strong> to enable telecalling.
-              </p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => reconnectTelephony()}
-            className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shrink-0 flex items-center gap-2 shadow-sm transition-all active:scale-95"
-          >
-            <RefreshCw className="w-4 h-4" />
-            <span>Sync Office JioFiber</span>
-          </button>
-        </div>
-      )}
-
-      {/* Main Calling Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Side: Telecaller Queue (5 Cols) */}
-        <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200/90 shadow-soft overflow-hidden flex flex-col h-[680px]">
-          <div className="p-4 border-b border-slate-100 bg-slate-50/50 space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-sm text-slate-900">Calling Queue</h3>
-                <p className="text-xs text-slate-500">{queueLeads.length} students waiting</p>
-              </div>
-              <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[11px] font-bold">
-                Auto-prioritized
-              </span>
-            </div>
-
-            {/* Queue Search */}
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search lead in queue..."
-                value={queueSearch}
-                onChange={(e) => setQueueSearch(e.target.value)}
-                className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#142B52]"
-              />
-            </div>
-
-            {/* Queue Filter Tabs */}
-            <div className="flex items-center gap-1">
-              {(["All", "Hot", "Today", "Pending"] as const).map((filter) => (
-                <button
-                  key={filter}
-                  onClick={() => setQueueFilter(filter)}
-                  className={`flex-1 py-1 px-2 rounded-lg text-[11px] font-semibold transition-all ${
-                    queueFilter === filter
-                      ? "bg-[#142B52] text-white"
-                      : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-100"
-                  }`}
-                >
-                  {filter}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Queue List */}
-          <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
-            {queueLeads.map((lead) => {
-              const isSelected = lead.id === selectedLeadId;
+      {/* 3. Filters & Search Bar */}
+      <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-soft space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+          {/* Staff Filter */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-xs font-bold text-slate-500 mr-1 flex items-center gap-1">
+              <User className="w-3.5 h-3.5" />
+              <span>Staff:</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => setOwnerStaffFilter("All")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                ownerStaffFilter === "All"
+                  ? "bg-[#142B52] text-white shadow-xs"
+                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+              }`}
+            >
+              All Staff ({ownerTotalCalls})
+            </button>
+            {WEGROW_STAFF_MEMBERS.map((staff) => {
+              const count = allCalls.filter((c) => c.callerName && c.callerName.includes(staff)).length;
+              const isSelected = ownerStaffFilter === staff;
               return (
-                <div
-                  key={lead.id}
-                  onClick={() => {
-                    setSelectedLeadId(lead.id);
-                    setActiveCallLead(lead);
-                    if (isCallConnected) handleEndCall();
-                  }}
-                  className={`p-3.5 cursor-pointer transition-all ${
+                <button
+                  key={staff}
+                  type="button"
+                  onClick={() => setOwnerStaffFilter(staff)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                     isSelected
-                      ? "bg-[#FDF8ED] border-l-4 border-l-[#D5A52B]"
-                      : "hover:bg-slate-50"
+                      ? "bg-[#142B52] text-white shadow-xs"
+                      : "bg-slate-100 text-slate-700 hover:bg-slate-200"
                   }`}
                 >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="text-xs font-bold text-slate-900 leading-tight">
-                        {lead.studentName}
-                      </p>
-                      <p className="text-[11px] text-slate-500 font-mono mt-0.5">
-                        {lead.phone}
-                      </p>
-                    </div>
-                    <StatusBadge status={lead.priority} type="priority" />
-                  </div>
+                  {staff} ({count})
+                </button>
+              );
+            })}
+          </div>
 
-                  <p className="text-[11px] text-slate-600 font-medium truncate mt-1.5">
-                    {lead.courseInterested}
-                  </p>
-
-                  <div className="mt-2 flex items-center justify-between text-[10px] text-slate-400">
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3 h-3 text-[#D5A52B]" />
-                      Follow-up: {lead.nextFollowUpTime || "11:00 AM"}
-                    </span>
-                    <span className="text-slate-500 font-semibold">{lead.status}</span>
-                  </div>
-                </div>
+          {/* Status Filter */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-bold text-slate-500 mr-1 flex items-center gap-1">
+              <Filter className="w-3.5 h-3.5" />
+              <span>Call Status:</span>
+            </span>
+            {(["All", "Attended", "Not Attended"] as const).map((st) => {
+              const isSelected = ownerStatusFilter === st;
+              return (
+                <button
+                  key={st}
+                  type="button"
+                  onClick={() => setOwnerStatusFilter(st)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    isSelected
+                      ? st === "Attended"
+                        ? "bg-emerald-600 text-white"
+                        : st === "Not Attended"
+                        ? "bg-rose-600 text-white"
+                        : "bg-slate-800 text-white"
+                      : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                  }`}
+                >
+                  {st === "All" ? "All" : st === "Attended" ? "🟢 Attended" : "🔴 Not Attended / Rejected"}
+                </button>
               );
             })}
           </div>
         </div>
 
-        {/* Right Side: Selected Lead Details & Calling Workspace (7 Cols) */}
-        <div className="lg:col-span-7 space-y-4">
-          {/* Selected Lead Profile Card */}
-          <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-soft">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-lg font-bold text-slate-900">
-                    {selectedLead?.studentName}
-                  </h3>
-                  <StatusBadge status={selectedLead?.priority} type="priority" />
-                </div>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Interested in: <strong className="text-slate-800">{selectedLead?.courseInterested}</strong>
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                {/* Direct Call & End Call Button in Lead Banner: Strictly Green when idle, Strictly Red when in call */}
-                {isCallConnected || callPhase !== "idle" ? (
-                  <button
-                    type="button"
-                    onClick={handleEndCall}
-                    className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-transform active:scale-95 animate-pulse"
-                    title="End Call in MicroSIP (Cut Call)"
-                  >
-                    <PhoneOff className="w-3.5 h-3.5" />
-                    <span>Cut Call ({callPhase === "ringing" ? "Ringing..." : formatTimer(callDuration)})</span>
-                  </button>
-                ) : !telephonyStatus.connected && telephonyStatus.status === "wifi_disconnected" ? (
-                  <button
-                    type="button"
-                    onClick={() => reconnectTelephony()}
-                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-transform active:scale-95"
-                    title="JioFiber Wi-Fi disconnected. Click to sync."
-                  >
-                    <WifiOff className="w-3.5 h-3.5" />
-                    <span>Sync Office Wi-Fi</span>
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleStartCall}
-                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-transform active:scale-95"
-                    title="Call via MicroSIP in Background"
-                  >
-                    <Phone className="w-3.5 h-3.5 fill-white" />
-                    <span>Call Lead</span>
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => openAiCallModal(selectedLead, selectedLead?.phone, false)}
-                  className="px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-transform active:scale-95"
-                  title="Call using Gemini AI Voice Counselor"
-                >
-                  <Bot className="w-3.5 h-3.5 text-emerald-200" />
-                  <span>AI Voice Call</span>
-                </button>
-
-                <Link
-                  href={`/leads/${selectedLead?.id}`}
-                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold"
-                >
-                  Full Profile
-                </Link>
-                <Link
-                  href="/whatsapp"
-                  className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-semibold flex items-center gap-1"
-                >
-                  <MessageSquare className="w-3.5 h-3.5" />
-                  WhatsApp
-                </Link>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 text-xs">
-              <div className="bg-slate-50 p-2.5 rounded-xl">
-                <span className="text-slate-400 block text-[10px]">Phone Number</span>
-                <span className="font-bold text-slate-800 font-mono">{selectedLead?.phone}</span>
-              </div>
-              <div className="bg-slate-50 p-2.5 rounded-xl">
-                <span className="text-slate-400 block text-[10px]">Lead Source</span>
-                <span className="font-semibold text-slate-800">{selectedLead?.leadSource}</span>
-              </div>
-              <div className="bg-slate-50 p-2.5 rounded-xl">
-                <span className="text-slate-400 block text-[10px]">Previous Calls</span>
-                <span className="font-bold text-[#142B52]">{selectedLead?.callCount} calls logged</span>
-              </div>
-              <div className="bg-slate-50 p-2.5 rounded-xl">
-                <span className="text-slate-400 block text-[10px]">City / Location</span>
-                <span className="font-semibold text-slate-800">{selectedLead?.city || "Tamil Nadu"}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Softphone Calling Station (Exact Replica of Image 3) */}
-          <div className="bg-white rounded-2xl p-6 border border-slate-200/90 shadow-soft">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-base font-bold text-slate-900 tracking-tight">
-                  Softphone Calling Station
-                </h3>
-                <p className="text-xs text-slate-400">
-                  Live dialer with call outcome logging
-                </p>
-              </div>
-
-              {/* Dynamic Telephony & Wi-Fi Presence Badge */}
-              {telephonyStatus.connected ? (
-                <button
-                  type="button"
-                  onClick={() => reconnectTelephony()}
-                  className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold shadow-xs hover:bg-emerald-100 transition-all"
-                  title="Click to refresh connection"
-                >
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-sm" />
-                  <span>JioFiber Online</span>
-                </button>
-              ) : telephonyStatus.status === "wifi_disconnected" ? (
-                <button
-                  type="button"
-                  onClick={() => reconnectTelephony()}
-                  className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold shadow-xs animate-pulse hover:bg-rose-100 transition-all"
-                  title="Click to sync office Wi-Fi"
-                >
-                  <WifiOff className="w-3 h-3 text-rose-600" />
-                  <span>Sync Office Wi-Fi</span>
-                </button>
-              ) : (
-                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-xs font-bold shadow-xs">
-                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                  <span>Connecting...</span>
-                </div>
-              )}
-            </div>
-
-            {/* Black Calling Station Card */}
-            <div className="bg-[#142B52] text-white rounded-3xl p-6 text-center space-y-3 shadow-md">
-              <div className="w-16 h-16 rounded-full bg-[#E5B842] text-[#142B52] font-black text-2xl flex items-center justify-center mx-auto shadow-md">
-                {selectedLead?.studentName.charAt(0) || "V"}
-              </div>
-
-              <div>
-                <h4 className="text-base font-bold text-white tracking-tight">
-                  {selectedLead?.studentName}
-                </h4>
-                <p className="text-xs text-slate-300 font-mono mt-0.5">
-                  {selectedLead?.phone}
-                </p>
-              </div>
-
-              {/* Softphone Status & Timer */}
-              <div className="flex flex-col items-center gap-1.5 pt-0.5 min-h-[32px]">
-                {callPhase === "ringing" ? (
-                  <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-300 text-xs font-bold animate-pulse">
-                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-                    <span>Ringing Student&apos;s Phone...</span>
-                  </span>
-                ) : isCallConnected || callPhase === "connected" ? (
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
-                    <span className="text-sm font-mono font-bold text-emerald-400 tracking-wider">
-                      Live Call Active • {formatTimer(callDuration)}
-                    </span>
-                  </div>
-                ) : lastCallDuration ? (
-                  <span className="text-sm font-mono font-bold text-[#E5B842] tracking-wider">
-                    Call Ended • {lastCallDuration}
-                  </span>
-                ) : (
-                  <span className="text-sm font-mono font-bold text-slate-300 tracking-wider">
-                    00:00 • Ready to Call
-                  </span>
-                )}
-              </div>
-
-              {/* Station Call & Cut Button: Strictly Green when idle, Strictly Red when in call */}
-              <div className="pt-1 flex items-center justify-center gap-2">
-                {isCallConnected || callPhase !== "idle" ? (
-                  <button
-                    type="button"
-                    onClick={handleEndCall}
-                    className="px-8 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-full font-bold text-sm shadow-md transition-transform active:scale-95 flex items-center gap-2 animate-pulse"
-                    title="End Call / Cut Call in MicroSIP"
-                  >
-                    <PhoneOff className="w-4 h-4" />
-                    <span>Cut Call (Hangup)</span>
-                  </button>
-                ) : !telephonyStatus.connected && telephonyStatus.status === "wifi_disconnected" ? (
-                  <button
-                    type="button"
-                    onClick={() => reconnectTelephony()}
-                    className="px-8 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-full font-bold text-sm shadow-md transition-transform active:scale-95 flex items-center justify-center gap-2"
-                    title="JioFiber Wi-Fi is disconnected. Click to sync."
-                  >
-                    <WifiOff className="w-4 h-4" />
-                    <span>Sync Office Jio Wi-Fi</span>
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleStartCall}
-                    className="px-8 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full font-bold text-sm shadow-md transition-transform active:scale-95 flex items-center justify-center gap-2"
-                    title="Call via JioFiber MicroSIP in Background"
-                  >
-                    <Phone className="w-4 h-4 fill-white" />
-                    <span>Call via MicroSIP</span>
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Call Outcome Disposition: */}
-            <div className="mt-5 space-y-2.5">
-              <label className="block text-xs font-bold text-slate-800">
-                Call Outcome Disposition:
-              </label>
-
-              <div className="grid grid-cols-3 gap-2">
-                {["Interested", "Busy", "Call Later", "Not Answered", "Counselling", "Lost"].map((opt) => (
-                  <button
-                    key={opt}
-                    type="button"
-                    onClick={() => setSelectedOutcome(opt)}
-                    className={`py-2 px-3 rounded-xl text-xs font-semibold border transition-all text-center ${
-                      selectedOutcome === opt
-                        ? "bg-[#142B52] text-white border-[#142B52] shadow-xs"
-                        : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-                    }`}
-                  >
-                    {opt}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Remarks / Callback Notes: */}
-            <div className="mt-4">
-              <label className="block text-xs font-bold text-slate-800 mb-1">
-                Remarks / Callback Notes:
-              </label>
-              <textarea
-                rows={3}
-                value={callRemarks}
-                onChange={(e) => setCallRemarks(e.target.value)}
-                placeholder="e.g. Student interested in weekend GenAI batch..."
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#142B52]/20 resize-none"
-              />
-            </div>
-
-            {/* Save Disposition & Advance Queue Button */}
-            <div className="mt-5">
-              <button
-                type="button"
-                onClick={handleSaveCall}
-                className="w-full py-3 bg-[#142B52] hover:bg-[#1E3B6E] text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-[#142B52]/20 text-center"
-              >
-                Save Disposition & Advance Queue
-              </button>
-            </div>
-          </div>
+        {/* Search Input */}
+        <div className="relative">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+          <input
+            type="text"
+            value={ownerSearch}
+            onChange={(e) => setOwnerSearch(e.target.value)}
+            placeholder="Search student name, phone (+91...), staff member, course, or callback notes..."
+            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#142B52]/20 font-medium"
+          />
         </div>
+      </div>
+
+      {/* 4. Live Call Audit Feed / Logs */}
+      <div className="bg-white rounded-2xl p-6 border border-slate-200/90 shadow-soft space-y-4">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center font-bold">
+              <Clock className="w-4 h-4 text-purple-600" />
+            </div>
+            <div>
+              <h3 className="font-bold text-sm text-slate-900">
+                Staff Telecalling Audit Feed ({filteredOwnerCalls.length} Calls)
+              </h3>
+              <p className="text-[11px] text-slate-400">
+                Detailed inspection of call outcome, spoken duration, staff handler, and student responses
+              </p>
+            </div>
+          </div>
+
+          <span className="text-xs text-slate-500 font-semibold">
+            Showing {filteredOwnerCalls.length} of {ownerTotalCalls} calls
+          </span>
+        </div>
+
+        {filteredOwnerCalls.length === 0 ? (
+          <div className="py-12 text-center text-slate-400 text-xs bg-slate-50/70 rounded-xl border border-dashed border-slate-200">
+            <PhoneCall className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+            <p className="font-bold text-slate-700 text-sm">No calls found</p>
+            <p className="text-xs text-slate-400 mt-1">Try adjusting your staff or call status filter above.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filteredOwnerCalls.map((call, idx) => {
+              const attended = isCallAttended(call);
+              const displayStatus = attended ? "Attended Call" : "Not Attended Call";
+              const mindsetVal = call.mindset || (call.outcome !== "Attended Call" && call.outcome !== "Not Attended Call" ? call.outcome : null);
+
+              return (
+                <div
+                  key={`${call.leadId}-${call.id || "call"}-${idx}`}
+                  className="p-4 rounded-xl bg-slate-50/80 hover:bg-slate-100/90 border border-slate-200/80 transition-all space-y-3 text-xs"
+                >
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                    {/* Left: Student Name & Course */}
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-[#142B52] text-[#E5B842] font-black text-sm flex items-center justify-center shadow-xs shrink-0">
+                        {call.studentName.charAt(0) || "S"}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-bold text-slate-900 text-sm">{call.studentName}</h4>
+                          <span className="font-mono text-xs font-semibold text-slate-600 bg-white px-2 py-0.5 rounded border border-slate-200">
+                            {call.studentPhone}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          Course: <strong className="text-slate-700">{call.studentCourse}</strong>
+                        </p>
+                        {(call.qualification || call.collegeName) && (
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[11px]">
+                            {call.qualification && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-900 border border-amber-200/80 font-bold">
+                                <GraduationCap className="w-3 h-3 text-amber-600" />
+                                <span>{call.qualification}</span>
+                                {call.passedOutYear && <span className="text-amber-800">({call.passedOutYear})</span>}
+                              </span>
+                            )}
+                            {call.collegeName && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 font-semibold">
+                                <span>🏛️ {call.collegeName}</span>
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Right: Badges */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/* Speaked Staff Name Badge */}
+                      <span className="px-3 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-900 border border-purple-200 flex items-center gap-1.5 shadow-xs">
+                        <User className="w-3.5 h-3.5 text-purple-700" />
+                        <span>Caller: <strong>{call.callerName || "Staff"}</strong></span>
+                      </span>
+
+                      {/* Attended vs Not Attended */}
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-xs ${
+                          attended
+                            ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                            : "bg-rose-100 text-rose-800 border border-rose-300"
+                        }`}
+                      >
+                        <span
+                          className={`w-2 h-2 rounded-full ${
+                            attended ? "bg-emerald-500 animate-pulse" : "bg-rose-500"
+                          }`}
+                        />
+                        {displayStatus}
+                      </span>
+
+                      {/* Spoken Duration */}
+                      <span className="px-2.5 py-1 rounded-lg font-mono font-bold text-xs bg-emerald-600 text-white shadow-xs">
+                        ⏱️ {call.duration || "00:00"}
+                      </span>
+
+                      {/* Timeline */}
+                      <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-600 bg-white px-2.5 py-1 rounded-md border border-slate-200">
+                        <Clock className="w-3 h-3 text-slate-400" />
+                        <span className="font-semibold text-slate-700">
+                          {getCallTimeRange(call)}
+                        </span>
+                        <span className="text-slate-300">•</span>
+                        <span className="text-slate-500">{call.callDate}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bottom: Mindset & Staff Notes + Action Buttons */}
+                  <div className="flex flex-wrap items-center justify-between pt-2 border-t border-slate-200/70 text-[11px] gap-2">
+                    <div className="flex items-center gap-2">
+                      {mindsetVal && (
+                        <span className="px-2.5 py-0.5 rounded-full bg-[#142B52]/10 text-[#142B52] font-bold">
+                          Mindset: {mindsetVal}
+                        </span>
+                      )}
+                      <span className="text-slate-500">
+                        Inquiry handled by <strong className="text-slate-700">{call.callerName || "Staff"}</strong>
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {call.remarks && (
+                        <p className="text-slate-700 italic max-w-md truncate mr-2">
+                          &quot;{call.remarks}&quot;
+                        </p>
+                      )}
+                      <a
+                        href={`https://wa.me/91${call.studentPhone.replace(/\D/g, "").slice(-10)}?text=${encodeURIComponent(
+                          `Hello ${call.studentName}, greeting from Wegrow Academy.`
+                        )}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold flex items-center gap-1 shadow-xs transition-colors cursor-pointer"
+                        title="Open WhatsApp Chat"
+                      >
+                        <MessageSquare className="w-3 h-3" />
+                        <span>WhatsApp</span>
+                      </a>
+                      <Link
+                        href={`/leads/${call.leadId}`}
+                        className="px-2.5 py-1 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-lg font-bold transition-colors"
+                      >
+                        Profile
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -131,6 +131,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             icon: Users2,
           },
           {
+            title: "Calls Oversight & Audit",
+            href: "/calls",
+            icon: PhoneCall,
+            highlight: true,
+          },
+          {
             title: "Team Performance",
             href: "/team",
             icon: Trophy,
@@ -348,7 +354,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="relative">
               <img
                 src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80"
-                alt="Priya Sharma"
+                alt="Active User Profile"
                 className="w-9 h-9 rounded-full object-cover ring-2 ring-[#D5A52B]/80 flex-shrink-0"
               />
               <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-[#142B52]" />
@@ -358,7 +364,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
                   <p className="text-sm font-semibold text-white truncate leading-tight">
-                    Priya Sharma
+                    {activeUserRole === "Owner" || activeUserRole === "Owner / MD"
+                      ? "Thavabalan"
+                      : activeUserRole === "Admin"
+                      ? "LakshmiPriya (GM)"
+                      : activeUserRole === "HR"
+                      ? "Gopi (HR)"
+                      : "Muthumeena (Head)"}
                   </p>
                   <Sparkles className="w-3 h-3 text-[#D5A52B] flex-shrink-0" />
                 </div>
