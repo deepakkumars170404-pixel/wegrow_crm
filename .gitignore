@@ -49,6 +49,9 @@ desktop.ini
 *.swp
 *.swo
 
+# Android APK
+*.apk
+
 # Antigravity / Gemini temporary files
 .gemini/
 
