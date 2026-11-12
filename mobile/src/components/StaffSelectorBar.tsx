@@ -102,21 +102,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
-    backgroundColor: THEME.colors.surfaceLight,
+    backgroundColor: "#F1F5F9",
     borderWidth: 1,
-    borderColor: THEME.colors.border,
+    borderColor: "#E2E8F0",
   },
   staffChipActive: {
-    backgroundColor: THEME.colors.gold,
-    borderColor: THEME.colors.gold,
+    backgroundColor: "#2563EB",
+    borderColor: "#1D4ED8",
   },
   staffText: {
     fontSize: 12,
     fontWeight: "600",
-    color: THEME.colors.textSecondary,
+    color: "#475569",
   },
   staffTextActive: {
-    color: "#0B1528",
+    color: "#FFFFFF",
     fontWeight: "800",
   },
 });

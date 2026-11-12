@@ -238,15 +238,15 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   syncBtn: {
-    backgroundColor: THEME.colors.surface,
+    backgroundColor: "#EFF6FF",
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: THEME.colors.gold,
+    borderColor: "#BFDBFE",
   },
   syncBtnText: {
-    color: THEME.colors.gold,
+    color: "#1D4ED8",
     fontSize: 12,
     fontWeight: "bold",
   },

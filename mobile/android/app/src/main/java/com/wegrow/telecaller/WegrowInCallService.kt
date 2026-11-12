@@ -126,6 +126,44 @@ class WegrowInCallService : InCallService() {
             return false
         }
 
+        fun holdCurrentCall(): Boolean {
+            currentCall?.let {
+                try {
+                    it.hold()
+                    return true
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to hold call", e)
+                }
+            }
+            return false
+        }
+
+        fun unholdCurrentCall(): Boolean {
+            currentCall?.let {
+                try {
+                    it.unhold()
+                    return true
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to unhold call", e)
+                }
+            }
+            return false
+        }
+
+        fun mergeConference(): Boolean {
+            val call = currentCall ?: return false
+            try {
+                val conf = call.conferenceableCalls
+                if (conf != null && conf.isNotEmpty()) {
+                    call.conference(conf[0])
+                    return true
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to conference calls", e)
+            }
+            return false
+        }
+
         fun resolveContactName(context: Context, phoneNumber: String): String {
             if (phoneNumber.isBlank()) return ""
             var name = ""

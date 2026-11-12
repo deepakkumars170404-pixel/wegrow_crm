@@ -1117,7 +1117,7 @@ export const CallModal: React.FC<CallModalProps> = ({
               activeOpacity={0.8}
             >
               {saving ? (
-                <ActivityIndicator color="#0A1128" />
+                <ActivityIndicator color="#FFFFFF" />
               ) : (
                 <Text style={styles.saveText}>
                   {isExistingStudent
@@ -1136,7 +1136,7 @@ export const CallModal: React.FC<CallModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.85)",
+    backgroundColor: "rgba(15, 23, 42, 0.65)",
     justifyContent: "flex-end",
   },
   container: {
@@ -1146,7 +1146,7 @@ const styles = StyleSheet.create({
     maxHeight: "94%",
     padding: 16,
     borderTopWidth: 2,
-    borderTopColor: THEME.colors.gold,
+    borderTopColor: "#2563EB",
   },
   header: {
     flexDirection: "row",
@@ -1180,13 +1180,13 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   liveClockBanner: {
-    backgroundColor: "#0d1b2a",
+    backgroundColor: "#EFF6FF",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
     marginTop: 8,
     borderWidth: 1,
-    borderColor: "#1e3a8a",
+    borderColor: "#BFDBFE",
   },
   liveClockRow: {
     flexDirection: "row",
@@ -1196,7 +1196,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   liveClockText: {
-    color: THEME.colors.gold,
+    color: "#1D4ED8",
     fontSize: 11,
     fontWeight: "bold",
     fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
@@ -1290,20 +1290,20 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   academicCard: {
-    backgroundColor: "#0d1b2a",
+    backgroundColor: "#F8FAFC",
     padding: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#1e3a8a",
+    borderColor: "#E2E8F0",
     marginVertical: 6,
   },
   registeredCard: {
-    backgroundColor: "#0d2137",
+    backgroundColor: "#ECFDF5",
     borderRadius: 12,
     padding: 14,
     marginVertical: 6,
     borderWidth: 1.5,
-    borderColor: THEME.colors.emerald,
+    borderColor: "#A7F3D0",
   },
   registeredCardHeader: {
     flexDirection: "row",
@@ -1312,7 +1312,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   registeredCardTitle: {
-    color: THEME.colors.emerald,
+    color: "#065F46",
     fontSize: 12,
     fontWeight: "bold",
     letterSpacing: 0.5,
@@ -1325,32 +1325,32 @@ const styles = StyleSheet.create({
     marginLeft: 6,
   },
   knownPillText: {
-    color: THEME.colors.emerald,
+    color: "#047857",
     fontSize: 9,
     fontWeight: "bold",
   },
   editToggleBtn: {
-    backgroundColor: THEME.colors.surfaceLight,
+    backgroundColor: "#F1F5F9",
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: THEME.colors.gold,
+    borderColor: "#CBD5E1",
   },
   editToggleText: {
-    color: THEME.colors.gold,
+    color: "#2563EB",
     fontSize: 10,
     fontWeight: "bold",
   },
   registeredInfoBox: {
-    backgroundColor: THEME.colors.surface,
+    backgroundColor: "#FFFFFF",
     padding: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: THEME.colors.border,
+    borderColor: "#E2E8F0",
   },
   registeredName: {
-    color: "#FFFFFF",
+    color: "#0F172A",
     fontSize: 16,
     fontWeight: "bold",
   },
@@ -1471,19 +1471,24 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   dropdownContainer: {
-    backgroundColor: "#111827",
+    backgroundColor: "#FFFFFF",
     borderWidth: 1.5,
-    borderColor: THEME.colors.gold,
+    borderColor: "#2563EB",
     borderRadius: 10,
     marginTop: 4,
     marginBottom: 8,
     overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   dropdownHeader: {
-    color: THEME.colors.gold,
+    color: "#2563EB",
     fontSize: 10,
     padding: 6,
-    backgroundColor: "#1f2937",
+    backgroundColor: "#EFF6FF",
     fontWeight: "bold",
   },
   dropdownScrollView: {
@@ -1493,7 +1498,7 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#374151",
+    borderBottomColor: "#F1F5F9",
   },
   dropdownItemText: {
     color: THEME.colors.textPrimary,
@@ -1508,7 +1513,7 @@ const styles = StyleSheet.create({
   dropdownCloseBtn: {
     paddingVertical: 7,
     alignItems: "center",
-    backgroundColor: "#1e293b",
+    backgroundColor: "#F8FAFC",
   },
   dropdownCloseText: {
     color: THEME.colors.textMuted,
@@ -1532,7 +1537,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(239, 68, 68, 0.4)",
   },
   clearFollowUpText: {
-    color: "#f87171",
+    color: "#EF4444",
     fontSize: 10,
     fontWeight: "700",
   },
@@ -1555,7 +1560,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   pickerSection: {
-    backgroundColor: "#131f37",
+    backgroundColor: "#F8FAFC",
     padding: 8,
     borderRadius: 8,
     borderWidth: 1,
@@ -1576,12 +1581,12 @@ const styles = StyleSheet.create({
   pickerToggleBtn: {
     paddingHorizontal: 7,
     paddingVertical: 2,
-    backgroundColor: "#1e293b",
+    backgroundColor: "#F1F5F9",
     borderRadius: 5,
   },
   pickerToggleText: {
     fontSize: 10,
-    color: THEME.colors.gold,
+    color: "#2563EB",
     fontWeight: "600",
   },
   chipsScrollContainer: {
@@ -1590,7 +1595,7 @@ const styles = StyleSheet.create({
     paddingBottom: 2,
   },
   dateChip: {
-    backgroundColor: "#1e293b",
+    backgroundColor: "#F1F5F9",
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 6,
@@ -1598,16 +1603,16 @@ const styles = StyleSheet.create({
     borderColor: THEME.colors.border,
   },
   dateChipActive: {
-    backgroundColor: THEME.colors.gold,
-    borderColor: THEME.colors.gold,
+    backgroundColor: "#2563EB",
+    borderColor: "#1D4ED8",
   },
   dateChipText: {
     fontSize: 11,
-    color: THEME.colors.textPrimary,
+    color: THEME.colors.textSecondary,
     fontWeight: "600",
   },
   dateChipTextActive: {
-    color: "#0A1128",
+    color: "#FFFFFF",
     fontWeight: "bold",
   },
   calendarContainer: {
@@ -1628,7 +1633,7 @@ const styles = StyleSheet.create({
   dayCard: {
     width: 44,
     height: 54,
-    backgroundColor: "#1e293b",
+    backgroundColor: "#F1F5F9",
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
@@ -1636,8 +1641,8 @@ const styles = StyleSheet.create({
     borderColor: THEME.colors.border,
   },
   dayCardActive: {
-    backgroundColor: THEME.colors.gold,
-    borderColor: THEME.colors.gold,
+    backgroundColor: "#2563EB",
+    borderColor: "#1D4ED8",
   },
   dayCardDayName: {
     fontSize: 9,
@@ -1655,10 +1660,10 @@ const styles = StyleSheet.create({
     color: THEME.colors.textSecondary,
   },
   dayCardTextActive: {
-    color: "#0A1128",
+    color: "#FFFFFF",
   },
   timeChip: {
-    backgroundColor: "#1e293b",
+    backgroundColor: "#F1F5F9",
     paddingHorizontal: 9,
     paddingVertical: 6,
     borderRadius: 6,
@@ -1666,16 +1671,16 @@ const styles = StyleSheet.create({
     borderColor: THEME.colors.border,
   },
   timeChipActive: {
-    backgroundColor: THEME.colors.gold,
-    borderColor: THEME.colors.gold,
+    backgroundColor: "#2563EB",
+    borderColor: "#1D4ED8",
   },
   timeChipText: {
     fontSize: 11,
-    color: THEME.colors.textPrimary,
+    color: THEME.colors.textSecondary,
     fontWeight: "600",
   },
   timeChipTextActive: {
-    color: "#0A1128",
+    color: "#FFFFFF",
     fontWeight: "bold",
   },
   clockPickerContainer: {
@@ -1700,7 +1705,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   amPmBtn: {
-    backgroundColor: "#1e293b",
+    backgroundColor: "#F1F5F9",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
@@ -1708,16 +1713,16 @@ const styles = StyleSheet.create({
     borderColor: THEME.colors.border,
   },
   amPmBtnActive: {
-    backgroundColor: THEME.colors.gold,
-    borderColor: THEME.colors.gold,
+    backgroundColor: "#2563EB",
+    borderColor: "#1D4ED8",
   },
   amPmBtnText: {
     fontSize: 10,
-    color: THEME.colors.textPrimary,
+    color: THEME.colors.textSecondary,
     fontWeight: "600",
   },
   amPmBtnTextActive: {
-    color: "#0A1128",
+    color: "#FFFFFF",
     fontWeight: "bold",
   },
   clockRowTitle: {
@@ -1735,7 +1740,7 @@ const styles = StyleSheet.create({
   clockHourBtn: {
     width: 32,
     height: 32,
-    backgroundColor: "#1e293b",
+    backgroundColor: "#F1F5F9",
     borderRadius: 6,
     alignItems: "center",
     justifyContent: "center",
@@ -1743,8 +1748,8 @@ const styles = StyleSheet.create({
     borderColor: THEME.colors.border,
   },
   clockHourBtnActive: {
-    backgroundColor: THEME.colors.gold,
-    borderColor: THEME.colors.gold,
+    backgroundColor: "#2563EB",
+    borderColor: "#1D4ED8",
   },
   clockHourText: {
     fontSize: 11,
@@ -1752,7 +1757,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   clockHourTextActive: {
-    color: "#0A1128",
+    color: "#FFFFFF",
     fontWeight: "bold",
   },
   clockMinuteRow: {
@@ -1763,7 +1768,7 @@ const styles = StyleSheet.create({
   clockMinBtn: {
     flex: 1,
     paddingVertical: 6,
-    backgroundColor: "#1e293b",
+    backgroundColor: "#F1F5F9",
     borderRadius: 6,
     alignItems: "center",
     justifyContent: "center",
@@ -1771,8 +1776,8 @@ const styles = StyleSheet.create({
     borderColor: THEME.colors.border,
   },
   clockMinBtnActive: {
-    backgroundColor: THEME.colors.gold,
-    borderColor: THEME.colors.gold,
+    backgroundColor: "#2563EB",
+    borderColor: "#1D4ED8",
   },
   clockMinText: {
     fontSize: 11,
@@ -1780,29 +1785,29 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   clockMinTextActive: {
-    color: "#0A1128",
+    color: "#FFFFFF",
     fontWeight: "bold",
   },
   row: {
     flexDirection: "row",
   },
   input: {
-    backgroundColor: THEME.colors.surface,
+    backgroundColor: "#F8FAFC",
     color: THEME.colors.textPrimary,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: THEME.colors.border,
+    borderColor: "#CBD5E1",
     fontSize: 12,
   },
   textArea: {
-    backgroundColor: THEME.colors.surface,
+    backgroundColor: "#F8FAFC",
     color: THEME.colors.textPrimary,
     borderRadius: 8,
     padding: 10,
     borderWidth: 1,
-    borderColor: THEME.colors.border,
+    borderColor: "#CBD5E1",
     fontSize: 12,
     textAlignVertical: "top",
     minHeight: 55,
@@ -1825,18 +1830,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   saveButton: {
-    backgroundColor: THEME.colors.gold,
+    backgroundColor: "#2563EB",
     paddingVertical: 10,
     paddingHorizontal: 20,
     borderRadius: 10,
-    shadowColor: "#000",
+    shadowColor: "#2563EB",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
-    shadowRadius: 3,
+    shadowRadius: 4,
     elevation: 3,
   },
   saveText: {
-    color: "#0A1128",
+    color: "#FFFFFF",
     fontSize: 13,
     fontWeight: "bold",
   },

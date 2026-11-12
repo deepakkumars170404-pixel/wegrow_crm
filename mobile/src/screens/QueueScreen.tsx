@@ -248,15 +248,15 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   liveClockBadge: {
-    backgroundColor: "#0d1b2a",
+    backgroundColor: "#EFF6FF",
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: THEME.colors.gold,
+    borderColor: "#BFDBFE",
   },
   liveClockText: {
-    color: THEME.colors.gold,
+    color: "#1D4ED8",
     fontSize: 11,
     fontWeight: "bold",
     fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",

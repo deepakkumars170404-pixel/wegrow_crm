@@ -218,6 +218,36 @@ class WegrowTelephonyModule(private val reactContext: ReactApplicationContext) :
     }
 
     @ReactMethod
+    fun holdCall(promise: Promise) {
+        try {
+            val res = WegrowInCallService.holdCurrentCall()
+            promise.resolve(res)
+        } catch (e: Exception) {
+            promise.reject("HOLD_FAILED", e.message)
+        }
+    }
+
+    @ReactMethod
+    fun unholdCall(promise: Promise) {
+        try {
+            val res = WegrowInCallService.unholdCurrentCall()
+            promise.resolve(res)
+        } catch (e: Exception) {
+            promise.reject("UNHOLD_FAILED", e.message)
+        }
+    }
+
+    @ReactMethod
+    fun mergeCalls(promise: Promise) {
+        try {
+            val res = WegrowInCallService.mergeConference()
+            promise.resolve(res)
+        } catch (e: Exception) {
+            promise.reject("MERGE_FAILED", e.message)
+        }
+    }
+
+    @ReactMethod
     fun getContactName(phoneNumber: String, promise: Promise) {
         try {
             val name = WegrowInCallService.resolveContactName(reactContext, phoneNumber)

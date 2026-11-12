@@ -145,6 +145,39 @@ export const TelephonyService = {
     return false;
   },
 
+  async holdCall(): Promise<boolean> {
+    if (Platform.OS === "android" && WegrowTelephony?.holdCall) {
+      try {
+        return await WegrowTelephony.holdCall();
+      } catch (err) {
+        console.warn("WegrowTelephony holdCall error:", err);
+      }
+    }
+    return false;
+  },
+
+  async unholdCall(): Promise<boolean> {
+    if (Platform.OS === "android" && WegrowTelephony?.unholdCall) {
+      try {
+        return await WegrowTelephony.unholdCall();
+      } catch (err) {
+        console.warn("WegrowTelephony unholdCall error:", err);
+      }
+    }
+    return false;
+  },
+
+  async mergeCalls(): Promise<boolean> {
+    if (Platform.OS === "android" && WegrowTelephony?.mergeCalls) {
+      try {
+        return await WegrowTelephony.mergeCalls();
+      } catch (err) {
+        console.warn("WegrowTelephony mergeCalls error:", err);
+      }
+    }
+    return false;
+  },
+
   async getContactName(phoneNumber: string): Promise<string> {
     if (Platform.OS === "android" && WegrowTelephony?.getContactName) {
       try {

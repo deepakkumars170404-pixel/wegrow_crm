@@ -57,7 +57,7 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar style="light" backgroundColor={THEME.colors.background} />
+      <StatusBar style="dark" backgroundColor="#FFFFFF" />
 
       {/* 1 Phone / 5 Staff Quick Selector Header */}
       <StaffSelectorBar onStaffChanged={(staff) => setActiveStaff(staff)} />
