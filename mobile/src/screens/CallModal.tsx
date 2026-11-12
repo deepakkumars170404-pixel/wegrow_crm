@@ -19,6 +19,7 @@ import { StorageService } from "../services/storage";
 import { DEGREES_LIST, TN_COLLEGES_LIST } from "../data/academicData";
 import { WEGROW_INSTITUTE_COURSES, WegrowCourseItem } from "../data/instituteCourses";
 import { LiveClock } from "../components/LiveClock";
+import { User, UserCheck, Sparkles, GraduationCap, Building2, XCircle, Clock, PhoneMissed, Check, Calendar, Phone } from "lucide-react-native";
 
 interface CallModalProps {
   visible: boolean;
@@ -346,7 +347,10 @@ export const CallModal: React.FC<CallModalProps> = ({
           >
             {/* 1. STAFF SELECTION (Who Took The Inquiry?) */}
             <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionLabel}>1. SELECT STAFF (WHO TOOK THE INQUIRY?)</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <User size={15} color="#2563EB" />
+                <Text style={styles.sectionLabel}>1. SELECT STAFF (WHO TOOK THE INQUIRY?)</Text>
+              </View>
               <Text style={styles.selectedBadgeText}>Active: {selectedStaff}</Text>
             </View>
             <View style={styles.staffGrid}>
@@ -363,7 +367,11 @@ export const CallModal: React.FC<CallModalProps> = ({
                     }}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.staffIcon}>{isSelected ? "👤" : "▫️"}</Text>
+                    {isSelected ? (
+                      <UserCheck size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
+                    ) : (
+                      <User size={14} color="#64748B" style={{ marginRight: 6 }} />
+                    )}
                     <Text style={[styles.staffText, isSelected && styles.staffTextActive]}>
                       {staff}
                     </Text>
@@ -1218,17 +1226,15 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   sectionLabel: {
-    color: THEME.colors.gold,
-    fontSize: 11,
+    color: "#0F172A",
+    fontSize: 12,
     fontWeight: "bold",
-    letterSpacing: 0.8,
-    marginBottom: 6,
-    marginTop: 6,
+    letterSpacing: 0.5,
   },
   selectedBadgeText: {
-    color: THEME.colors.goldLight,
-    fontSize: 11,
-    fontWeight: "700",
+    color: "#2563EB",
+    fontSize: 12,
+    fontWeight: "800",
   },
   staffGrid: {
     flexDirection: "row",
@@ -1239,30 +1245,35 @@ const styles = StyleSheet.create({
   staffButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: THEME.colors.surface,
+    backgroundColor: "#F8FAFC",
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 10,
-    borderWidth: 1,
-    borderColor: THEME.colors.border,
+    borderWidth: 1.5,
+    borderColor: "#CBD5E1",
   },
   staffButtonActive: {
-    borderColor: THEME.colors.gold,
-    backgroundColor: THEME.colors.surfaceLight,
-    borderWidth: 2,
+    borderColor: "#1D4ED8",
+    backgroundColor: "#2563EB",
+    borderWidth: 1.5,
+    shadowColor: "#2563EB",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
   },
   staffIcon: {
     fontSize: 12,
     marginRight: 6,
   },
   staffText: {
-    color: THEME.colors.textSecondary,
-    fontSize: 12,
-    fontWeight: "600",
+    color: "#0F172A",
+    fontSize: 13,
+    fontWeight: "700",
   },
   staffTextActive: {
-    color: THEME.colors.goldLight,
-    fontWeight: "bold",
+    color: "#FFFFFF",
+    fontWeight: "800",
   },
   dispGrid: {
     flexDirection: "row",

@@ -8,6 +8,7 @@ import {
   RefreshControl,
   Alert,
 } from "react-native";
+import { RefreshCw, CheckCircle2, Clock, Check } from "lucide-react-native";
 import { THEME } from "../constants/theme";
 import { CallRecord, TelecallerStats } from "../types";
 import { StorageService } from "../services/storage";
@@ -96,9 +97,19 @@ export const DashboardScreen: React.FC = () => {
           <View style={styles.dispPill}>
             <Text style={styles.dispPillText}>{item.disposition}</Text>
           </View>
-          <Text style={[styles.syncStatus, item.syncedToCrm ? styles.synced : styles.pending]}>
-            {item.syncedToCrm ? "✓ Synced" : "⏳ Local"}
-          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            {item.syncedToCrm ? (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                <Check size={12} color={THEME.colors.emerald} strokeWidth={2.5} />
+                <Text style={[styles.syncStatus, styles.synced]}>Synced</Text>
+              </View>
+            ) : (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                <Clock size={12} color={THEME.colors.amber} strokeWidth={2} />
+                <Text style={[styles.syncStatus, styles.pending]}>Local</Text>
+              </View>
+            )}
+          </View>
         </View>
 
         {item.notes ? (
@@ -118,7 +129,8 @@ export const DashboardScreen: React.FC = () => {
           <Text style={styles.headerTitle}>Telecaller Dashboard</Text>
           <Text style={styles.headerSubtitle}>Daily Performance & Metrics</Text>
         </View>
-        <TouchableOpacity style={styles.syncBtn} onPress={handleSyncNow}>
+        <TouchableOpacity style={styles.syncBtn} onPress={handleSyncNow} activeOpacity={0.7}>
+          <RefreshCw size={13} color="#1D4ED8" strokeWidth={2.2} style={{ marginRight: 5 }} />
           <Text style={styles.syncBtnText}>Sync Cloud</Text>
         </TouchableOpacity>
       </View>
@@ -239,11 +251,13 @@ const styles = StyleSheet.create({
   },
   syncBtn: {
     backgroundColor: "#EFF6FF",
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "#BFDBFE",
+    flexDirection: "row",
+    alignItems: "center",
   },
   syncBtnText: {
     color: "#1D4ED8",

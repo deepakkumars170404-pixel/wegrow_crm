@@ -13,6 +13,23 @@ import {
   ScrollView,
 } from "react-native";
 import { THEME } from "../constants/theme";
+import {
+  Phone,
+  PhoneCall,
+  PhoneOff,
+  ChevronsLeft,
+  ChevronsRight,
+  Mic,
+  MicOff,
+  Volume2,
+  Grid3X3,
+  UserPlus,
+  Bell,
+  GraduationCap,
+  User,
+  X,
+  Delete,
+} from "lucide-react-native";
 import { TelephonyService, NativeCallStateEvent } from "../services/telephony";
 import { StorageService } from "../services/storage";
 import { Lead, StaffMember } from "../types";
@@ -314,12 +331,16 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({ onCallEnde
       <SafeAreaView style={styles.container}>
         {/* Top Header */}
         <View style={styles.topHeader}>
-          <Text style={styles.staffDutyBadge}>
-            👤 Staff on Duty: <Text style={{ color: "#2563EB", fontWeight: "800" }}>{activeStaff}</Text>
-          </Text>
+          <View style={styles.staffDutyBadge}>
+            <User size={13} color="#2563EB" style={{ marginRight: 5 }} />
+            <Text style={styles.staffDutyText}>
+              Staff on Duty: <Text style={{ color: "#2563EB", fontWeight: "800" }}>{activeStaff}</Text>
+            </Text>
+          </View>
           {matchedLead?.courseInterested ? (
             <View style={styles.courseBadge}>
-              <Text style={styles.courseBadgeText}>🎓 {matchedLead.courseInterested}</Text>
+              <GraduationCap size={13} color="#065F46" style={{ marginRight: 5 }} />
+              <Text style={styles.courseBadgeText}>{matchedLead.courseInterested}</Text>
             </View>
           ) : null}
         </View>
@@ -335,7 +356,11 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({ onCallEnde
             ]}
           >
             <View style={[styles.avatarInner, isIncoming ? styles.avatarIncoming : styles.avatarActive]}>
-              <Text style={styles.avatarIcon}>{isIncoming ? "🔔" : "📞"}</Text>
+              {isIncoming ? (
+                <Bell size={46} color="#FFFFFF" />
+              ) : (
+                <PhoneCall size={46} color="#FFFFFF" />
+              )}
             </View>
           </Animated.View>
 
@@ -381,30 +406,32 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({ onCallEnde
         {/* Bottom Control Controls */}
         <View style={styles.bottomArea}>
           {isIncoming && callState === "RINGING" ? (
-            /* Modern Swipe-to-Answer / Swipe-to-Decline Gesture Bar */
+            /* Modern Symmetrical Swipe-to-Answer / Swipe-to-Decline Gesture Bar */
             <View style={styles.swipeContainer}>
               <View style={styles.swipeTrack}>
-                {/* Left Decline Zone */}
+                {/* Left 50% Decline Zone */}
                 <TouchableOpacity
                   style={styles.leftTrackZone}
                   onPress={handleHangup}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.declineChevron}>««</Text>
+                  <PhoneOff size={18} color="#EF4444" strokeWidth={2.5} />
+                  <ChevronsLeft size={16} color="#EF4444" strokeWidth={2.5} />
                   <Text style={styles.declineText}>Decline</Text>
                 </TouchableOpacity>
 
-                {/* Right Attend Zone */}
+                {/* Right 50% Attend Zone */}
                 <TouchableOpacity
                   style={styles.rightTrackZone}
                   onPress={handleAnswer}
                   activeOpacity={0.7}
                 >
                   <Text style={styles.attendText}>Answer</Text>
-                  <Text style={styles.attendChevron}>»»</Text>
+                  <ChevronsRight size={16} color="#10B981" strokeWidth={2.5} />
+                  <PhoneCall size={18} color="#10B981" strokeWidth={2.5} />
                 </TouchableOpacity>
 
-                {/* Draggable Knob */}
+                {/* Centered Draggable Knob */}
                 <Animated.View
                   style={[
                     styles.draggableKnob,
@@ -415,7 +442,7 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({ onCallEnde
                   {...panResponder.panHandlers}
                 >
                   <View style={styles.knobInner}>
-                    <Text style={styles.knobIcon}>📞</Text>
+                    <Phone size={24} color="#2563EB" strokeWidth={2.5} />
                   </View>
                 </Animated.View>
               </View>
@@ -435,7 +462,11 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({ onCallEnde
                   onPress={handleToggleMute}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.controlIcon}>{isMuted ? "🔇" : "🎤"}</Text>
+                  {isMuted ? (
+                    <MicOff size={22} color="#EF4444" strokeWidth={2.2} />
+                  ) : (
+                    <Mic size={22} color="#334155" strokeWidth={2.2} />
+                  )}
                   <Text style={[styles.controlLabel, isMuted && styles.controlLabelActive]}>
                     {isMuted ? "Muted" : "Mute"}
                   </Text>
@@ -447,7 +478,11 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({ onCallEnde
                   onPress={handleToggleSpeaker}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.controlIcon}>{isSpeaker ? "🔊" : "🔈"}</Text>
+                  <Volume2
+                    size={22}
+                    color={isSpeaker ? "#2563EB" : "#334155"}
+                    strokeWidth={2.2}
+                  />
                   <Text style={[styles.controlLabel, isSpeaker && styles.controlLabelActive]}>
                     {isSpeaker ? "Speaker On" : "Speaker"}
                   </Text>
@@ -459,19 +494,23 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({ onCallEnde
                   onPress={() => setShowKeypad(!showKeypad)}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.controlIcon}>🔢</Text>
+                  <Grid3X3
+                    size={22}
+                    color={showKeypad ? "#2563EB" : "#334155"}
+                    strokeWidth={2.2}
+                  />
                   <Text style={[styles.controlLabel, showKeypad && styles.controlLabelActive]}>
                     Keypad
                   </Text>
                 </TouchableOpacity>
 
-                {/* Add Call Button (Now Fully Functional!) */}
+                {/* Add Call Button */}
                 <TouchableOpacity
                   style={styles.controlBtn}
                   onPress={handleOpenAddCall}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.controlIcon}>➕</Text>
+                  <UserPlus size={22} color="#334155" strokeWidth={2.2} />
                   <Text style={styles.controlLabel}>Add Call</Text>
                 </TouchableOpacity>
               </View>
@@ -482,7 +521,7 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({ onCallEnde
                 onPress={handleHangup}
                 activeOpacity={0.8}
               >
-                <Text style={styles.hangupIcon}>📵</Text>
+                <PhoneOff size={20} color="#FFFFFF" strokeWidth={2.5} />
                 <Text style={styles.hangupLabel}>END CALL</Text>
               </TouchableOpacity>
             </View>
@@ -510,7 +549,7 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({ onCallEnde
                   style={styles.closeSheetBtn}
                   onPress={() => setShowAddCallSheet(false)}
                 >
-                  <Text style={styles.closeSheetText}>✕</Text>
+                  <X size={16} color="#64748B" strokeWidth={2.5} />
                 </TouchableOpacity>
               </View>
 
@@ -524,7 +563,7 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({ onCallEnde
                     onPress={() => setAddCallNumber((prev) => prev.slice(0, -1))}
                     style={styles.addCallBackspace}
                   >
-                    <Text style={styles.addCallBackspaceText}>⌫</Text>
+                    <Delete size={20} color="#64748B" />
                   </TouchableOpacity>
                 )}
               </View>
@@ -599,9 +638,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   staffDutyBadge: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#475569",
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: "#F1F5F9",
     paddingHorizontal: 14,
     paddingVertical: 6,
@@ -609,7 +647,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E2E8F0",
   },
+  staffDutyText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
   courseBadge: {
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: "#ECFDF5",
     borderWidth: 1,
     borderColor: "#A7F3D0",
@@ -757,57 +802,51 @@ const styles = StyleSheet.create({
   },
   swipeTrack: {
     width: "100%",
-    height: 68,
+    height: 70,
     backgroundColor: "#F1F5F9",
-    borderRadius: 34,
+    borderRadius: 35,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
     position: "relative",
     borderWidth: 1.5,
     borderColor: "#CBD5E1",
     overflow: "hidden",
   },
   leftTrackZone: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-  },
-  declineChevron: {
-    fontSize: 16,
-    color: "#EF4444",
-    fontWeight: "900",
+    justifyContent: "center",
+    gap: 5,
+    paddingRight: 24,
   },
   declineText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "800",
     color: "#EF4444",
     letterSpacing: 0.5,
   },
   rightTrackZone: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    justifyContent: "center",
+    gap: 5,
+    paddingLeft: 24,
   },
   attendText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "800",
     color: "#10B981",
     letterSpacing: 0.5,
   },
-  attendChevron: {
-    fontSize: 16,
-    color: "#10B981",
-    fontWeight: "900",
-  },
   draggableKnob: {
     position: "absolute",
     left: "50%",
-    marginLeft: -28,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    marginLeft: -30,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
@@ -822,9 +861,6 @@ const styles = StyleSheet.create({
   knobInner: {
     alignItems: "center",
     justifyContent: "center",
-  },
-  knobIcon: {
-    fontSize: 26,
   },
   swipeHelpText: {
     fontSize: 12,

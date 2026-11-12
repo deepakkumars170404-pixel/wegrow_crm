@@ -9,6 +9,7 @@ import {
   Alert,
   ActivityIndicator,
 } from "react-native";
+import { Globe, User, ShieldAlert, Smartphone, RefreshCw, Zap, Check, CheckCircle2 } from "lucide-react-native";
 import { THEME } from "../constants/theme";
 import { StorageService } from "../services/storage";
 import { ApiService } from "../services/api";
@@ -127,37 +128,53 @@ export const SettingsScreen: React.FC = () => {
           disabled={testing}
         >
           {testing ? (
-            <ActivityIndicator color={THEME.colors.gold} />
+            <ActivityIndicator color="#1D4ED8" />
           ) : (
-            <Text style={styles.testBtnText}>⚡ Test Connection to CRM</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Zap size={15} color="#1D4ED8" />
+              <Text style={styles.testBtnText}>Test Connection to CRM</Text>
+            </View>
           )}
         </TouchableOpacity>
       </View>
 
       {/* Telecaller Identity */}
       <View style={styles.card}>
-        <Text style={styles.label}>TELECALLER NAME (SELECT OR TYPE)</Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
+          <User size={15} color="#2563EB" />
+          <Text style={styles.label}>TELECALLER NAME (SELECT OR TYPE)</Text>
+        </View>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
           {WEGROW_STAFF_MEMBERS.map((staff) => {
             const isSel = callerName === staff;
             return (
               <TouchableOpacity
                 key={staff}
                 style={{
-                  paddingVertical: 6,
-                  paddingHorizontal: 12,
-                  borderRadius: 8,
-                  backgroundColor: isSel ? THEME.colors.gold : "#1e293b",
-                  borderWidth: 1,
-                  borderColor: isSel ? THEME.colors.gold : THEME.colors.border,
+                  paddingVertical: 8,
+                  paddingHorizontal: 14,
+                  borderRadius: 10,
+                  backgroundColor: isSel ? "#2563EB" : "#F1F5F9",
+                  borderWidth: 1.5,
+                  borderColor: isSel ? "#1D4ED8" : "#CBD5E1",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                  shadowColor: isSel ? "#2563EB" : "transparent",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: isSel ? 0.25 : 0,
+                  shadowRadius: 4,
+                  elevation: isSel ? 3 : 0,
                 }}
                 onPress={() => setCallerName(staff)}
+                activeOpacity={0.7}
               >
+                {isSel && <Check size={14} color="#FFFFFF" strokeWidth={3} />}
                 <Text
                   style={{
-                    fontSize: 12,
-                    fontWeight: isSel ? "bold" : "600",
-                    color: isSel ? "#0A1128" : THEME.colors.textPrimary,
+                    fontSize: 13,
+                    fontWeight: isSel ? "800" : "700",
+                    color: isSel ? "#FFFFFF" : "#0F172A",
                   }}
                 >
                   {staff === "Muthumeena" ? "👑 Muthumeena (Head)" : staff}
@@ -235,7 +252,10 @@ export const SettingsScreen: React.FC = () => {
 
       {/* Save Button */}
       <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-        <Text style={styles.saveBtnText}>Save Settings</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <CheckCircle2 size={18} color="#FFFFFF" strokeWidth={2.5} />
+          <Text style={styles.saveBtnText}>Save Settings</Text>
+        </View>
       </TouchableOpacity>
     </ScrollView>
   );

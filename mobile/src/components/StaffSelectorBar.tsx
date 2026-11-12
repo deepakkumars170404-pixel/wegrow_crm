@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from "react-native";
+import { Smartphone, Check } from "lucide-react-native";
 import { THEME } from "../constants/theme";
 import { WEGROW_STAFF_MEMBERS, StaffMember } from "../types";
 import { StorageService } from "../services/storage";
@@ -31,7 +32,7 @@ export const StaffSelectorBar: React.FC<StaffSelectorBarProps> = ({ onStaffChang
   return (
     <View style={styles.container}>
       <View style={styles.labelRow}>
-        <Text style={styles.phoneIcon}>📱</Text>
+        <Smartphone size={14} color="#2563EB" style={{ marginRight: 5 }} />
         <Text style={styles.label}>STAFF ON DUTY (1 PHONE / 5 STAFF):</Text>
         <Text style={styles.activePill}>{activeStaff}</Text>
       </View>
@@ -49,8 +50,9 @@ export const StaffSelectorBar: React.FC<StaffSelectorBarProps> = ({ onStaffChang
               onPress={() => handleSelectStaff(staff)}
               activeOpacity={0.7}
             >
+              {isSelected && <Check size={12} color="#FFFFFF" strokeWidth={3} style={{ marginRight: 4 }} />}
               <Text style={[styles.staffText, isSelected && styles.staffTextActive]}>
-                {isSelected ? "✓ " : ""}{staff}
+                {staff}
               </Text>
             </TouchableOpacity>
           );
@@ -112,8 +114,8 @@ const styles = StyleSheet.create({
   },
   staffText: {
     fontSize: 12,
-    fontWeight: "600",
-    color: "#475569",
+    fontWeight: "700",
+    color: "#0F172A",
   },
   staffTextActive: {
     color: "#FFFFFF",

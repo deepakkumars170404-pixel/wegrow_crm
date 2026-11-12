@@ -15,6 +15,7 @@ import { Lead } from "../types";
 import { ApiService } from "../services/api";
 import { TelephonyService } from "../services/telephony";
 import { LiveClock } from "../components/LiveClock";
+import { Phone, MessageCircle, FileEdit, Clock, Search } from "lucide-react-native";
 
 interface QueueScreenProps {
   onOpenCallModal?: (lead: Lead) => void;
@@ -131,7 +132,10 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({ onOpenCallModal }) => 
             onPress={() => handleCallLead(item)}
             activeOpacity={0.8}
           >
-            <Text style={styles.callButtonText}>📞 Call SIM</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5 }}>
+              <Phone size={14} color="#FFFFFF" strokeWidth={2.5} />
+              <Text style={styles.callButtonText}>Call SIM</Text>
+            </View>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -139,7 +143,10 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({ onOpenCallModal }) => 
             onPress={() => handleWhatsApp(item)}
             activeOpacity={0.8}
           >
-            <Text style={styles.waButtonText}>💬 WhatsApp</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5 }}>
+              <MessageCircle size={14} color="#FFFFFF" strokeWidth={2.5} />
+              <Text style={styles.waButtonText}>WhatsApp</Text>
+            </View>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -148,7 +155,10 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({ onOpenCallModal }) => 
               if (onOpenCallModal) onOpenCallModal(item);
             }}
           >
-            <Text style={styles.dispButtonText}>Log</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4 }}>
+              <FileEdit size={13} color="#334155" strokeWidth={2.2} />
+              <Text style={styles.dispButtonText}>Log</Text>
+            </View>
           </TouchableOpacity>
         </View>
       </View>
@@ -166,7 +176,8 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({ onOpenCallModal }) => 
           </Text>
         </View>
         <View style={styles.liveClockBadge}>
-          <LiveClock style={styles.liveClockText} prefix="🕒 " />
+          <Clock size={12} color="#1D4ED8" style={{ marginRight: 4 }} />
+          <LiveClock style={styles.liveClockText} />
         </View>
       </View>
 
@@ -179,13 +190,16 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({ onOpenCallModal }) => 
 
       {/* Search Bar */}
       <View style={styles.searchBox}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search by student name, phone, course..."
-          placeholderTextColor={THEME.colors.textMuted}
-          value={search}
-          onChangeText={setSearch}
-        />
+        <View style={styles.searchInputWrapper}>
+          <Search size={16} color="#64748B" style={{ marginRight: 8 }} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search by student name, phone, course..."
+            placeholderTextColor={THEME.colors.textMuted}
+            value={search}
+            onChangeText={setSearch}
+          />
+        </View>
       </View>
 
       {/* Queue List */}
@@ -274,16 +288,21 @@ const styles = StyleSheet.create({
   },
   searchBox: {
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 10,
   },
-  searchInput: {
+  searchInputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: THEME.colors.card,
-    color: THEME.colors.textPrimary,
     borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 14,
     borderWidth: 1,
     borderColor: THEME.colors.border,
+  },
+  searchInput: {
+    flex: 1,
+    color: THEME.colors.textPrimary,
+    paddingVertical: 10,
     fontSize: 14,
   },
   listContent: {

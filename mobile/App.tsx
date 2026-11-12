@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, LogBox } from "react-native";
+import { ListFilter, PhoneCall, BarChart3, Settings } from "lucide-react-native";
 
 LogBox.ignoreAllLogs(true);
 import { StatusBar } from "expo-status-bar";
@@ -105,9 +106,11 @@ export default function App() {
           onPress={() => setCurrentTab("queue")}
           activeOpacity={0.7}
         >
-          <Text style={[styles.navIcon, currentTab === "queue" && styles.activeNavText]}>
-            📋
-          </Text>
+          <ListFilter
+            size={22}
+            color={currentTab === "queue" ? "#2563EB" : "#94A3B8"}
+            strokeWidth={currentTab === "queue" ? 2.5 : 2}
+          />
           <Text style={[styles.navLabel, currentTab === "queue" && styles.activeNavLabel]}>
             Queue
           </Text>
@@ -118,9 +121,11 @@ export default function App() {
           onPress={() => setCurrentTab("dialer")}
           activeOpacity={0.7}
         >
-          <Text style={[styles.navIcon, currentTab === "dialer" && styles.activeNavText]}>
-            🔢
-          </Text>
+          <PhoneCall
+            size={22}
+            color={currentTab === "dialer" ? "#2563EB" : "#94A3B8"}
+            strokeWidth={currentTab === "dialer" ? 2.5 : 2}
+          />
           <Text style={[styles.navLabel, currentTab === "dialer" && styles.activeNavLabel]}>
             Dialer
           </Text>
@@ -131,9 +136,11 @@ export default function App() {
           onPress={() => setCurrentTab("dashboard")}
           activeOpacity={0.7}
         >
-          <Text style={[styles.navIcon, currentTab === "dashboard" && styles.activeNavText]}>
-            📊
-          </Text>
+          <BarChart3
+            size={22}
+            color={currentTab === "dashboard" ? "#2563EB" : "#94A3B8"}
+            strokeWidth={currentTab === "dashboard" ? 2.5 : 2}
+          />
           <Text style={[styles.navLabel, currentTab === "dashboard" && styles.activeNavLabel]}>
             Metrics
           </Text>
@@ -144,9 +151,11 @@ export default function App() {
           onPress={() => setCurrentTab("settings")}
           activeOpacity={0.7}
         >
-          <Text style={[styles.navIcon, currentTab === "settings" && styles.activeNavText]}>
-            ⚙️
-          </Text>
+          <Settings
+            size={22}
+            color={currentTab === "settings" ? "#2563EB" : "#94A3B8"}
+            strokeWidth={currentTab === "settings" ? 2.5 : 2}
+          />
           <Text style={[styles.navLabel, currentTab === "settings" && styles.activeNavLabel]}>
             Settings
           </Text>
@@ -188,11 +197,12 @@ const styles = StyleSheet.create({
   },
   navLabel: {
     fontSize: 11,
-    color: THEME.colors.textMuted,
-    fontWeight: "500",
+    color: "#64748B",
+    fontWeight: "600",
+    marginTop: 4,
   },
   activeNavLabel: {
-    color: THEME.colors.gold,
-    fontWeight: "700",
+    color: "#2563EB",
+    fontWeight: "800",
   },
 });

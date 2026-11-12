@@ -8,6 +8,7 @@ import {
   Platform,
   ScrollView,
 } from "react-native";
+import { Phone, Delete, X, GraduationCap } from "lucide-react-native";
 import { THEME } from "../constants/theme";
 import { TelephonyService } from "../services/telephony";
 import { StorageService } from "../services/storage";
@@ -117,6 +118,7 @@ export const DialerScreen: React.FC = () => {
           </Text>
           {phoneNumber.length > 0 && (
             <TouchableOpacity onPress={handleClear} style={styles.clearBadge}>
+              <X size={12} color="#64748B" strokeWidth={2.5} style={{ marginRight: 3 }} />
               <Text style={styles.clearText}>Clear</Text>
             </TouchableOpacity>
           )}
@@ -130,11 +132,15 @@ export const DialerScreen: React.FC = () => {
             activeOpacity={0.8}
           >
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-              <Text style={styles.recognizedTitle} numberOfLines={1}>
-                🎓 <Text style={{ color: "#2563EB", fontWeight: "bold" }}>{recognizedLead.studentName}</Text>
-              </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", flex: 1, marginRight: 8 }}>
+                <GraduationCap size={15} color="#2563EB" style={{ marginRight: 6 }} />
+                <Text style={styles.recognizedTitle} numberOfLines={1}>
+                  {recognizedLead.studentName}
+                </Text>
+              </View>
               <View style={styles.recognizedTag}>
-                <Text style={styles.recognizedTagText}>Tap to Call 📞</Text>
+                <Phone size={10} color="#2563EB" style={{ marginRight: 4 }} />
+                <Text style={styles.recognizedTagText}>Tap to Call</Text>
               </View>
             </View>
             <Text style={styles.recognizedSubtitle} numberOfLines={1}>
@@ -169,7 +175,7 @@ export const DialerScreen: React.FC = () => {
               delayLongPress={350}
               activeOpacity={0.7}
             >
-              <Text style={styles.backspaceText}>⌫</Text>
+              <Delete size={22} color="#475569" strokeWidth={2} />
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -177,10 +183,11 @@ export const DialerScreen: React.FC = () => {
               onPress={handleCall}
               activeOpacity={0.8}
             >
-              <Text style={styles.dialButtonText}>📞 Call SIM</Text>
+              <Phone size={18} color="#FFFFFF" strokeWidth={2.5} style={{ marginRight: 8 }} />
+              <Text style={styles.dialButtonText}>Call SIM</Text>
             </TouchableOpacity>
 
-            <View style={{ width: 56 }} />
+            <View style={{ width: 54 }} />
           </View>
         </View>
       </ScrollView>
@@ -233,15 +240,15 @@ const styles = StyleSheet.create({
   screenContainer: {
     backgroundColor: THEME.colors.card,
     marginHorizontal: 20,
-    marginTop: 8,
+    marginTop: 6,
     borderRadius: 14,
-    paddingVertical: 12,
+    paddingVertical: 8,
     paddingHorizontal: 16,
     borderWidth: 1,
     borderColor: THEME.colors.border,
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 64,
+    minHeight: 52,
     position: "relative",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
@@ -251,10 +258,11 @@ const styles = StyleSheet.create({
   },
   recognizedLeadCard: {
     marginHorizontal: 20,
-    marginTop: 6,
+    marginTop: 4,
+    marginBottom: 2,
     backgroundColor: "#EFF6FF",
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: "#BFDBFE",
@@ -265,6 +273,8 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   recognizedTag: {
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: "rgba(37, 99, 235, 0.15)",
     paddingHorizontal: 8,
     paddingVertical: 2,
@@ -280,11 +290,11 @@ const styles = StyleSheet.create({
   recognizedSubtitle: {
     color: "#475569",
     fontSize: 11,
-    marginTop: 2,
+    marginTop: 1,
   },
   screenText: {
     color: THEME.colors.textPrimary,
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: "bold",
     letterSpacing: 2,
     fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
@@ -299,6 +309,8 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     borderWidth: 1,
     borderColor: "#E2E8F0",
+    flexDirection: "row",
+    alignItems: "center",
   },
   clearText: {
     color: THEME.colors.textMuted,
@@ -306,18 +318,18 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   keypadContainer: {
-    marginTop: 8,
+    marginTop: 4,
     paddingHorizontal: 28,
-    gap: 8,
+    gap: 6,
   },
   row: {
     flexDirection: "row",
     justifyContent: "space-between",
   },
   key: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
+    width: 64,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: "#FFFFFF",
     justifyContent: "center",
     alignItems: "center",
@@ -331,7 +343,7 @@ const styles = StyleSheet.create({
   },
   keyText: {
     color: THEME.colors.textPrimary,
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: "bold",
   },
   bottomControlRow: {
@@ -342,24 +354,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   backspaceButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#F1F5F9",
     borderWidth: 1,
     borderColor: "#E2E8F0",
   },
-  backspaceText: {
-    color: THEME.colors.textSecondary,
-    fontSize: 22,
-  },
   dialButton: {
     backgroundColor: THEME.colors.emerald,
-    paddingHorizontal: 30,
-    paddingVertical: 14,
-    borderRadius: 28,
+    paddingHorizontal: 28,
+    paddingVertical: 13,
+    borderRadius: 27,
     flexDirection: "row",
     alignItems: "center",
     shadowColor: THEME.colors.emerald,
