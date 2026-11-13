@@ -12,7 +12,7 @@ import {
   ScrollView,
 } from "react-native";
 import { THEME } from "../constants/theme";
-import { Lead } from "../types";
+import { Lead, WEGROW_STAFF_MEMBERS } from "../types";
 import { ApiService } from "../services/api";
 import { TelephonyService } from "../services/telephony";
 import {
@@ -27,6 +27,8 @@ import {
   X,
   Filter,
   RefreshCw,
+  User,
+  ArrowUpDown,
 } from "lucide-react-native";
 
 interface QueueScreenProps {
@@ -40,6 +42,8 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({ onOpenCallModal }) => 
   const [refreshing, setRefreshing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [priorityFilter, setPriorityFilter] = useState<"All" | "Hot" | "Warm" | "Follow-up">("All");
+  const [selectedStaff, setSelectedStaff] = useState<string>("All");
+  const [sortBy, setSortBy] = useState<"upcoming" | "newest" | "oldest">("upcoming");
 
   const loadQueue = useCallback(async () => {
     setErrorMsg(null);
@@ -95,11 +99,19 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({ onOpenCallModal }) => 
     return hasFollowUpDate || hasFollowUpTime || isStatusFollowUp || isStageFollowUp;
   }, []);
 
-  // Filter and DEDUPLICATE leads by 10-digit phone number so no student appears twice
+  // Filter and DEDUPLICATE leads by 10-digit phone number so no student appears twice, then sort
   const uniqueLeads = useMemo(() => {
     const q = search.toLowerCase().trim();
     const filtered = leads.filter((l) => {
-      // 1. Search Query
+      // 1. Staff Filter
+      if (selectedStaff !== "All") {
+        const caller = (l.assignedCaller || "").toLowerCase();
+        if (!caller.includes(selectedStaff.toLowerCase())) {
+          return false;
+        }
+      }
+
+      // 2. Search Query
       if (q) {
         const student = (l.studentName || "").toLowerCase();
         const phone = (l.phone || "").toLowerCase();
@@ -115,7 +127,7 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({ onOpenCallModal }) => 
         if (!matches) return false;
       }
 
-      // 2. Priority / Stage Filter
+      // 3. Priority / Stage Filter
       if (priorityFilter === "Hot" && l.priority !== "Hot") return false;
       if (priorityFilter === "Warm" && l.priority !== "Warm") return false;
       if (priorityFilter === "Follow-up" && !isFollowUpLead(l)) {
@@ -126,24 +138,67 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({ onOpenCallModal }) => 
     });
 
     const seenPhones = new Set<string>();
-    const result: Lead[] = [];
+    const deduped: Lead[] = [];
     for (const lead of filtered) {
       const cleanPhone = (lead.phone || "").replace(/\D/g, "").slice(-10);
       const key = cleanPhone || lead.id;
       if (!seenPhones.has(key)) {
         seenPhones.add(key);
-        result.push(lead);
+        deduped.push(lead);
       }
     }
-    return result;
-  }, [leads, search, priorityFilter, isFollowUpLead]);
 
-  const totalCount = leads.length;
-  const hotCount = useMemo(() => leads.filter((l) => l.priority === "Hot").length, [leads]);
-  const warmCount = useMemo(() => leads.filter((l) => l.priority === "Warm").length, [leads]);
+    // Sort: upcoming (nearest follow-up due), newest (recent ID/creation), oldest
+    return deduped.sort((a, b) => {
+      if (sortBy === "upcoming") {
+        const aHas = Boolean(
+          a.nextFollowUpDate &&
+          a.nextFollowUpDate !== "-" &&
+          a.nextFollowUpDate !== "null"
+        );
+        const bHas = Boolean(
+          b.nextFollowUpDate &&
+          b.nextFollowUpDate !== "-" &&
+          b.nextFollowUpDate !== "null"
+        );
+        if (aHas && !bHas) return -1;
+        if (!aHas && bHas) return 1;
+        if (aHas && bHas) {
+          const aDate = a.nextFollowUpDate || "9999-12-31";
+          const bDate = b.nextFollowUpDate || "9999-12-31";
+          if (aDate !== bDate) return aDate.localeCompare(bDate);
+          return (a.nextFollowUpTime || "").localeCompare(b.nextFollowUpTime || "");
+        }
+        const aNum = parseInt(String(a.id || "").replace(/\D/g, ""), 10) || 0;
+        const bNum = parseInt(String(b.id || "").replace(/\D/g, ""), 10) || 0;
+        return bNum - aNum;
+      } else if (sortBy === "oldest") {
+        const aNum = parseInt(String(a.id || "").replace(/\D/g, ""), 10) || 0;
+        const bNum = parseInt(String(b.id || "").replace(/\D/g, ""), 10) || 0;
+        return aNum - bNum;
+      } else {
+        // "newest"
+        const aNum = parseInt(String(a.id || "").replace(/\D/g, ""), 10) || 0;
+        const bNum = parseInt(String(b.id || "").replace(/\D/g, ""), 10) || 0;
+        return bNum - aNum;
+      }
+    });
+  }, [leads, search, priorityFilter, selectedStaff, sortBy, isFollowUpLead]);
+
+  // Counts reflecting selected staff member (or all)
+  const staffFilteredLeads = useMemo(() => {
+    if (selectedStaff === "All") return leads;
+    return leads.filter((l) =>
+      (l.assignedCaller || "").toLowerCase().includes(selectedStaff.toLowerCase())
+    );
+  }, [leads, selectedStaff]);
+
+  const totalCount = staffFilteredLeads.length;
+  const hotCount = useMemo(() => staffFilteredLeads.filter((l) => l.priority === "Hot").length, [staffFilteredLeads]);
+  const warmCount = useMemo(() => staffFilteredLeads.filter((l) => l.priority === "Warm").length, [staffFilteredLeads]);
   const followUpCount = useMemo(
-    () => leads.filter(isFollowUpLead).length,
-    [leads, isFollowUpLead]
+    () => staffFilteredLeads.filter(isFollowUpLead).length,
+    [staffFilteredLeads, isFollowUpLead]
   );
 
   const renderLeadCard = useCallback(({ item }: { item: Lead }) => {
@@ -305,7 +360,45 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({ onOpenCallModal }) => 
         </View>
       )}
 
-      {/* 2. Priority Filter Tabs */}
+      {/* 2. Staff Filter Horizontal Chips */}
+      <View style={styles.staffFilterSection}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.staffChipsContainer}
+        >
+          <TouchableOpacity
+            style={[styles.staffChip, selectedStaff === "All" && styles.staffChipActive]}
+            onPress={() => setSelectedStaff("All")}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.staffChipText, selectedStaff === "All" && styles.staffChipTextActive]}>
+              All Staff ({leads.length})
+            </Text>
+          </TouchableOpacity>
+
+          {WEGROW_STAFF_MEMBERS.map((staff) => {
+            const count = leads.filter((l) =>
+              (l.assignedCaller || "").toLowerCase().includes(staff.toLowerCase())
+            ).length;
+            const isSelected = selectedStaff === staff;
+            return (
+              <TouchableOpacity
+                key={staff}
+                style={[styles.staffChip, isSelected && styles.staffChipActive]}
+                onPress={() => setSelectedStaff(staff)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.staffChipText, isSelected && styles.staffChipTextActive]}>
+                  {staff} ({count})
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+
+      {/* 3. Priority & Follow-up Filter Tabs */}
       <View style={styles.filterTabsRow}>
         <TouchableOpacity
           style={[styles.filterTab, priorityFilter === "All" && styles.filterTabActive]}
@@ -348,13 +441,13 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({ onOpenCallModal }) => 
         </TouchableOpacity>
       </View>
 
-      {/* 3. Search Bar */}
-      <View style={styles.searchBox}>
+      {/* 4. Search Bar & Sort Selector */}
+      <View style={styles.searchAndSortContainer}>
         <View style={styles.searchInputWrapper}>
-          <Search size={15} color="#94A3B8" style={{ marginRight: 8 }} />
+          <Search size={14} color="#94A3B8" style={{ marginRight: 6 }} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search by student name, phone, course..."
+            placeholder="Search student, phone, course..."
             placeholderTextColor="#94A3B8"
             value={search}
             onChangeText={setSearch}
@@ -362,9 +455,46 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({ onOpenCallModal }) => 
           />
           {search.length > 0 && (
             <TouchableOpacity onPress={() => setSearch("")} style={{ padding: 4 }}>
-              <X size={14} color="#64748B" strokeWidth={2.5} />
+              <X size={13} color="#64748B" strokeWidth={2.5} />
             </TouchableOpacity>
           )}
+        </View>
+
+        {/* Sort Selector Bar (Upcoming / Newest / Oldest) */}
+        <View style={styles.sortRow}>
+          <View style={styles.sortLabelGroup}>
+            <ArrowUpDown size={11} color="#475569" strokeWidth={2.2} />
+            <Text style={styles.sortLabelText}>Sort Queue:</Text>
+          </View>
+          <View style={styles.sortButtonsPill}>
+            <TouchableOpacity
+              style={[styles.sortBtn, sortBy === "upcoming" && styles.sortBtnActive]}
+              onPress={() => setSortBy("upcoming")}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.sortBtnText, sortBy === "upcoming" && styles.sortBtnTextActive]}>
+                🕒 Upcoming Due
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.sortBtn, sortBy === "newest" && styles.sortBtnActive]}
+              onPress={() => setSortBy("newest")}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.sortBtnText, sortBy === "newest" && styles.sortBtnTextActive]}>
+                🆕 Newest
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.sortBtn, sortBy === "oldest" && styles.sortBtnActive]}
+              onPress={() => setSortBy("oldest")}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.sortBtnText, sortBy === "oldest" && styles.sortBtnTextActive]}>
+                ⏳ Oldest
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
@@ -521,19 +651,52 @@ const styles = StyleSheet.create({
     color: "#4338CA",
     fontWeight: "800",
   },
-  searchBox: {
-    paddingHorizontal: 14,
+  staffFilterSection: {
     paddingVertical: 8,
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+  },
+  staffChipsContainer: {
+    paddingHorizontal: 14,
+    gap: 6,
+  },
+  staffChip: {
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+    borderRadius: 16,
+  },
+  staffChipActive: {
+    backgroundColor: "#1E40AF",
+    borderColor: "#1E40AF",
+  },
+  staffChipText: {
+    color: "#475569",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  staffChipTextActive: {
+    color: "#FFFFFF",
+    fontWeight: "800",
+  },
+  searchAndSortContainer: {
+    paddingHorizontal: 14,
+    paddingTop: 8,
+    paddingBottom: 4,
+    gap: 7,
   },
   searchInputWrapper: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#FFFFFF",
-    borderRadius: 11,
-    paddingHorizontal: 11,
+    borderRadius: 10,
+    paddingHorizontal: 10,
     borderWidth: 1,
     borderColor: "#CBD5E1",
-    height: 38,
+    height: 36,
   },
   searchInput: {
     flex: 1,
@@ -541,6 +704,49 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "500",
     paddingVertical: 0,
+  },
+  sortRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  sortLabelGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  sortLabelText: {
+    color: "#475569",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  sortButtonsPill: {
+    flexDirection: "row",
+    gap: 4,
+  },
+  sortBtn: {
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 7,
+    backgroundColor: "#F1F5F9",
+  },
+  sortBtnActive: {
+    backgroundColor: "#1E40AF",
+  },
+  sortBtnText: {
+    color: "#64748B",
+    fontSize: 10.5,
+    fontWeight: "700",
+  },
+  sortBtnTextActive: {
+    color: "#FFFFFF",
+    fontWeight: "800",
   },
   listContent: {
     paddingHorizontal: 14,

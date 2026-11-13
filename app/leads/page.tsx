@@ -31,7 +31,7 @@ import {
 import { useCRM } from "@/context/CRMContext";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { AddLeadModal } from "@/components/leads/AddLeadModal";
-import { Lead, LeadPriority, LeadStatus } from "@/types";
+import { Lead, LeadPriority, LeadStatus, WEGROW_STAFF_MEMBERS } from "@/types";
 
 type LeadCustomView =
   | "all_leads"
@@ -67,6 +67,15 @@ export default function LeadsPage() {
   const [selectedStatus, setSelectedStatus] = useState("All");
   const [selectedCaller, setSelectedCaller] = useState("All");
   const [selectedPriority, setSelectedPriority] = useState("All");
+  const [sortBy, setSortBy] = useState<"upcoming" | "newest" | "oldest">("newest");
+
+  // All combined staff list for filter pills and dropdown
+  const allStaffList = useMemo(() => {
+    const set = new Set<string>();
+    WEGROW_STAFF_MEMBERS.forEach((s) => set.add(s));
+    telecallers.forEach((t) => set.add(t.name));
+    return Array.from(set);
+  }, [telecallers]);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -80,9 +89,9 @@ export default function LeadsPage() {
   // Role Permissions
   const canExport = activeUserRole === "Admin" || activeUserRole === "Owner" || activeUserRole === "Owner / MD";
 
-  // Filtered Leads
+  // Filtered and Sorted Leads
   const filteredLeads = useMemo(() => {
-    return leads.filter((lead) => {
+    const list = leads.filter((lead) => {
       // 1. Custom View Filter
       if (customView === "my_leads" && lead.assignedCaller !== "Priya Sharma") {
         return false;
@@ -90,8 +99,17 @@ export default function LeadsPage() {
       if (customView === "hot_leads" && lead.priority !== "Hot") {
         return false;
       }
-      if (customView === "today_followups" && (!lead.nextFollowUpDate || lead.nextFollowUpDate === "-")) {
-        return false;
+      if (customView === "today_followups") {
+        const hasDate = Boolean(
+          lead.nextFollowUpDate &&
+          lead.nextFollowUpDate !== "-" &&
+          lead.nextFollowUpDate !== "null"
+        );
+        const isFollowUpStatus =
+          (lead.status as string) === "Follow-up" ||
+          (lead.status as string) === "Call Later" ||
+          (lead.status as string) === "Counselling Scheduled";
+        if (!hasDate && !isFollowUpStatus) return false;
       }
       if (customView === "unassigned" && lead.assignedCaller && lead.assignedCaller !== "Unassigned") {
         return false;
@@ -105,7 +123,8 @@ export default function LeadsPage() {
         searchQuery === "" ||
         lead.studentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         lead.phone.includes(searchQuery) ||
-        lead.email.toLowerCase().includes(searchQuery.toLowerCase());
+        lead.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (lead.courseInterested && lead.courseInterested.toLowerCase().includes(searchQuery.toLowerCase()));
 
       // 3. Course
       const matchesCourse =
@@ -121,7 +140,8 @@ export default function LeadsPage() {
 
       // 6. Caller
       const matchesCaller =
-        selectedCaller === "All" || lead.assignedCaller === selectedCaller;
+        selectedCaller === "All" ||
+        (lead.assignedCaller && lead.assignedCaller.toLowerCase().includes(selectedCaller.toLowerCase()));
 
       // 7. Priority
       const matchesPriority =
@@ -136,6 +156,34 @@ export default function LeadsPage() {
         matchesPriority
       );
     });
+
+    // Apply Sorting: upcoming (nearest follow-up due), newest (latest ID/date), oldest
+    return list.sort((a, b) => {
+      if (sortBy === "upcoming") {
+        const aHas = Boolean(a.nextFollowUpDate && a.nextFollowUpDate !== "-" && a.nextFollowUpDate !== "null");
+        const bHas = Boolean(b.nextFollowUpDate && b.nextFollowUpDate !== "-" && b.nextFollowUpDate !== "null");
+        if (aHas && !bHas) return -1;
+        if (!aHas && bHas) return 1;
+        if (aHas && bHas) {
+          const aDate = a.nextFollowUpDate || "9999-12-31";
+          const bDate = b.nextFollowUpDate || "9999-12-31";
+          if (aDate !== bDate) return aDate.localeCompare(bDate);
+          return (a.nextFollowUpTime || "").localeCompare(b.nextFollowUpTime || "");
+        }
+        const aNum = parseInt(String(a.id || "").replace(/\D/g, ""), 10) || 0;
+        const bNum = parseInt(String(b.id || "").replace(/\D/g, ""), 10) || 0;
+        return bNum - aNum;
+      } else if (sortBy === "oldest") {
+        const aNum = parseInt(String(a.id || "").replace(/\D/g, ""), 10) || 0;
+        const bNum = parseInt(String(b.id || "").replace(/\D/g, ""), 10) || 0;
+        return aNum - bNum;
+      } else {
+        // "newest" / "latest"
+        const aNum = parseInt(String(a.id || "").replace(/\D/g, ""), 10) || 0;
+        const bNum = parseInt(String(b.id || "").replace(/\D/g, ""), 10) || 0;
+        return bNum - aNum;
+      }
+    });
   }, [
     leads,
     customView,
@@ -145,6 +193,7 @@ export default function LeadsPage() {
     selectedStatus,
     selectedCaller,
     selectedPriority,
+    sortBy,
   ]);
 
   // Paginated Leads
@@ -161,6 +210,7 @@ export default function LeadsPage() {
     setSelectedStatus("All");
     setSelectedCaller("All");
     setSelectedPriority("All");
+    setSortBy("newest");
     setCurrentPage(1);
   };
 
@@ -432,16 +482,61 @@ export default function LeadsPage() {
               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#142B52]/20 focus:border-[#142B52]"
             >
               <option value="All">All Telecallers</option>
-              {telecallers.map((t) => (
-                <option key={t.id} value={t.name}>
-                  {t.name}
+              {allStaffList.map((name) => (
+                <option key={name} value={name}>
+                  {name}
                 </option>
               ))}
             </select>
           </div>
         </div>
 
-        {/* Secondary Filter Row: Source & Priority + Clear Filters */}
+        {/* Staff Quick-Filter Pills */}
+        <div className="flex flex-wrap items-center gap-1.5 pt-3 border-t border-slate-100">
+          <span className="text-xs font-bold text-slate-500 mr-1 flex items-center gap-1">
+            <Users2 className="w-3.5 h-3.5" />
+            <span>Staff Filter:</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedCaller("All");
+              setCurrentPage(1);
+            }}
+            className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              selectedCaller === "All"
+                ? "bg-[#142B52] text-white shadow-xs"
+                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+            }`}
+          >
+            All Staff ({leads.length})
+          </button>
+          {allStaffList.map((staff) => {
+            const count = leads.filter((l) =>
+              (l.assignedCaller || "").toLowerCase().includes(staff.toLowerCase())
+            ).length;
+            const isSelected = selectedCaller === staff;
+            return (
+              <button
+                key={staff}
+                type="button"
+                onClick={() => {
+                  setSelectedCaller(staff);
+                  setCurrentPage(1);
+                }}
+                className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  isSelected
+                    ? "bg-[#142B52] text-white shadow-xs"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                {staff} ({count})
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Secondary Filter Row: Source, Priority & Sorting */}
         <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100 text-xs">
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
@@ -484,6 +579,58 @@ export default function LeadsPage() {
                     {p}
                   </button>
                 ))}
+              </div>
+            </div>
+
+            {/* Sorting Controls */}
+            <div className="flex items-center gap-1.5 ml-0 sm:ml-2">
+              <span className="text-slate-500 font-medium">Sort:</span>
+              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSortBy("upcoming");
+                    setCurrentPage(1);
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    sortBy === "upcoming"
+                      ? "bg-[#142B52] text-white shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                  title="Sort by nearest scheduled follow-up due date & time"
+                >
+                  🕒 Upcoming Due
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSortBy("newest");
+                    setCurrentPage(1);
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    sortBy === "newest"
+                      ? "bg-[#142B52] text-white shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                  title="Sort by newest enquiries first"
+                >
+                  🆕 Newest
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSortBy("oldest");
+                    setCurrentPage(1);
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    sortBy === "oldest"
+                      ? "bg-[#142B52] text-white shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                  title="Sort by oldest enquiries first"
+                >
+                  ⏳ Oldest
+                </button>
               </div>
             </div>
           </div>

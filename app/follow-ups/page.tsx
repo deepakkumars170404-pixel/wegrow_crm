@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import Link from "next/link";
 import {
   CalendarClock,
@@ -17,17 +17,24 @@ import {
   X,
   Edit2,
   Check,
+  Search,
+  User,
+  ArrowUpDown,
 } from "lucide-react";
 import { useCRM } from "@/context/CRMContext";
 import { StatusBadge } from "@/components/shared/StatusBadge";
-import { FollowUpTask } from "@/types";
+import { FollowUpTask, WEGROW_STAFF_MEMBERS } from "@/types";
 
 export default function FollowUpsPage() {
   const { followUps, markFollowUpCompleted, rescheduleFollowUp } = useCRM();
 
   const [activeTab, setActiveTab] = useState<
-    "Today" | "Tomorrow" | "Overdue" | "Upcoming" | "Completed"
-  >("Today");
+    "All" | "Today" | "Tomorrow" | "Overdue" | "Upcoming" | "Completed"
+  >("All");
+
+  const [selectedStaff, setSelectedStaff] = useState<string>("All");
+  const [sortBy, setSortBy] = useState<"upcoming" | "newest" | "oldest">("upcoming");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
   const [rescheduleModalTask, setRescheduleModalTask] = useState<FollowUpTask | null>(null);
@@ -36,14 +43,81 @@ export default function FollowUpsPage() {
   const [rescheduleRemarks, setRescheduleRemarks] = useState("");
 
   // Counts for tabs
+  const allCount = followUps.length;
   const todayCount = followUps.filter((f) => f.status === "Today").length;
   const tomorrowCount = followUps.filter((f) => f.status === "Tomorrow").length;
   const overdueCount = followUps.filter((f) => f.status === "Overdue").length;
   const upcomingCount = followUps.filter((f) => f.status === "Upcoming").length;
   const completedCount = followUps.filter((f) => f.status === "Completed").length;
 
-  // Filtered by tab
-  const displayedTasks = followUps.filter((f) => f.status === activeTab);
+  // Filter tasks by Tab, Staff, and Search Query
+  const filteredTasks = useMemo(() => {
+    return followUps.filter((f) => {
+      // 1. Tab Status Filter
+      if (activeTab !== "All" && f.status !== activeTab) {
+        return false;
+      }
+
+      // 2. Staff Member Filter
+      if (selectedStaff !== "All") {
+        if (!f.assignedCaller || !f.assignedCaller.toLowerCase().includes(selectedStaff.toLowerCase())) {
+          return false;
+        }
+      }
+
+      // 3. Search Query
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const student = (f.studentName || "").toLowerCase();
+        const phone = (f.phone || "").toLowerCase();
+        const course = (f.course || "").toLowerCase();
+        const caller = (f.assignedCaller || "").toLowerCase();
+        const remarks = (f.remarks || "").toLowerCase();
+        if (
+          !student.includes(q) &&
+          !phone.includes(q) &&
+          !course.includes(q) &&
+          !caller.includes(q) &&
+          !remarks.includes(q)
+        ) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [followUps, activeTab, selectedStaff, searchQuery]);
+
+  // Sort Filtered Tasks (Upcoming / Newest / Oldest)
+  const sortedTasks = useMemo(() => {
+    const list = [...filteredTasks];
+    if (sortBy === "upcoming") {
+      // Nearest Due Date & Time First
+      return list.sort((a, b) => {
+        const aDate = a.followUpDate && a.followUpDate !== "-" ? a.followUpDate : "9999-12-31";
+        const bDate = b.followUpDate && b.followUpDate !== "-" ? b.followUpDate : "9999-12-31";
+        if (aDate !== bDate) return aDate.localeCompare(bDate);
+        return (a.followUpTime || "").localeCompare(b.followUpTime || "");
+      });
+    } else if (sortBy === "newest") {
+      // Newest Created / Recent ID First
+      return list.sort((a, b) => {
+        const aNum = parseInt(String(a.id || "").replace(/\D/g, ""), 10) || 0;
+        const bNum = parseInt(String(b.id || "").replace(/\D/g, ""), 10) || 0;
+        return bNum - aNum;
+      });
+    } else if (sortBy === "oldest") {
+      // Oldest Created First
+      return list.sort((a, b) => {
+        const aNum = parseInt(String(a.id || "").replace(/\D/g, ""), 10) || 0;
+        const bNum = parseInt(String(b.id || "").replace(/\D/g, ""), 10) || 0;
+        return aNum - bNum;
+      });
+    }
+    return list;
+  }, [filteredTasks, sortBy]);
+
+  const displayedTasks = sortedTasks;
 
   const handleOpenReschedule = (task: FollowUpTask) => {
     setRescheduleModalTask(task);
@@ -86,7 +160,7 @@ export default function FollowUpsPage() {
         <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
           <button
             onClick={() => setViewMode("list")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
               viewMode === "list"
                 ? "bg-white text-[#142B52] shadow-xs"
                 : "text-slate-600 hover:text-slate-900"
@@ -97,7 +171,7 @@ export default function FollowUpsPage() {
           </button>
           <button
             onClick={() => setViewMode("calendar")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
               viewMode === "calendar"
                 ? "bg-white text-[#142B52] shadow-xs"
                 : "text-slate-600 hover:text-slate-900"
@@ -109,9 +183,10 @@ export default function FollowUpsPage() {
         </div>
       </div>
 
-      {/* Tabs */}
+      {/* 1. Date Status Tabs */}
       <div className="bg-white rounded-2xl p-2 border border-slate-200/90 shadow-soft flex flex-wrap gap-2">
         {[
+          { id: "All", label: "All Follow-ups", count: allCount, color: "text-slate-700 bg-slate-100" },
           { id: "Today", label: "Today's Follow-ups", count: todayCount, color: "text-amber-700 bg-amber-50" },
           { id: "Tomorrow", label: "Tomorrow", count: tomorrowCount, color: "text-blue-700 bg-blue-50" },
           { id: "Overdue", label: "Overdue Tasks", count: overdueCount, color: "text-rose-700 bg-rose-50 font-bold" },
@@ -121,7 +196,7 @@ export default function FollowUpsPage() {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === tab.id
                 ? "bg-[#142B52] text-white shadow-xs"
                 : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
@@ -137,6 +212,95 @@ export default function FollowUpsPage() {
             </span>
           </button>
         ))}
+      </div>
+
+      {/* 2. Staff Filter, Sort By & Search Controls Strip */}
+      <div className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-soft space-y-3">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+          {/* Staff Filter */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-xs font-bold text-slate-500 mr-1 flex items-center gap-1">
+              <User className="w-3.5 h-3.5" />
+              <span>Staff:</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => setSelectedStaff("All")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                selectedStaff === "All"
+                  ? "bg-[#142B52] text-white shadow-xs"
+                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+              }`}
+            >
+              All Staff ({allCount})
+            </button>
+            {WEGROW_STAFF_MEMBERS.map((staff) => {
+              const staffCount = followUps.filter((f) => (f.assignedCaller || "").toLowerCase().includes(staff.toLowerCase())).length;
+              const isSelected = selectedStaff === staff;
+              return (
+                <button
+                  key={staff}
+                  type="button"
+                  onClick={() => setSelectedStaff(staff)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    isSelected
+                      ? "bg-[#142B52] text-white shadow-xs"
+                      : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                  }`}
+                >
+                  {staff} ({staffCount})
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Sort By Controls */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-bold text-slate-500 mr-1 flex items-center gap-1">
+              <ArrowUpDown className="w-3.5 h-3.5" />
+              <span>Sort:</span>
+            </span>
+            {[
+              { id: "upcoming", label: "🕒 Upcoming (Due Soonest)" },
+              { id: "newest", label: "🆕 Newest First" },
+              { id: "oldest", label: "⏳ Oldest First" },
+            ].map((s) => {
+              const isSelected = sortBy === s.id;
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setSortBy(s.id as any)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    isSelected
+                      ? "bg-slate-900 text-white shadow-xs"
+                      : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                  }`}
+                >
+                  {s.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Search Bar & Result Counter */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search student name, phone (+91...), course, counselor, or callback notes..."
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#142B52]/20 font-medium"
+            />
+          </div>
+
+          <span className="text-xs text-slate-500 font-semibold self-center whitespace-nowrap">
+            Showing <strong className="text-slate-900">{displayedTasks.length}</strong> of {allCount} tasks
+          </span>
+        </div>
       </div>
 
       {/* Content based on view mode */}

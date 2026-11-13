@@ -177,7 +177,7 @@ export const SettingsScreen: React.FC = () => {
                     color: isSel ? "#FFFFFF" : "#0F172A",
                   }}
                 >
-                  {staff === "Muthumeena" ? "👑 Muthumeena (Head)" : staff}
+                  {staff === "Muthumeena" ? "Muthumeena" : staff}
                 </Text>
               </TouchableOpacity>
             );
