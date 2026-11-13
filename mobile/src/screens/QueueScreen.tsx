@@ -71,6 +71,30 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({ onOpenCallModal }) => 
     TelephonyService.openWhatsAppChat(lead.phone, lead.studentName, lead.courseInterested);
   };
 
+  const isFollowUpLead = useCallback((l: Lead): boolean => {
+    const hasFollowUpDate = Boolean(
+      l.nextFollowUpDate &&
+      String(l.nextFollowUpDate).trim().length > 0 &&
+      l.nextFollowUpDate !== "-" &&
+      l.nextFollowUpDate !== "null" &&
+      l.nextFollowUpDate !== "undefined"
+    );
+    const hasFollowUpTime = Boolean(
+      l.nextFollowUpTime &&
+      String(l.nextFollowUpTime).trim().length > 0 &&
+      l.nextFollowUpTime !== "-"
+    );
+    const isStatusFollowUp =
+      l.status === "Follow-up" ||
+      (l.status as string) === "Call Later" ||
+      (l.status as string) === "Counselling Scheduled";
+    const isStageFollowUp =
+      l.stage === "Call Scheduled" ||
+      (l.stage as string) === "Follow-up";
+
+    return hasFollowUpDate || hasFollowUpTime || isStatusFollowUp || isStageFollowUp;
+  }, []);
+
   // Filter and DEDUPLICATE leads by 10-digit phone number so no student appears twice
   const uniqueLeads = useMemo(() => {
     const q = search.toLowerCase().trim();
@@ -94,7 +118,7 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({ onOpenCallModal }) => 
       // 2. Priority / Stage Filter
       if (priorityFilter === "Hot" && l.priority !== "Hot") return false;
       if (priorityFilter === "Warm" && l.priority !== "Warm") return false;
-      if (priorityFilter === "Follow-up" && l.status !== "Follow-up" && l.stage !== "Call Scheduled") {
+      if (priorityFilter === "Follow-up" && !isFollowUpLead(l)) {
         return false;
       }
 
@@ -112,14 +136,14 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({ onOpenCallModal }) => 
       }
     }
     return result;
-  }, [leads, search, priorityFilter]);
+  }, [leads, search, priorityFilter, isFollowUpLead]);
 
   const totalCount = leads.length;
   const hotCount = useMemo(() => leads.filter((l) => l.priority === "Hot").length, [leads]);
   const warmCount = useMemo(() => leads.filter((l) => l.priority === "Warm").length, [leads]);
   const followUpCount = useMemo(
-    () => leads.filter((l) => l.status === "Follow-up" || l.stage === "Call Scheduled").length,
-    [leads]
+    () => leads.filter(isFollowUpLead).length,
+    [leads, isFollowUpLead]
   );
 
   const renderLeadCard = useCallback(({ item }: { item: Lead }) => {

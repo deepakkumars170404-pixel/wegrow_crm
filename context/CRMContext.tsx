@@ -111,6 +111,7 @@ interface CRMContextType {
     }
   ) => void;
   markFollowUpCompleted: (id: string) => void;
+  completeLeadFollowUp: (leadId: string) => void;
   rescheduleFollowUp: (id: string, newDate: string, newTime: string, remarks?: string) => void;
   addNewFollowUp: (task: Omit<FollowUpTask, "id">) => void;
   sendWhatsAppMessage: (chatId: string, text: string) => void;
@@ -1273,13 +1274,58 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const markFollowUpCompleted = (id: string) => {
+    const targetTask = followUps.find((fu) => fu.id === id);
     const updated = followUps.map((fu) => (fu.id === id ? { ...fu, status: "Completed" as const } : fu));
     setFollowUps(updated);
-    persistLeads(leads, updated);
+
+    let updatedLeads = leads;
+    if (targetTask && targetTask.leadId) {
+      updatedLeads = leads.map((l) =>
+        l.id === targetTask.leadId
+          ? {
+              ...l,
+              nextFollowUpDate: "",
+              nextFollowUpTime: "",
+              stage: l.stage === "Counselling Scheduled" ? "Interested" : l.stage,
+            }
+          : l
+      );
+      setLeads(updatedLeads);
+    }
+
+    persistLeads(updatedLeads, updated);
     showToast({
       type: "success",
       title: "Follow-up Marked Completed",
       message: "Task has been moved to completed follow-ups.",
+    });
+  };
+
+  const completeLeadFollowUp = (leadId: string) => {
+    const updatedLeads = leads.map((l) =>
+      l.id === leadId
+        ? {
+            ...l,
+            nextFollowUpDate: "",
+            nextFollowUpTime: "",
+            stage: l.stage === "Counselling Scheduled" ? "Interested" : l.stage,
+          }
+        : l
+    );
+    setLeads(updatedLeads);
+
+    const updatedFu = followUps.map((fu) =>
+      fu.leadId === leadId && fu.status !== "Completed"
+        ? { ...fu, status: "Completed" as const }
+        : fu
+    );
+    setFollowUps(updatedFu);
+
+    persistLeads(updatedLeads, updatedFu);
+    showToast({
+      type: "success",
+      title: "Follow-up Accepted & Completed",
+      message: "Scheduled follow-up has been marked completed successfully.",
     });
   };
 
@@ -1443,6 +1489,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addLeadNote,
         addCallRecord,
         markFollowUpCompleted,
+        completeLeadFollowUp,
         rescheduleFollowUp,
         addNewFollowUp,
         sendWhatsAppMessage,

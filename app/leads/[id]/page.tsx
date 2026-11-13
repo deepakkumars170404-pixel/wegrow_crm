@@ -38,13 +38,16 @@ export default function LeadDetailPage() {
 
   const {
     leads,
+    followUps,
     telecallers,
     courses,
+    updateLead,
     updateLeadStatus,
     assignCaller,
     addLeadNote,
     addCallRecord,
     markFollowUpCompleted,
+    completeLeadFollowUp,
     addNewFollowUp,
     activeUserRole,
     addToast,
@@ -168,6 +171,11 @@ export default function LeadDetailPage() {
   const handleSaveSchedule = (e: React.FormEvent) => {
     e.preventDefault();
     if (!schedDate) return;
+    updateLead(lead.id, {
+      nextFollowUpDate: schedDate,
+      nextFollowUpTime: schedTime,
+      stage: "Counselling Scheduled",
+    });
     addNewFollowUp({
       leadId: lead.id,
       studentName: lead.studentName,
@@ -181,6 +189,7 @@ export default function LeadDetailPage() {
       priority: lead.priority,
       remarks: schedRemarks || "Scheduled follow-up reminder.",
     });
+    addToast(`Callback scheduled for ${lead.studentName} on ${schedDate} at ${schedTime}.`, "success");
     setIsScheduleModalOpen(false);
   };
 
@@ -452,42 +461,71 @@ export default function LeadDetailPage() {
                 </button>
               </div>
 
-              <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-slate-800">
-                      Next Follow-up Due
-                    </span>
-                    <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-bold text-[10px]">
-                      Scheduled
-                    </span>
+              {lead.nextFollowUpDate && lead.nextFollowUpDate.trim() && lead.nextFollowUpDate !== "-" ? (
+                <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-slate-800">
+                        Next Follow-up Due
+                      </span>
+                      <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-bold text-[10px]">
+                        Scheduled
+                      </span>
+                    </div>
+                    <p className="text-slate-600 mt-1">
+                      Date: <strong className="text-slate-900">{lead.nextFollowUpDate}</strong> at{" "}
+                      <strong className="text-slate-900">{lead.nextFollowUpTime || "11:00 AM"}</strong>
+                    </p>
+                    <p className="text-slate-500 text-[11px] mt-0.5">
+                      Assigned Caller: {lead.assignedCaller || "Staff"}
+                    </p>
                   </div>
-                  <p className="text-slate-600 mt-1">
-                    Date: <strong className="text-slate-900">{lead.nextFollowUpDate}</strong> at{" "}
-                    <strong className="text-slate-900">{lead.nextFollowUpTime}</strong>
-                  </p>
-                  <p className="text-slate-500 text-[11px] mt-0.5">
-                    Assigned Caller: {lead.assignedCaller}
-                  </p>
-                </div>
 
-                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => completeLeadFollowUp(lead.id)}
+                      className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Mark Done / Accept</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSchedDate(lead.nextFollowUpDate || "");
+                        setSchedTime(lead.nextFollowUpTime || "11:00 AM");
+                        setIsScheduleModalOpen(true);
+                      }}
+                      className="px-3 py-1.5 border border-slate-300 bg-white text-slate-700 rounded-lg font-semibold hover:bg-slate-50 transition-colors cursor-pointer"
+                    >
+                      Reschedule
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-6 rounded-xl border border-emerald-200 bg-emerald-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold shrink-0">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-900 text-sm">All Scheduled Follow-ups Completed</p>
+                      <p className="text-slate-500 text-[11px] mt-0.5">
+                        No pending callbacks due for {lead.studentName}. Click schedule if you want to set a future reminder.
+                      </p>
+                    </div>
+                  </div>
                   <button
                     onClick={() => {
-                      alert("Follow-up marked completed!");
+                      setSchedDate("");
+                      setSchedTime("11:00 AM");
+                      setIsScheduleModalOpen(true);
                     }}
-                    className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700"
+                    className="px-3.5 py-2 bg-[#142B52] hover:bg-[#1E3B6E] text-white rounded-xl font-bold transition-all shadow-xs shrink-0 cursor-pointer"
                   >
-                    Mark Done
-                  </button>
-                  <button
-                    onClick={() => setIsScheduleModalOpen(true)}
-                    className="px-3 py-1.5 border border-slate-300 bg-white text-slate-700 rounded-lg font-semibold hover:bg-slate-50"
-                  >
-                    Reschedule
+                    + Schedule Next Follow-up
                   </button>
                 </div>
-              </div>
+              )}
             </div>
           )}
 

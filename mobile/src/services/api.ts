@@ -19,27 +19,49 @@ export const ApiService = {
           .select("*, calls(*)")
           .order("created_at", { ascending: false });
 
+        // Also fetch active follow-ups from Supabase follow_ups table
+        let dbFollowUps: any[] = [];
+        try {
+          const { data: fuData } = await supabaseMobile
+            .from("follow_ups")
+            .select("*")
+            .neq("status", "Completed");
+          if (fuData) dbFollowUps = fuData;
+        } catch {}
+
         if (!error && dbLeads && dbLeads.length > 0) {
-          const leads: Lead[] = dbLeads.map((l: any) => ({
-            id: l.id,
-            studentName: l.student_name,
-            phone: l.phone,
-            email: l.email || "",
-            courseInterested: l.course_interested || "",
-            leadSource: l.lead_source || "Phone",
-            enquiryDate: l.enquiry_date || "",
-            nextFollowUpDate: l.next_follow_up_date || "",
-            nextFollowUpTime: l.next_follow_up_time || "",
-            assignedCaller: l.assigned_caller || "",
-            status: l.status || "Interested",
-            priority: l.priority || "Warm",
-            stage: l.stage || "Interested",
-            callCount: l.call_count || (l.calls ? l.calls.length : 0),
-            qualification: l.qualification || "",
-            passedOutYear: l.passed_out_year || "",
-            collegeName: l.college_name || "",
-            notes: [],
-          }));
+          const leads: Lead[] = dbLeads.map((l: any) => {
+            const clean = (l.phone || "").replace(/\D/g, "").slice(-10);
+            const matchingFu = dbFollowUps.find(
+              (fu: any) =>
+                fu.lead_id === l.id ||
+                (fu.phone && String(fu.phone).replace(/\D/g, "").endsWith(clean))
+            );
+
+            const fuDate = l.next_follow_up_date || (matchingFu ? matchingFu.scheduled_date || matchingFu.follow_up_date : "") || "";
+            const fuTime = l.next_follow_up_time || (matchingFu ? matchingFu.scheduled_time || matchingFu.follow_up_time : "") || "";
+
+            return {
+              id: l.id,
+              studentName: l.student_name,
+              phone: l.phone,
+              email: l.email || "",
+              courseInterested: l.course_interested || "",
+              leadSource: l.lead_source || "Phone",
+              enquiryDate: l.enquiry_date || "",
+              nextFollowUpDate: fuDate,
+              nextFollowUpTime: fuTime,
+              assignedCaller: l.assigned_caller || (matchingFu ? matchingFu.caller_name : "") || "",
+              status: l.status || "Interested",
+              priority: l.priority || "Warm",
+              stage: l.stage || (fuDate ? "Call Scheduled" : "Interested"),
+              callCount: l.call_count || (l.calls ? l.calls.length : 0),
+              qualification: l.qualification || "",
+              passedOutYear: l.passed_out_year || "",
+              collegeName: l.college_name || "",
+              notes: [],
+            };
+          });
         // Deduplicate leads by 10-digit phone number, keeping the freshest
         const seenPhones = new Set<string>();
         const dedupedLeads: Lead[] = [];
@@ -70,15 +92,33 @@ export const ApiService = {
 
       if (res.ok) {
         const data = await res.json();
-        const rawLeads: Lead[] = Array.isArray(data) ? data : data.leads || [];
+        const rawLeads: any[] = Array.isArray(data) ? data : data.leads || [];
+        const rawFu: any[] = Array.isArray(data.followUps) ? data.followUps : [];
+
         const seenPhones = new Set<string>();
         const dedupedLeads: Lead[] = [];
         for (const l of rawLeads) {
           const cleanPhone = (l.phone || "").replace(/\D/g, "").slice(-10);
+          const matchingFu = rawFu.find(
+            (fu: any) =>
+              fu.leadId === l.id ||
+              (fu.phone && String(fu.phone).replace(/\D/g, "").endsWith(cleanPhone))
+          );
+
+          const fuDate = l.nextFollowUpDate || (matchingFu ? matchingFu.followUpDate || matchingFu.scheduled_date : "") || "";
+          const fuTime = l.nextFollowUpTime || (matchingFu ? matchingFu.followUpTime || matchingFu.scheduled_time : "") || "";
+
+          const formattedLead: Lead = {
+            ...l,
+            nextFollowUpDate: fuDate,
+            nextFollowUpTime: fuTime,
+            stage: l.stage || (fuDate ? "Call Scheduled" : "Interested"),
+          };
+
           const key = cleanPhone || l.id;
           if (!seenPhones.has(key)) {
             seenPhones.add(key);
-            dedupedLeads.push(l);
+            dedupedLeads.push(formattedLead);
           }
         }
         if (dedupedLeads.length > 0) {
