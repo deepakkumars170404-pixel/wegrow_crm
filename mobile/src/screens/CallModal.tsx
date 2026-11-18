@@ -129,6 +129,19 @@ export const CallModal: React.FC<CallModalProps> = ({
     if (visible) {
       setEffectiveDuration(durationSeconds);
 
+      // Pre-fill exact call start and end timestamps with seconds
+      const endD = new Date();
+      const startD = new Date(endD.getTime() - (durationSeconds || 0) * 1000);
+      const formatTimeWithSec = (d: Date) =>
+        d.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: true,
+        });
+      setCallStartTimeStr(formatTimeWithSec(startD));
+      setCallEndTimeStr(formatTimeWithSec(endD));
+
       // Query true phone hardware duration and timeline from server bridge with automatic retry
       let attempts = 0;
       const fetchStatus = () => {
@@ -258,6 +271,24 @@ export const CallModal: React.FC<CallModalProps> = ({
         .filter(Boolean)
         .join(" • ");
 
+      const formatTimeWithSec = (d: Date) =>
+        d.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: true,
+        });
+      const endD = new Date();
+      const startD = new Date(endD.getTime() - (effectiveDuration || 0) * 1000);
+      const computedStartTime =
+        callStartTimeStr && callStartTimeStr !== "11:59 AM" && callStartTimeStr !== callEndTimeStr
+          ? callStartTimeStr
+          : formatTimeWithSec(startD);
+      const computedEndTime =
+        callEndTimeStr && callEndTimeStr !== "11:59 AM"
+          ? callEndTimeStr
+          : formatTimeWithSec(endD);
+
       const record: CallRecord = {
         id: `CR-${Date.now()}`,
         leadId: lead.id,
@@ -271,11 +302,11 @@ export const CallModal: React.FC<CallModalProps> = ({
         qualification: qualification.trim(),
         passedOutYear: passedOutYear.trim(),
         collegeName: collegeName.trim(),
-        callStartTime: callStartTimeStr,
-        callEndTime: callEndTimeStr,
+        callStartTime: computedStartTime,
+        callEndTime: computedEndTime,
         notes: notes.trim()
           ? `${notes.trim()}${academicNotes ? ` (${academicNotes})` : ""}`
-          : `Inquiry handled by ${selectedStaff}. Spoke for ${formatTime(effectiveDuration)} (${callStartTimeStr || "11:59 AM"} - ${callEndTimeStr || "11:59 AM"}). Mindset: ${selectedMindset}${academicNotes ? ` • ${academicNotes}` : ""}`,
+          : `Inquiry handled by ${selectedStaff}. Spoke for ${formatTime(effectiveDuration)} (${computedStartTime} - ${computedEndTime}). Mindset: ${selectedMindset}${academicNotes ? ` • ${academicNotes}` : ""}`,
         nextFollowUpDate,
         nextFollowUpTime,
         timestamp: Date.now(),

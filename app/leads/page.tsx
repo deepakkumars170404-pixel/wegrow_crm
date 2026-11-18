@@ -89,6 +89,43 @@ export default function LeadsPage() {
   // Role Permissions
   const canExport = activeUserRole === "Admin" || activeUserRole === "Owner" || activeUserRole === "Owner / MD";
 
+  // Calculate lead's latest real activity timestamp (latest call date/time, enquiry date, or creation date)
+  const getLeadLatestActivityTime = (lead: Lead): number => {
+    // 1. Most recent call in callHistory
+    if (Array.isArray(lead.callHistory) && lead.callHistory.length > 0) {
+      let maxCallTime = 0;
+      for (const c of lead.callHistory) {
+        if (c.callDate) {
+          const timePart = c.callTime || c.fromTime || c.endTime || "00:00:00";
+          const parsed = new Date(`${c.callDate} ${timePart}`).getTime();
+          if (!isNaN(parsed) && parsed > maxCallTime) maxCallTime = parsed;
+        }
+      }
+      if (maxCallTime > 0) return maxCallTime;
+    }
+
+    // 2. lastCallDate
+    if (lead.lastCallDate && lead.lastCallDate !== "-") {
+      const parsed = new Date(lead.lastCallDate).getTime();
+      if (!isNaN(parsed)) return parsed;
+    }
+
+    // 3. enquiryDate
+    if (lead.enquiryDate && lead.enquiryDate !== "-") {
+      const parsed = new Date(lead.enquiryDate).getTime();
+      if (!isNaN(parsed)) return parsed;
+    }
+
+    // 4. Timestamp from Lead ID (e.g. LD-MOB-1794473513385)
+    const match = String(lead.id || "").match(/\d{10,13}/);
+    if (match) {
+      const num = parseInt(match[0], 10);
+      if (num > 1000000000) return num;
+    }
+
+    return 0;
+  };
+
   // Filtered and Sorted Leads
   const filteredLeads = useMemo(() => {
     const list = leads.filter((lead) => {
@@ -157,7 +194,7 @@ export default function LeadsPage() {
       );
     });
 
-    // Apply Sorting: upcoming (nearest follow-up due), newest (latest ID/date), oldest
+    // Apply Sorting: upcoming (nearest follow-up due), newest (latest activity/calls first), oldest
     return list.sort((a, b) => {
       if (sortBy === "upcoming") {
         const aHas = Boolean(a.nextFollowUpDate && a.nextFollowUpDate !== "-" && a.nextFollowUpDate !== "null");
@@ -170,18 +207,12 @@ export default function LeadsPage() {
           if (aDate !== bDate) return aDate.localeCompare(bDate);
           return (a.nextFollowUpTime || "").localeCompare(b.nextFollowUpTime || "");
         }
-        const aNum = parseInt(String(a.id || "").replace(/\D/g, ""), 10) || 0;
-        const bNum = parseInt(String(b.id || "").replace(/\D/g, ""), 10) || 0;
-        return bNum - aNum;
+        return getLeadLatestActivityTime(b) - getLeadLatestActivityTime(a);
       } else if (sortBy === "oldest") {
-        const aNum = parseInt(String(a.id || "").replace(/\D/g, ""), 10) || 0;
-        const bNum = parseInt(String(b.id || "").replace(/\D/g, ""), 10) || 0;
-        return aNum - bNum;
+        return getLeadLatestActivityTime(a) - getLeadLatestActivityTime(b);
       } else {
-        // "newest" / "latest"
-        const aNum = parseInt(String(a.id || "").replace(/\D/g, ""), 10) || 0;
-        const bNum = parseInt(String(b.id || "").replace(/\D/g, ""), 10) || 0;
-        return bNum - aNum;
+        // "newest" / "latest activity"
+        return getLeadLatestActivityTime(b) - getLeadLatestActivityTime(a);
       }
     });
   }, [

@@ -148,7 +148,24 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({ onOpenCallModal }) => 
       }
     }
 
-    // Sort: upcoming (nearest follow-up due), newest (recent ID/creation), oldest
+    const getLeadLatestActivityTime = (lead: Lead): number => {
+      if (lead.lastCallDate && lead.lastCallDate !== "-") {
+        const parsed = new Date(lead.lastCallDate).getTime();
+        if (!isNaN(parsed)) return parsed;
+      }
+      if (lead.enquiryDate && lead.enquiryDate !== "-") {
+        const parsed = new Date(lead.enquiryDate).getTime();
+        if (!isNaN(parsed)) return parsed;
+      }
+      const match = String(lead.id || "").match(/\d{10,13}/);
+      if (match) {
+        const num = parseInt(match[0], 10);
+        if (num > 1000000000) return num;
+      }
+      return 0;
+    };
+
+    // Sort: upcoming (nearest follow-up due), newest (recent activity/calls), oldest
     return deduped.sort((a, b) => {
       if (sortBy === "upcoming") {
         const aHas = Boolean(
@@ -169,18 +186,12 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({ onOpenCallModal }) => 
           if (aDate !== bDate) return aDate.localeCompare(bDate);
           return (a.nextFollowUpTime || "").localeCompare(b.nextFollowUpTime || "");
         }
-        const aNum = parseInt(String(a.id || "").replace(/\D/g, ""), 10) || 0;
-        const bNum = parseInt(String(b.id || "").replace(/\D/g, ""), 10) || 0;
-        return bNum - aNum;
+        return getLeadLatestActivityTime(b) - getLeadLatestActivityTime(a);
       } else if (sortBy === "oldest") {
-        const aNum = parseInt(String(a.id || "").replace(/\D/g, ""), 10) || 0;
-        const bNum = parseInt(String(b.id || "").replace(/\D/g, ""), 10) || 0;
-        return aNum - bNum;
+        return getLeadLatestActivityTime(a) - getLeadLatestActivityTime(b);
       } else {
-        // "newest"
-        const aNum = parseInt(String(a.id || "").replace(/\D/g, ""), 10) || 0;
-        const bNum = parseInt(String(b.id || "").replace(/\D/g, ""), 10) || 0;
-        return bNum - aNum;
+        // "newest" / recent activity
+        return getLeadLatestActivityTime(b) - getLeadLatestActivityTime(a);
       }
     });
   }, [leads, search, priorityFilter, selectedStaff, sortBy, isFollowUpLead]);

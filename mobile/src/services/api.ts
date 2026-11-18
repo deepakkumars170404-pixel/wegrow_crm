@@ -366,9 +366,28 @@ export const ApiService = {
         : record.disposition;
 
     const dateStr = new Date().toISOString().split("T")[0];
-    const timeStr =
-      record.callStartTime ||
-      new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+    const endMs = record.timestamp || Date.now();
+    const durSec = typeof record.durationSeconds === "number" ? record.durationSeconds : 0;
+    const startMs = endMs - durSec * 1000;
+    const formatTimeWithSec = (d: Date) =>
+      d.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true,
+      });
+
+    const validStartTime =
+      record.callStartTime &&
+      record.callStartTime !== "11:59 AM" &&
+      record.callStartTime !== record.callEndTime
+        ? record.callStartTime
+        : formatTimeWithSec(new Date(startMs));
+
+    const validEndTime =
+      record.callEndTime && record.callEndTime !== "11:59 AM"
+        ? record.callEndTime
+        : formatTimeWithSec(new Date(endMs));
 
     // 1. DIRECT SYNC TO SUPABASE CLOUD (Zero dependency on same Wi-Fi!)
     // Works wherever phone is connected: Jio/Airtel 4G/5G, Hotspot, or any Wi-Fi!
@@ -409,12 +428,12 @@ export const ApiService = {
             phone: record.phone,
             caller_name: record.callerName,
             call_date: dateStr,
-            call_time: timeStr,
+            call_time: validStartTime,
             duration: record.formattedDuration,
             duration_formatted: `${record.durationSeconds} seconds`,
             duration_seconds: record.durationSeconds,
-            from_time: record.callStartTime || timeStr,
-            end_time: record.callEndTime || timeStr,
+            from_time: validStartTime,
+            end_time: validEndTime,
             outcome: record.durationSeconds > 0 ? "Attended Call" : "Not Attended Call",
             mindset: record.disposition,
             course_interested: record.courseInterested || null,

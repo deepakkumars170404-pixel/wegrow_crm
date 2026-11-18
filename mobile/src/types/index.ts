@@ -17,6 +17,8 @@ export interface Lead {
   qualification?: string;
   passedOutYear?: string;
   collegeName?: string;
+  lastCallDate?: string;
+  lastCallOutcome?: string;
 }
 
 export const WEGROW_STAFF_MEMBERS = [

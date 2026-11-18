@@ -75,10 +75,13 @@ export default function CallManagementPage() {
   // Get clear From Time -> End Time range
   const getCallTimeRange = (call: CallRecord) => {
     if (call.fromTime && call.endTime) {
+      if (call.fromTime === call.endTime) {
+        return call.fromTime;
+      }
       return `${call.fromTime} → ${call.endTime}`;
     }
     if (call.callTime) {
-      return `Started at ${call.callTime}`;
+      return `At ${call.callTime}`;
     }
     return "";
   };
@@ -110,6 +113,11 @@ export default function CallManagementPage() {
     });
 
     return list.sort((a, b) => {
+      if (a.callDate && b.callDate) {
+        const aT = new Date(`${a.callDate} ${a.callTime || a.fromTime || "00:00:00"}`).getTime();
+        const bT = new Date(`${b.callDate} ${b.callTime || b.fromTime || "00:00:00"}`).getTime();
+        if (!isNaN(aT) && !isNaN(bT) && aT !== bT) return bT - aT;
+      }
       const aTime = a.id ? parseInt(a.id.replace(/\D/g, ""), 10) || 0 : 0;
       const bTime = b.id ? parseInt(b.id.replace(/\D/g, ""), 10) || 0 : 0;
       return bTime - aTime;
