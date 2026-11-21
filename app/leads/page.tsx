@@ -786,7 +786,11 @@ export default function LeadsPage() {
 
                     {/* Enquiry Date */}
                     <td className="py-3.5 px-4 text-slate-500 text-[11px]">
-                      {lead.enquiryDate}
+                      {lead.enquiryDate && lead.enquiryDate !== "-" ? (
+                        <span className="font-medium text-slate-600">{lead.enquiryDate}</span>
+                      ) : (
+                        <span className="text-slate-400 italic">-</span>
+                      )}
                     </td>
 
                     {/* Next Follow-up */}

@@ -258,6 +258,7 @@ export async function POST(request: Request) {
         callCount: isRecentMerge ? existing.callCount : (existing.callCount || 0) + 1,
         lastCallDate: dateStr,
         lastCallOutcome: disposition,
+        enquiryDate: existing.enquiryDate || dateStr,
         qualification: qualification || existing.qualification || "",
         passedOutYear: passedOutYear || existing.passedOutYear || "",
         collegeName: collegeName || existing.collegeName || "",

@@ -48,7 +48,7 @@ export async function GET() {
           stage: l.stage || "Interested",
           assignedCaller: l.assigned_caller || "",
           city: l.city || "Tamil Nadu",
-          enquiryDate: l.enquiry_date || "",
+          enquiryDate: l.enquiry_date || (l.created_at ? l.created_at.split("T")[0] : "-"),
           nextFollowUpDate: l.next_follow_up_date || "",
           nextFollowUpTime: l.next_follow_up_time || "",
           callCount: l.call_count || (l.calls ? l.calls.length : 0),

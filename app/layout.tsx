@@ -14,6 +14,11 @@ const plusJakarta = Plus_Jakarta_Sans({
 export const metadata: Metadata = {
   title: "WeGrow Skill Campus | Telecalling CRM Dashboard",
   description: "Enterprise Telecalling & Admissions CRM for WeGrow Skill Campus. Lead management, call queues, follow-ups, WhatsApp and admission pipeline tracking.",
+  icons: {
+    icon: "/favicon.png",
+    shortcut: "/favicon.png",
+    apple: "/favicon.png",
+  },
 };
 
 export default function RootLayout({
