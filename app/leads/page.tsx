@@ -51,6 +51,7 @@ export default function LeadsPage() {
     activeUserRole,
     addToast,
     initiateCall,
+    batchAddLeads,
   } = useCRM();
 
   const isOwnerMD = activeUserRole === "Owner" || activeUserRole === "Owner / MD";
@@ -85,6 +86,189 @@ export default function LeadsPage() {
   const [isAddLeadModalOpen, setIsAddLeadModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
+
+  // Real Import Leads State
+  const [importText, setImportText] = useState("");
+  const [parsedImportLeads, setParsedImportLeads] = useState<any[]>([]);
+  const [importFileName, setImportFileName] = useState("");
+  const [importDefaultCaller, setImportDefaultCaller] = useState("MuthuSelvi");
+  const [importTab, setImportTab] = useState<"file" | "paste">("file");
+
+  const parseCSVToLeads = (text: string) => {
+    const lines = text
+      .split(/\r\n|\n|\r/)
+      .map((l) => l.trim())
+      .filter(Boolean);
+    if (lines.length === 0) return [];
+
+    const firstLine = lines[0].toLowerCase();
+    const hasHeader =
+      firstLine.includes("name") ||
+      firstLine.includes("phone") ||
+      firstLine.includes("course") ||
+      firstLine.includes("student");
+
+    const dataLines = hasHeader ? lines.slice(1) : lines;
+    const results: any[] = [];
+
+    for (const line of dataLines) {
+      const parts: string[] = [];
+      let current = "";
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"' || char === "'") {
+          inQuotes = !inQuotes;
+        } else if ((char === "," || char === "\t") && !inQuotes) {
+          parts.push(current.trim().replace(/^["']|["']$/g, ""));
+          current = "";
+        } else {
+          current += char;
+        }
+      }
+      parts.push(current.trim().replace(/^["']|["']$/g, ""));
+
+      if (parts.length >= 2) {
+        const name = parts[0] || "Student Enquiry";
+        let phone = parts[1] || "";
+        const cleanPhone = phone.replace(/\D/g, "");
+
+        if (cleanPhone.length >= 10) {
+          const course = parts[2] || "Data Analyst & Power BI Executive";
+          const college = parts[3] || "Alagappa University";
+          const qual = parts[4] || "Any Degree";
+          const year = parts[5] || "2026";
+          const city = parts[6] || "Sivakasi";
+          const assigned = parts[7] || importDefaultCaller || "MuthuSelvi";
+
+          results.push({
+            studentName: name,
+            phone: cleanPhone.slice(-10),
+            email: `${name.toLowerCase().replace(/[^a-z0-9]/g, "") || "student"}@gmail.com`,
+            courseInterested: course,
+            qualification: qual,
+            passedOutYear: year,
+            collegeName: college,
+            city: city,
+            status: "Interested" as LeadStatus,
+            stage: "Interested" as any,
+            priority: "Hot" as LeadPriority,
+            leadSource: "Import" as any,
+            assignedCaller: assigned,
+            enquiryDate: new Date().toISOString().split("T")[0],
+          });
+        }
+      }
+    }
+    return results;
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = String(event.target?.result || "");
+      const parsed = parseCSVToLeads(text);
+      setParsedImportLeads(parsed);
+      if (parsed.length === 0) {
+        addToast("No valid leads with 10-digit phone numbers detected in file.", "warning");
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleDownloadSampleCSV = () => {
+    const sampleCsv = `Student Name,Phone,Course,College,Qualification,Passed Out Year,City,Assigned Telecaller
+Karthik Raman,9843173678,Data Analyst & Power BI Executive,Alagappa University,BBA,2026,Sivakasi,MuthuSelvi
+Sangeetha M,9092322803,Full Stack Web Development,Mepco Schlenk Engineering College,B.E CSE,2025,Sivakasi,Devi Priya
+Vignesh Kumar,9943877948,AI & Python Automation,Ayya Nadar Janaki Ammal College,B.Sc CS,2026,Srivilliputtur,Subhashini`;
+
+    const blob = new Blob([sampleCsv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "WeGrow_Sample_Leads_Template.csv";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    addToast("Downloaded sample student leads template CSV.", "info");
+  };
+
+  const handleConfirmImport = () => {
+    if (parsedImportLeads.length === 0) {
+      addToast("Please provide at least one valid student record to import.", "warning");
+      return;
+    }
+    batchAddLeads(parsedImportLeads);
+    setIsImportModalOpen(false);
+    setParsedImportLeads([]);
+    setImportText("");
+    setImportFileName("");
+  };
+
+  const handleExportCSV = () => {
+    if (filteredLeads.length === 0) {
+      addToast("No student leads matching your criteria to export.", "info");
+      return;
+    }
+
+    const headers = [
+      "Student Name",
+      "Phone",
+      "Email",
+      "Course Interested",
+      "Status",
+      "Mindset / Priority",
+      "College Name",
+      "Qualification",
+      "Passed Out Year",
+      "City",
+      "Assigned Caller",
+      "Enquiry Date",
+      "Next Follow-up Date",
+      "Call Count",
+    ];
+
+    const escapeCsv = (val: any) => {
+      const str = String(val ?? "").replace(/"/g, '""');
+      return `"${str}"`;
+    };
+
+    const csvRows = [headers.join(",")];
+    for (const l of filteredLeads) {
+      const row = [
+        escapeCsv(l.studentName),
+        escapeCsv(l.phone),
+        escapeCsv(l.email || ""),
+        escapeCsv(l.courseInterested || ""),
+        escapeCsv(l.status || ""),
+        escapeCsv(l.priority || ""),
+        escapeCsv(l.collegeName || ""),
+        escapeCsv(l.qualification || ""),
+        escapeCsv(l.passedOutYear || ""),
+        escapeCsv(l.city || ""),
+        escapeCsv(l.assignedCaller || ""),
+        escapeCsv(l.enquiryDate || ""),
+        escapeCsv(l.nextFollowUpDate || ""),
+        escapeCsv(l.callCount || 0),
+      ];
+      csvRows.push(row.join(","));
+    }
+
+    const blob = new Blob([csvRows.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `WeGrow_Student_Leads_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    addToast(`Exported ${filteredLeads.length} student leads to CSV file!`, "success");
+  };
 
   // Role Permissions
   const canExport = activeUserRole === "Admin" || activeUserRole === "Owner" || activeUserRole === "Owner / MD";
@@ -400,14 +584,12 @@ export default function LeadsPage() {
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {canExport ? (
               <button
-                onClick={() => {
-                  addToast("Export: Downloaded student leads dataset to Excel.", "success");
-                }}
-                className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-semibold transition-colors"
+                onClick={handleExportCSV}
+                className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
                 title="Export all filtered student leads to Excel / CSV"
               >
                 <Download className="w-3.5 h-3.5 text-slate-500" />
-                <span>Export Excel</span>
+                <span>Export Excel (.csv)</span>
               </button>
             ) : (
               <button
@@ -1105,60 +1287,191 @@ export default function LeadsPage() {
         </div>
       )}
 
-      {/* Import Leads Modal (UI Demo) */}
+      {/* Real Import Leads Modal */}
       {isImportModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-[#142B52] text-white">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-xl overflow-hidden animate-in zoom-in-95 duration-150 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-[#142B52] text-white flex-shrink-0">
               <div className="flex items-center gap-2">
                 <FileSpreadsheet className="w-5 h-5 text-[#D5A52B]" />
-                <h3 className="font-bold text-sm">Import Student Leads (CSV / Excel)</h3>
+                <div>
+                  <h3 className="font-bold text-sm">Import Student Leads into Live CRM Queue</h3>
+                  <p className="text-[10px] text-slate-300">Syncs immediately to Web and Android Telecaller App</p>
+                </div>
               </div>
               <button
-                onClick={() => setIsImportModalOpen(false)}
+                onClick={() => {
+                  setIsImportModalOpen(false);
+                  setParsedImportLeads([]);
+                }}
                 className="text-slate-300 hover:text-white"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-6 text-center space-y-4">
-              <div className="border-2 border-dashed border-slate-300 rounded-2xl p-6 hover:border-[#142B52] transition-colors bg-slate-50/50 cursor-pointer">
-                <Upload className="w-10 h-10 text-slate-400 mx-auto mb-2" />
-                <p className="text-xs font-bold text-slate-800">
-                  Click or drag Excel / CSV file here
-                </p>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Supports columns: Student Name, Phone, Email, Course, Source
-                </p>
-              </div>
-
-              <div className="text-left bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs">
-                <span className="font-semibold text-slate-700 block mb-1">
-                  Sample template:
-                </span>
-                <span className="text-[11px] text-slate-500">
-                  Download the official WeGrow student upload format before uploading bulk enquiries.
-                </span>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2 border-t">
+            <div className="p-6 overflow-y-auto space-y-4 text-xs flex-1">
+              {/* Tabs: Upload File vs Paste Text */}
+              <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
                 <button
-                  onClick={() => setIsImportModalOpen(false)}
-                  className="px-4 py-2 border rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                  type="button"
+                  onClick={() => setImportTab("file")}
+                  className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-colors cursor-pointer ${
+                    importTab === "file"
+                      ? "bg-[#142B52] text-white"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
                 >
-                  Cancel
+                  📁 Upload CSV / Excel File
                 </button>
                 <button
-                  onClick={() => {
-                    setIsImportModalOpen(false);
-                    alert("Demo: 42 leads from Excel successfully imported into active queue.");
-                  }}
-                  className="px-4 py-2 bg-[#142B52] text-white rounded-xl text-xs font-bold hover:bg-[#1E3B6E]"
+                  type="button"
+                  onClick={() => setImportTab("paste")}
+                  className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-colors cursor-pointer ${
+                    importTab === "paste"
+                      ? "bg-[#142B52] text-white"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
                 >
-                  Simulate Import
+                  📝 Paste Data Directly
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleDownloadSampleCSV}
+                  className="ml-auto text-xs text-[#142B52] font-bold hover:underline flex items-center gap-1"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download Sample CSV</span>
                 </button>
               </div>
+
+              {/* Default Telecaller Assignment */}
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <label className="font-bold text-slate-800 block text-xs">Assign Leads To Counsellor:</label>
+                  <span className="text-[10px] text-slate-500">Default telecaller if not specified in file</span>
+                </div>
+                <select
+                  value={importDefaultCaller}
+                  onChange={(e) => setImportDefaultCaller(e.target.value)}
+                  className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-800"
+                >
+                  {WEGROW_STAFF_MEMBERS.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Mode 1: File Upload */}
+              {importTab === "file" && (
+                <div>
+                  <label className="border-2 border-dashed border-slate-300 hover:border-[#142B52] transition-colors rounded-2xl p-6 text-center bg-slate-50/50 flex flex-col items-center justify-center cursor-pointer block">
+                    <input
+                      type="file"
+                      accept=".csv, .txt"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                    />
+                    <Upload className="w-8 h-8 text-[#142B52] mb-2" />
+                    <span className="font-bold text-slate-800 text-xs">
+                      {importFileName ? `Selected: ${importFileName}` : "Click to browse or drop CSV file here"}
+                    </span>
+                    <span className="text-[11px] text-slate-500 mt-1">
+                      Expected columns: Name, Phone, Course, College, Qualification, Year, City
+                    </span>
+                  </label>
+                </div>
+              )}
+
+              {/* Mode 2: Paste Raw Text */}
+              {importTab === "paste" && (
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700 block">
+                    Paste Student Data (1 line per student):
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={importText}
+                    onChange={(e) => {
+                      setImportText(e.target.value);
+                      const parsed = parseCSVToLeads(e.target.value);
+                      setParsedImportLeads(parsed);
+                    }}
+                    placeholder={`Ganesh, 9843173678, Data Analyst, Alagappa Univ, BBA, 2026, Sivakasi
+Anitha, 9092322803, Full Stack, Mepco Schlenk, B.E, 2025, Srivilliputtur`}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-mono text-xs focus:outline-none focus:ring-2 focus:ring-[#142B52]/20"
+                  />
+                </div>
+              )}
+
+              {/* Parsed Leads Preview */}
+              {parsedImportLeads.length > 0 && (
+                <div className="space-y-2 pt-2 border-t border-slate-100">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                      ✓ Ready to import {parsedImportLeads.length} student leads
+                    </span>
+                    <span className="text-[11px] text-slate-500">
+                      Auto-validated phone numbers
+                    </span>
+                  </div>
+
+                  <div className="max-h-40 overflow-y-auto border border-slate-200 rounded-xl">
+                    <table className="w-full text-left text-[11px]">
+                      <thead className="bg-slate-100 text-slate-600 font-bold sticky top-0">
+                        <tr>
+                          <th className="p-2">Name</th>
+                          <th className="p-2">Phone</th>
+                          <th className="p-2">Course</th>
+                          <th className="p-2">Counsellor</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {parsedImportLeads.slice(0, 8).map((p, i) => (
+                          <tr key={i} className="hover:bg-slate-50">
+                            <td className="p-2 font-semibold text-slate-800">{p.studentName}</td>
+                            <td className="p-2 font-mono text-slate-600">+91 {p.phone}</td>
+                            <td className="p-2 text-slate-600 truncate max-w-[150px]">{p.courseInterested}</td>
+                            <td className="p-2 font-medium text-[#142B52]">{p.assignedCaller}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {parsedImportLeads.length > 8 && (
+                    <p className="text-[10px] text-slate-400 text-right">
+                      + {parsedImportLeads.length - 8} more students
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2 flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsImportModalOpen(false);
+                  setParsedImportLeads([]);
+                }}
+                className="px-4 py-2 border rounded-xl text-slate-600 hover:bg-slate-100 cursor-pointer font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmImport}
+                disabled={parsedImportLeads.length === 0}
+                className={`px-5 py-2 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  parsedImportLeads.length > 0
+                    ? "bg-[#142B52] text-white hover:bg-[#1E3B6E] shadow-sm"
+                    : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                }`}
+              >
+                <CheckCircle className="w-4 h-4 text-[#D5A52B]" />
+                <span>Confirm Import ({parsedImportLeads.length} Leads)</span>
+              </button>
             </div>
           </div>
         </div>

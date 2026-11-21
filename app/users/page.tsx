@@ -31,6 +31,12 @@ export default function UsersRolesPage() {
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<AppUser | null>(null);
 
+  // Access Control: Owner and Admin ONLY can Add, Edit, or Manage Staff
+  const canManageStaff =
+    activeUserRole === "Owner" ||
+    activeUserRole === "Owner / MD" ||
+    activeUserRole === "Admin";
+
   // New user form state
   const [newUserName, setNewUserName] = useState("");
   const [newUserEmail, setNewUserEmail] = useState("");
@@ -39,6 +45,10 @@ export default function UsersRolesPage() {
 
   const handleCreateUser = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canManageStaff) {
+      alert("Access Denied: Only Owner and Admin can add new staff members.");
+      return;
+    }
     if (!newUserName.trim() || !newUserEmail.trim()) return;
 
     addUser({
@@ -58,6 +68,10 @@ export default function UsersRolesPage() {
 
   const handleSaveEditUser = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canManageStaff) {
+      alert("Access Denied: Only Owner and Admin can edit staff accounts.");
+      return;
+    }
     if (!editingUser) return;
     updateUserRole(editingUser.id, editingUser.role);
     setEditingUser(null);
@@ -112,13 +126,23 @@ export default function UsersRolesPage() {
           </p>
         </div>
 
-        <button
-          onClick={() => setIsAddUserModalOpen(true)}
-          className="flex items-center gap-1.5 px-4 py-2 bg-[#142B52] hover:bg-[#1E3B6E] text-white rounded-xl text-xs font-bold transition-colors shadow-sm self-start md:self-auto"
-        >
-          <UserPlus className="w-4 h-4 text-[#D5A52B]" />
-          <span>Add New User</span>
-        </button>
+        {canManageStaff ? (
+          <button
+            onClick={() => setIsAddUserModalOpen(true)}
+            className="flex items-center gap-1.5 px-4 py-2 bg-[#142B52] hover:bg-[#1E3B6E] text-white rounded-xl text-xs font-bold transition-colors shadow-sm self-start md:self-auto cursor-pointer"
+          >
+            <UserPlus className="w-4 h-4 text-[#D5A52B]" />
+            <span>Add New User</span>
+          </button>
+        ) : (
+          <div
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 border border-slate-200 text-slate-400 rounded-xl text-xs font-semibold select-none self-start md:self-auto"
+            title="🔒 Telecallers cannot add new staff. Owner or Admin access required."
+          >
+            <Lock className="w-3.5 h-3.5 text-slate-400" />
+            <span>Add User (Owner/Admin Only)</span>
+          </div>
+        )}
       </div>
 
       {/* Role-Based Dashboard Preview Selector */}
@@ -264,32 +288,50 @@ export default function UsersRolesPage() {
                   </td>
 
                   <td className="py-3.5 px-4">
-                    <button
-                      onClick={() => toggleUserStatus(u.id)}
-                      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold transition-all ${
-                        u.status === "Active"
-                          ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                          : "bg-rose-50 text-rose-700 hover:bg-rose-100"
-                      }`}
-                    >
-                      <span
-                        className={`w-1.5 h-1.5 rounded-full ${
-                          u.status === "Active" ? "bg-emerald-500" : "bg-rose-500"
+                    {canManageStaff ? (
+                      <button
+                        onClick={() => toggleUserStatus(u.id)}
+                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                          u.status === "Active"
+                            ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                            : "bg-rose-50 text-rose-700 hover:bg-rose-100"
                         }`}
-                      />
-                      <span>{u.status}</span>
-                    </button>
+                      >
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            u.status === "Active" ? "bg-emerald-500" : "bg-rose-500"
+                          }`}
+                        />
+                        <span>{u.status}</span>
+                      </button>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-50 text-slate-600 border border-slate-200">
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            u.status === "Active" ? "bg-emerald-500" : "bg-rose-500"
+                          }`}
+                        />
+                        <span>{u.status}</span>
+                      </span>
+                    )}
                   </td>
 
                   <td className="py-3.5 px-4 text-right">
                     <div className="flex items-center justify-end gap-1.5">
-                      <button
-                        onClick={() => setEditingUser(u)}
-                        title="Edit User Role"
-                        className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
+                      {canManageStaff ? (
+                        <button
+                          onClick={() => setEditingUser(u)}
+                          title="Edit User Role"
+                          className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 cursor-pointer"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                      ) : (
+                        <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
+                          <Lock className="w-3 h-3 text-slate-300" />
+                          <span>Admin Only</span>
+                        </span>
+                      )}
                     </div>
                   </td>
                 </tr>

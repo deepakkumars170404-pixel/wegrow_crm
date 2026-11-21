@@ -71,6 +71,7 @@ export const CallModal: React.FC<CallModalProps> = ({
   const [callEndTimeStr, setCallEndTimeStr] = useState("");
 
   const [notes, setNotes] = useState("");
+  const [manualReason, setManualReason] = useState("");
   const [nextFollowUpDate, setNextFollowUpDate] = useState("");
   const [nextFollowUpTime, setNextFollowUpTime] = useState("");
   const [saving, setSaving] = useState(false);
@@ -304,9 +305,11 @@ export const CallModal: React.FC<CallModalProps> = ({
         collegeName: collegeName.trim(),
         callStartTime: computedStartTime,
         callEndTime: computedEndTime,
-        notes: notes.trim()
-          ? `${notes.trim()}${academicNotes ? ` (${academicNotes})` : ""}`
-          : `Inquiry handled by ${selectedStaff}. Spoke for ${formatTime(effectiveDuration)} (${computedStartTime} - ${computedEndTime}). Mindset: ${selectedMindset}${academicNotes ? ` • ${academicNotes}` : ""}`,
+        notes: manualReason.trim()
+          ? `${notes.trim() ? `${notes.trim()} | ` : ""}Reason: ${manualReason.trim()}${academicNotes ? ` (${academicNotes})` : ""}`
+          : (notes.trim()
+            ? `${notes.trim()}${academicNotes ? ` (${academicNotes})` : ""}`
+            : `Inquiry handled by ${selectedStaff}. Spoke for ${formatTime(effectiveDuration)} (${computedStartTime} - ${computedEndTime}). Mindset: ${selectedMindset}${academicNotes ? ` • ${academicNotes}` : ""}`),
         nextFollowUpDate,
         nextFollowUpTime,
         timestamp: Date.now(),
@@ -322,6 +325,7 @@ export const CallModal: React.FC<CallModalProps> = ({
       }
 
       setNotes("");
+      setManualReason("");
       setNextFollowUpDate("");
       setNextFollowUpTime("");
       setActiveDropdown(null);
@@ -445,6 +449,30 @@ export const CallModal: React.FC<CallModalProps> = ({
                   </TouchableOpacity>
                 );
               })}
+            </View>
+
+            {/* MANUAL REASON / REMARKS INPUT */}
+            <View style={{ marginTop: 10, padding: 10, backgroundColor: "#FFF8E1", borderRadius: 12, borderWidth: 1, borderColor: "#FFE082" }}>
+              <Text style={{ fontSize: 11, fontWeight: "700", color: "#37474F", marginBottom: 4 }}>
+                ✏️ SPECIFIC REASON / REMARKS (MANUAL NOTE)
+              </Text>
+              <TextInput
+                style={{
+                  backgroundColor: "#FFFFFF",
+                  borderWidth: 1,
+                  borderColor: "#CFD8DC",
+                  borderRadius: 8,
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  fontSize: 12,
+                  color: "#263238",
+                }}
+                placeholder="e.g. Fees High, Parents to decide, Timing clash..."
+                placeholderTextColor={THEME.colors.textMuted}
+                value={manualReason}
+                onChangeText={setManualReason}
+                onFocus={() => setActiveDropdown(null)}
+              />
             </View>
 
             {/* 3. STUDENT & COURSE & ACADEMIC DETAILS */}

@@ -261,7 +261,7 @@ export default function DashboardPage() {
     const callStatus = isSpoken ? "Attended Call" : "Not Attended Call";
 
     addCallRecord(dialerLead.id, {
-      callerName: "Priya Sharma",
+      callerName: selectedTelecallerName || "MuthuSelvi",
       outcome: callStatus,
       mindset: callDisposition,
       duration: finalDuration,
@@ -299,7 +299,7 @@ export default function DashboardPage() {
   const recentEnquiries = (leads || []).slice(0, 5);
 
   // Selected counselor persona for Telecaller view
-  const [selectedTelecallerName, setSelectedTelecallerName] = useState<string>("Muthumeena");
+  const [selectedTelecallerName, setSelectedTelecallerName] = useState<string>("MuthuSelvi");
 
   // Current telecaller data for Telecaller view
   const myCallerData = useMemo(() => {
@@ -309,20 +309,20 @@ export default function DashboardPage() {
     if (found) return found;
     return (
       telecallers?.[0] || {
-        id: "caller-muthumeena",
-        name: selectedTelecallerName || "Muthumeena",
-        email: "muthumeena@wegrow.edu",
-        phone: "+91 98431 73678",
-        avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80",
-        role: "Senior Counselor",
-        assignedLeads: 84,
+        id: "caller-muthuselvi",
+        name: selectedTelecallerName || "MuthuSelvi",
+        email: "muthuselvi@wegrow.edu",
+        phone: "+91 99438 77948",
+        avatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80",
+        role: "Senior Telecaller",
+        assignedLeads: 0,
         dailyTarget: 60,
-        callsCompleted: 58,
-        connectedCalls: 44,
-        interestedLeads: 21,
-        followUpsCompleted: 34,
-        admissionsGenerated: 16,
-        conversionRate: 19.0,
+        callsCompleted: 0,
+        connectedCalls: 0,
+        interestedLeads: 0,
+        followUpsCompleted: 0,
+        admissionsGenerated: 0,
+        conversionRate: 0,
         rank: 1,
       }
     );
@@ -363,7 +363,7 @@ export default function DashboardPage() {
                 Owner Executive Command
               </h2>
               <p className="text-xs sm:text-sm text-slate-200 max-w-xl">
-                Institution-wide revenue (₹43.25L), gross admission margin, campus seat occupancy, and branch profitability.
+                Institution-wide revenue, gross admission margin, campus seat occupancy, and branch profitability.
               </p>
             </>
           )}
@@ -450,25 +450,23 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
             <KPICard
               title="Gross Tuition Booked"
-              value="₹43,25,000"
-              change="+24.2%"
-              isPositive={true}
+              value="₹0"
+              subtext="Current enrollment revenue"
               icon={DollarSign}
               iconColor="text-emerald-700"
               iconBg="bg-emerald-50"
             />
             <KPICard
               title="Total Admissions Won"
-              value="89 Seats"
-              change="+18.5%"
-              isPositive={true}
+              value="0 Seats"
+              subtext="Enrolled students"
               icon={GraduationCap}
               iconColor="text-[#D5A52B]"
               iconBg="bg-[#FAF1D6]"
             />
             <KPICard
               title="Avg Ticket Value"
-              value="₹48,595"
+              value="₹0"
               subtext="Per enrolled student"
               icon={Award}
               iconColor="text-indigo-600"
@@ -476,7 +474,7 @@ export default function DashboardPage() {
             />
             <KPICard
               title="Overall Conversion"
-              value="7.13%"
+              value="0.0%"
               subtext="Enquiry to Paid"
               icon={Percent}
               iconColor="text-emerald-600"
@@ -484,16 +482,15 @@ export default function DashboardPage() {
             />
             <KPICard
               title="Total Inbound Enquiries"
-              value="1,248"
-              change="+18.4%"
-              isPositive={true}
+              value={`${leads.length}`}
+              subtext="Active pipeline leads"
               icon={Users}
               iconColor="text-[#142B52]"
               iconBg="bg-blue-50"
             />
             <KPICard
               title="Customer Acq. Cost"
-              value="₹1,420"
+              value="₹0"
               subtext="CAC per paid seat"
               icon={TrendingUp}
               iconColor="text-purple-600"
@@ -520,31 +517,31 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {[
                 {
-                  campus: "Bangalore Main Campus",
-                  location: "Koramangala 4th Block",
-                  admissions: 44,
-                  revenue: 2150000,
-                  occupancy: 82,
-                  head: "Priya Sharma",
-                  badge: "Flagship Center",
+                  campus: "Sivakasi (Main Branch)",
+                  location: "193, 1A, Parasakthi Colony",
+                  admissions: 0,
+                  revenue: 0,
+                  occupancy: 0,
+                  head: "Thavabalan",
+                  badge: "Headquarters",
                 },
                 {
-                  campus: "Pune Tech Center",
-                  location: "Hinjawadi Rajiv Gandhi Tech Park",
-                  admissions: 28,
-                  revenue: 1380000,
-                  occupancy: 74,
-                  head: "Rahul Deshmukh",
-                  badge: "Regional Hub",
-                },
-                {
-                  campus: "Hyderabad Center",
-                  location: "HITEC City / Madhapur",
-                  admissions: 17,
-                  revenue: 795000,
-                  occupancy: 70,
-                  head: "Sneha Patel",
+                  campus: "Sivakasi (Thiruthangal Road)",
+                  location: "100A/5, 1st Floor, Thiruthangal Road",
+                  admissions: 0,
+                  revenue: 0,
+                  occupancy: 0,
+                  head: "LakshmiPriya (GM)",
                   badge: "Branch Center",
+                },
+                {
+                  campus: "Srivilliputtur Branch",
+                  location: "129, North Car Street",
+                  admissions: 0,
+                  revenue: 0,
+                  occupancy: 0,
+                  head: "Gopinath (HR)",
+                  badge: "Learning Center",
                 },
               ].map((b) => (
                 <div
@@ -629,7 +626,7 @@ export default function DashboardPage() {
                 <div className="flex items-center justify-between mb-1">
                   <h3 className="font-bold text-base text-slate-900">Channel Attribution</h3>
                   <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
-                    1,248 Leads
+                    {leads.length} Leads
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 mb-4">Admissions channel origin</p>
@@ -648,8 +645,8 @@ export default function DashboardPage() {
                     </ResponsiveContainer>
                   ) : null}
                   <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                    <span className="text-lg font-bold text-slate-900">35%</span>
-                    <span className="text-[10px] text-slate-500">Website</span>
+                    <span className="text-lg font-bold text-slate-900">0%</span>
+                    <span className="text-[10px] text-slate-500">Pipeline</span>
                   </div>
                 </div>
               </div>
@@ -674,7 +671,7 @@ export default function DashboardPage() {
                 <p className="text-xs text-slate-500">Drop-off inspection across customer journey</p>
               </div>
               <span className="px-2.5 py-1 bg-[#D5A52B]/15 text-[#B88A1B] text-xs font-bold rounded-lg">
-                Net Won: 7.13%
+                Net Won: 0.0%
               </span>
             </div>
 
@@ -1427,17 +1424,21 @@ export default function DashboardPage() {
                           {staff.name.charAt(0)}
                         </div>
                         <span>{staff.name}</span>
-                        {staff.name === "Muthumeena" && (
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
-                            Head
+                        {staff.name === "MuthuSelvi" && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                            Senior Caller
                           </span>
                         )}
                       </td>
                       <td className="py-3 text-slate-500">
-                        {staff.name === "Muthumeena"
-                          ? "Telecall Head / Senior Counselor"
+                        {staff.name === "MuthuSelvi"
+                          ? "Senior Telecaller"
+                          : staff.name === "Devi Priya"
+                          ? "Senior Telecaller"
+                          : staff.name === "Subhashini"
+                          ? "Telecalling Executive"
                           : staff.name === "LakshmiPriya"
-                          ? "Admissions Counselor / Admin"
+                          ? "Admissions Telecaller"
                           : "Telecalling Executive"}
                       </td>
                       <td className="py-3 text-center font-bold text-slate-800">{staff.totalCalls}</td>

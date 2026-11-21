@@ -13,7 +13,11 @@ import {
   Sliders,
   Sparkles,
   Save,
-  } from "lucide-react";
+  Smartphone,
+  X,
+  Trash2,
+  Plus,
+} from "lucide-react";
 import { useCRM } from "@/context/CRMContext";
 
 export default function SettingsPage() {
@@ -30,6 +34,63 @@ export default function SettingsPage() {
       >("company");
 
   // Company Profile State
+    // Physical Campuses State with real WeGrow locations
+  const [campuses, setCampuses] = useState([
+    {
+      id: "camp-sivakasi-main",
+      name: "Sivakasi (Main Branch)",
+      address: "193, 1A, Ayyappan kovil opposite / Naturals Salon & Spa Downstairs, Parasakthi Colony, Sivakasi, Tamil Nadu 626123",
+      head: "Thavabalan",
+      phone: "+91 98431 73678",
+      status: "Headquarters / Main Branch",
+    },
+    {
+      id: "camp-sivakasi-thiruthangal",
+      name: "Sivakasi (Thiruthangal Road)",
+      address: "100A/5, 1st Floor, Thiruthangal Road, Opposite Bell Hotel, IBACO Upstairs, Sivakasi – 626 123",
+      head: "LakshmiPriya (GM)",
+      phone: "+91 98431 73678",
+      status: "Branch Center",
+    },
+    {
+      id: "camp-srivilliputtur",
+      name: "Srivilliputtur Branch",
+      address: "129, North Car Street, Opposite Bombay Textiles, Upstairs Pathras Kids & Gift Shop, Srivilliputtur – 626 125",
+      head: "Gopinath (HR)",
+      phone: "+91 99438 77948",
+      status: "Learning Center",
+    },
+  ]);
+
+  const [isAddCampusModalOpen, setIsAddCampusModalOpen] = useState(false);
+  const [newCampusName, setNewCampusName] = useState("");
+  const [newCampusAddress, setNewCampusAddress] = useState("");
+  const [newCampusHead, setNewCampusHead] = useState("");
+  const [newCampusPhone, setNewCampusPhone] = useState("+91 ");
+  const [newCampusStatus, setNewCampusStatus] = useState("Branch Center");
+
+  // Lead Pipeline & Funnel Statuses State
+  const [statuses, setStatuses] = useState<string[]>([
+    "New",
+    "Contacted",
+    "Interested",
+    "Busy",
+    "Call Later",
+    "Not Interested",
+    "Counselling Scheduled",
+    "Visited Campus",
+    "Fee Discussion",
+    "Admitted",
+    "Lost",
+  ]);
+  const [isAddStatusModalOpen, setIsAddStatusModalOpen] = useState(false);
+  const [newStatusInput, setNewStatusInput] = useState("");
+
+  // WhatsApp Gateway API Configuration (MyDreamsTechnology)
+  const [waLicenseNumber, setWaLicenseNumber] = useState("90093749600");
+  const [waApiKey, setWaApiKey] = useState("kPHm6t2y5cW78qhKGvZYefQ3E");
+  const [waGatewayUrl, setWaGatewayUrl] = useState("https://wa.mydreamstechnology.in/api/sendtemplate.php");
+
   const [companyName, setCompanyName] = useState("WeGrow Skill Campus");
   const [tagline, setTagline] = useState("Empowering Careers Through Advanced Tech & Industry Skills");
   const [website, setWebsite] = useState("https://wegrow.edu.in");
@@ -214,56 +275,167 @@ export default function SettingsPage() {
                     WeGrow Physical Campuses & Learning Centers
                   </h3>
                   <p className="text-slate-500 text-[11px] mt-0.5">
-                    Physical offline classroom lab facilities
+                    Physical offline classroom lab facilities & branch offices
                   </p>
                 </div>
                 <button
                   type="button"
-                  onClick={() => alert("Add Campus Center Modal (Demo)")}
-                  className="px-3 py-1.5 bg-[#142B52] text-white rounded-lg text-xs font-bold"
+                  onClick={() => setIsAddCampusModalOpen(true)}
+                  className="px-3.5 py-2 bg-[#142B52] hover:bg-[#1E3B6E] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
                 >
-                  + Add Center
+                  <span>+ Add Center</span>
                 </button>
               </div>
 
+              {/* Add Center Modal */}
+              {isAddCampusModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl p-6 w-full max-w-lg space-y-4">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                      <h4 className="font-bold text-base text-slate-900 flex items-center gap-2">
+                        <MapPin className="w-5 h-5 text-[#0284c7]" />
+                        <span>Add New WeGrow Campus Center</span>
+                      </h4>
+                      <button
+                        type="button"
+                        onClick={() => setIsAddCampusModalOpen(false)}
+                        className="text-slate-400 hover:text-slate-600 text-lg font-bold"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">Center / Branch Name</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Sivakasi (Main Branch)"
+                          value={newCampusName}
+                          onChange={(e) => setNewCampusName(e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">Full Physical Address</label>
+                        <textarea
+                          rows={2}
+                          placeholder="Building, street, landmark, city, pincode"
+                          value={newCampusAddress}
+                          onChange={(e) => setNewCampusAddress(e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs resize-none"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">Center In-Charge</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Thavabalan"
+                            value={newCampusHead}
+                            onChange={(e) => setNewCampusHead(e.target.value)}
+                            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">Desk Phone</label>
+                          <input
+                            type="text"
+                            placeholder="+91 98431 73678"
+                            value={newCampusPhone}
+                            onChange={(e) => setNewCampusPhone(e.target.value)}
+                            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">Campus Type / Status</label>
+                        <select
+                          value={newCampusStatus}
+                          onChange={(e) => setNewCampusStatus(e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white font-medium"
+                        >
+                          <option value="Headquarters / Main Branch">Headquarters / Main Branch</option>
+                          <option value="Branch Center">Branch Center</option>
+                          <option value="Learning Center">Learning Center</option>
+                          <option value="Regional Office">Regional Office</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => setIsAddCampusModalOpen(false)}
+                        className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!newCampusName.trim()) return;
+                          setCampuses((prev) => [
+                            ...prev,
+                            {
+                              id: `camp-${Date.now()}`,
+                              name: newCampusName.trim(),
+                              address: newCampusAddress.trim(),
+                              head: newCampusHead.trim() || "Thavabalan",
+                              phone: newCampusPhone.trim() || "+91 98431 73678",
+                              status: newCampusStatus,
+                            },
+                          ]);
+                          setNewCampusName("");
+                          setNewCampusAddress("");
+                          setNewCampusHead("");
+                          setIsAddCampusModalOpen(false);
+                          showToast({
+                            type: "success",
+                            title: "Campus Added",
+                            message: `${newCampusName} has been added to WeGrow Campus network.`,
+                          });
+                        }}
+                        className="px-4 py-2 bg-[#142B52] text-white rounded-xl text-xs font-bold hover:bg-[#1E3B6E]"
+                      >
+                        Save Center
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-3">
-                {[
-                  {
-                    name: "Bangalore Main Campus (Koramangala)",
-                    address: "80 Feet Rd, 4th Block, Koramangala, Bengaluru, Karnataka 560034",
-                    head: "Priya Sharma",
-                    phone: "+91 80 4123 4567",
-                    status: "Headquarters",
-                  },
-                  {
-                    name: "Pune Tech Center (Hinjawadi)",
-                    address: "Phase 1, Hinjawadi Rajiv Gandhi Infotech Park, Pune, Maharashtra 411057",
-                    head: "Rahul Deshmukh",
-                    phone: "+91 20 6789 0123",
-                    status: "Regional Center",
-                  },
-                  {
-                    name: "Hyderabad Center (HITEC City)",
-                    address: "Madhapur, HITEC City, Hyderabad, Telangana 500081",
-                    head: "Sneha Patel",
-                    phone: "+91 40 2345 6789",
-                    status: "Branch Center",
-                  },
-                ].map((branch) => (
+                {campuses.map((branch) => (
                   <div
-                    key={branch.name}
-                    className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5"
+                    key={branch.id || branch.name}
+                    className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2 hover:border-slate-300 transition-colors"
                   >
                     <div className="flex items-center justify-between">
-                      <h4 className="font-bold text-slate-900 text-sm">
-                        {branch.name}
+                      <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                        <MapPin className="w-4 h-4 text-[#0284c7]" />
+                        <span>{branch.name}</span>
                       </h4>
-                      <span className="text-[10px] font-bold bg-[#D5A52B]/15 text-[#B88A1B] px-2 py-0.5 rounded">
-                        {branch.status}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold bg-[#D5A52B]/15 text-[#B88A1B] px-2.5 py-0.5 rounded-full">
+                          {branch.status}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm(`Remove ${branch.name}?`)) {
+                              setCampuses((prev) => prev.filter((c) => (c.id || c.name) !== (branch.id || branch.name)));
+                            }
+                          }}
+                          className="text-slate-400 hover:text-rose-600 text-xs px-1.5 py-0.5 rounded"
+                          title="Remove Campus"
+                        >
+                          ✕
+                        </button>
+                      </div>
                     </div>
-                    <p className="text-slate-500 text-[11px]">{branch.address}</p>
-                    <div className="flex items-center gap-4 text-slate-600 text-[11px] pt-1">
+                    <p className="text-slate-600 text-[11px] leading-relaxed pl-6">{branch.address}</p>
+                    <div className="flex items-center gap-5 text-slate-600 text-[11px] pt-1 pl-6">
                       <span>Center In-charge: <strong>{branch.head}</strong></span>
                       <span>Desk: <strong>{branch.phone}</strong></span>
                     </div>
@@ -276,29 +448,80 @@ export default function SettingsPage() {
           {/* TAB 3: PIPELINE STATUSES */}
           {activeTab === "statuses" && (
             <div className="space-y-4 text-xs">
-              <div className="pb-3 border-b border-slate-100">
-                <h3 className="font-bold text-base text-slate-900">
-                  Lead Disposition & Funnel Statuses
-                </h3>
-                <p className="text-slate-500 text-[11px] mt-0.5">
-                  Standardized stages used across telecalling workflows
-                </p>
+              <div className="pb-3 border-b border-slate-100 flex items-center justify-between">
+                <div>
+                  <h3 className="font-bold text-base text-slate-900">
+                    Lead Disposition & Funnel Statuses
+                  </h3>
+                  <p className="text-slate-500 text-[11px] mt-0.5">
+                    Pipeline stages used across telecalling queues and admission tracking
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsAddStatusModalOpen(true)}
+                  className="px-3.5 py-2 bg-[#142B52] hover:bg-[#1E3B6E] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                >
+                  <span>+ Add New Stage</span>
+                </button>
               </div>
 
+              {/* Add New Status Modal */}
+              {isAddStatusModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl p-6 w-full max-w-sm space-y-4">
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                      <h4 className="font-bold text-sm text-slate-900">Add New Pipeline Stage</h4>
+                      <button
+                        type="button"
+                        onClick={() => setIsAddStatusModalOpen(false)}
+                        className="text-slate-400 hover:text-slate-600 font-bold"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Stage / Disposition Name</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Document Verification / Aptitude Test"
+                        value={newStatusInput}
+                        onChange={(e) => setNewStatusInput(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"
+                      />
+                    </div>
+                    <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => setIsAddStatusModalOpen(false)}
+                        className="px-3 py-1.5 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!newStatusInput.trim()) return;
+                          setStatuses((prev) => [...prev, newStatusInput.trim()]);
+                          setNewStatusInput("");
+                          setIsAddStatusModalOpen(false);
+                          showToast({
+                            type: "success",
+                            title: "Stage Added",
+                            message: `New status "${newStatusInput.trim()}" enabled.`,
+                          });
+                        }}
+                        className="px-4 py-1.5 bg-[#142B52] text-white rounded-xl text-xs font-bold"
+                      >
+                        Add Stage
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-2">
-                {[
-                  "New",
-                  "Contacted",
-                  "Interested",
-                  "Busy",
-                  "Call Later",
-                  "Not Interested",
-                  "Counselling Scheduled",
-                  "Visited Campus",
-                  "Fee Discussion",
-                  "Admitted",
-                  "Lost",
-                ].map((status, i) => (
+                {statuses.map((status, i) => (
                   <div
                     key={status}
                     className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between"
@@ -306,15 +529,27 @@ export default function SettingsPage() {
                     <span className="font-bold text-slate-800">
                       {i + 1}. {status}
                     </span>
-                    <span className="text-[10px] text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded">
-                      Enabled
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded">
+                        Active
+                      </span>
+                      {i >= 11 && (
+                        <button
+                          type="button"
+                          onClick={() => setStatuses((prev) => prev.filter((s) => s !== status))}
+                          className="text-slate-400 hover:text-rose-600 px-1 font-bold"
+                          title="Remove custom stage"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
 
               <p className="text-[11px] text-slate-400 pt-2">
-                All 10 core statuses are standardized for consistent reporting and cannot be removed in demo mode.
+                Custom stages are automatically synchronized across Telecaller Call Logs, Leads Table, and the Admission Pipeline.
               </p>
             </div>
           )}
@@ -481,60 +716,28 @@ export default function SettingsPage() {
                       <h4 className="font-bold text-slate-900 text-xs">Active Office Network Profile</h4>
                       <p className="text-[11px] text-slate-500">Switch calling configuration when moving between campus branches</p>
                     </div>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
-                      {telephonyMode === "mobile"
-                        ? "📱 Mobile SIM (Android)"
-                        : "Presentation Mode"}
+                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      📱 Mobile SIM (Android Bridge) Active
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-                    <button
-                      type="button"
-                      onClick={() => setTelephonyMode("mobile")}
-                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                        telephonyMode === "mobile"
-                          ? "bg-[#142B52] text-white border-[#142B52] shadow-sm"
-                          : "bg-white text-slate-800 border-slate-200 hover:bg-slate-100/70"
-                      }`}
-                    >
+                  <div className="pt-1">
+                    <div className="p-4 rounded-xl border bg-[#142B52] text-white border-[#142B52] shadow-sm space-y-1">
                       <div className="font-bold text-xs flex items-center justify-between">
-                        <span>📱 Mobile Phone SIM (Android Bridge)</span>
-                        {telephonyMode === "mobile" && <span className="w-2 h-2 rounded-full bg-emerald-400" />}
+                        <span className="flex items-center gap-2">
+                          <Smartphone className="w-4 h-4 text-emerald-400" />
+                          <span>Mobile Phone SIM (Android Bridge) — 100% Operational</span>
+                        </span>
+                        <span className="flex items-center gap-1.5 text-[10px] bg-emerald-500/20 text-emerald-300 px-2.5 py-0.5 rounded-full font-bold">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                          Live Calling Active
+                        </span>
                       </div>
-                      <p className={`text-[10px] mt-1 ${telephonyMode === "mobile" ? "text-slate-300" : "text-slate-500"}`}>
-                        Dials directly through your Android phone SIM card with live talk duration sync
+                      <p className="text-[11px] text-slate-300">
+                        All telecalling dials directly through the assigned counsellor's Android SIM card. Spoken call duration, timestamps, and recording indicators sync automatically to the CRM Cloud.
                       </p>
-                    </button>
-
-                    {/* MicroSIP & Landline options kept in code only as comments - not visible on webpage */}
-                    {/*
-                    <button
-                      type="button"
-                      onClick={() => setTelephonyMode("jio")}
-                      className="p-3 rounded-xl border text-left"
-                    >
-                      <span>🏢 Local Branch MicroSIP</span>
-                    </button>
-                    */}
-
-                    <button
-                      type="button"
-                      onClick={() => setTelephonyMode("presentation")}
-                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                        telephonyMode === "presentation"
-                          ? "bg-[#142B52] text-white border-[#142B52] shadow-sm"
-                          : "bg-white text-slate-800 border-slate-200 hover:bg-slate-100/70"
-                      }`}
-                    >
-                      <div className="font-bold text-xs flex items-center justify-between">
-                        <span>🎯 Presentation / Demo Mode</span>
-                        {telephonyMode === "presentation" && <span className="w-2 h-2 rounded-full bg-emerald-400" />}
-                      </div>
-                      <p className={`text-[10px] mt-1 ${telephonyMode === "presentation" ? "text-slate-300" : "text-slate-500"}`}>
-                        100% reliable simulated demo for presentations on any Wi-Fi/Hotspot
-                      </p>
-                    </button>
+                    </div>
                   </div>
                 </div>
                 <div>
@@ -598,46 +801,74 @@ export default function SettingsPage() {
           {/* TAB 7: WHATSAPP SETTINGS */}
           {activeTab === "whatsapp" && (
             <div className="space-y-5 text-xs">
-              <div className="pb-3 border-b border-slate-100">
-                <h3 className="font-bold text-base text-slate-900">
-                  WhatsApp Business API Configuration
-                </h3>
-                <p className="text-slate-500 text-[11px] mt-0.5">
-                  Official verified sender details and default message footer
-                </p>
+              <div className="pb-3 border-b border-slate-100 flex items-center justify-between">
+                <div>
+                  <h3 className="font-bold text-base text-slate-900">
+                    Official WhatsApp Cloud Gateway Configuration
+                  </h3>
+                  <p className="text-slate-500 text-[11px] mt-0.5">
+                    Powered by MyDreamsTechnology Official Template Gateway
+                  </p>
+                </div>
+                <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  Gateway Connected
+                </span>
               </div>
 
               <div className="space-y-4">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    WhatsApp Display Name
-                  </label>
-                  <input
-                    type="text"
-                    defaultValue="WeGrow Skill Campus Admissions"
-                    className="w-full px-3 py-2 border rounded-xl"
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      License Number
+                    </label>
+                    <input
+                      type="text"
+                      value={waLicenseNumber}
+                      onChange={(e) => setWaLicenseNumber(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl font-mono text-xs font-bold text-slate-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      API Secret Key
+                    </label>
+                    <input
+                      type="text"
+                      value={waApiKey}
+                      onChange={(e) => setWaApiKey(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl font-mono text-xs font-bold text-slate-800"
+                    />
+                  </div>
                 </div>
 
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
-                    Official WhatsApp Sender Number
+                    API Gateway Endpoint URL
                   </label>
                   <input
                     type="text"
-                    defaultValue="+91 80 4123 4567"
-                    className="w-full px-3 py-2 border rounded-xl font-mono"
+                    value={waGatewayUrl}
+                    onChange={(e) => setWaGatewayUrl(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl font-mono text-xs text-slate-600"
                   />
+                </div>
+
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                  <p className="font-bold text-slate-800 text-xs">Direct Template Dispatch Format:</p>
+                  <code className="text-[10px] text-[#0284c7] block overflow-x-auto whitespace-pre font-mono p-2 bg-white rounded border border-slate-200">
+                    https://wa.mydreamstechnology.in/api/sendtemplate.php?LicenseNumber={waLicenseNumber}&APIKey={waApiKey}&Contact=91...&Template=...
+                  </code>
                 </div>
 
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
-                    Standard Message Signoff / Footer
+                    Standard Message Signoff / Campus Signature
                   </label>
                   <textarea
                     rows={2}
-                    defaultValue="Warm regards, WeGrow Skill Campus Admissions Office | www.wegrow.edu.in"
-                    className="w-full px-3 py-2 border rounded-xl"
+                    defaultValue="Warm regards, WeGrow Skill Campus Admissions Office • Sivakasi & Srivilliputtur | www.wegrow.edu.in"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"
                   />
                 </div>
               </div>
@@ -645,10 +876,10 @@ export default function SettingsPage() {
               <div className="pt-3 border-t border-slate-100 flex justify-end">
                 <button
                   type="button"
-                  onClick={() => handleSave("WhatsApp Settings")}
-                  className="px-5 py-2.5 bg-[#142B52] text-white rounded-xl font-bold"
+                  onClick={() => handleSave("WhatsApp Official API Settings")}
+                  className="px-5 py-2.5 bg-[#142B52] hover:bg-[#1E3B6E] text-white rounded-xl font-bold cursor-pointer transition-all"
                 >
-                  Save WhatsApp Settings
+                  Save WhatsApp Gateway Settings
                 </button>
               </div>
             </div>

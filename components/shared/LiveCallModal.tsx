@@ -50,6 +50,7 @@ export const LiveCallModal: React.FC = () => {
 
   // Disposition Form State
   const [outcome, setOutcome] = useState("Interested");
+  const [customReason, setCustomReason] = useState("");
   const [remarks, setRemarks] = useState("");
   const [nextFollowUpDate, setNextFollowUpDate] = useState("2026-11-13");
   const [nextFollowUpTime, setNextFollowUpTime] = useState("11:00 AM");
@@ -82,6 +83,7 @@ export const LiveCallModal: React.FC = () => {
     }
 
     setRemarks("");
+    setCustomReason("");
     setOutcome("Interested");
   }, [isCallModalOpen, activeCallLead]);
 
@@ -120,13 +122,16 @@ export const LiveCallModal: React.FC = () => {
       isSpoken = !isNaN(num) && num > 0;
     }
     const callOutcome = isSpoken ? "Attended Call" : "Not Attended Call";
+    const dispositionRemarks = customReason.trim()
+      ? (remarks.trim() ? `${remarks.trim()} | Specific Reason: ${customReason.trim()}` : `Mindset: ${outcome} | Specific Reason: ${customReason.trim()}`)
+      : (remarks.trim() || `Inquiry handled by ${selectedStaff}. Mindset: ${outcome}`);
 
     addCallRecord(activeCallLead.id, {
       callerName: selectedStaff,
       outcome: callOutcome,
       mindset: outcome,
       duration: finalDuration,
-      remarks: remarks || `Inquiry handled by ${selectedStaff}. Mindset: ${outcome}`,
+      remarks: dispositionRemarks,
       nextFollowUpDate: nextFollowUpDate,
       nextFollowUpTime: nextFollowUpTime,
       studentName: activeCallLead.studentName,
@@ -414,6 +419,25 @@ export const LiveCallModal: React.FC = () => {
                       </button>
                     );
                   })}
+                </div>
+
+                {/* Dedicated Manual Custom Reason / Feedback Box */}
+                <div className="mt-2.5 p-3 bg-amber-50/70 rounded-xl border border-amber-200/90 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-slate-800 flex items-center gap-1.5">
+                      <span>✏️ Specific Reason / Objection Details (Manual Note):</span>
+                    </label>
+                    <span className="text-[10px] text-amber-800 bg-amber-100/70 px-2 py-0.5 rounded font-medium">
+                      Optional / Custom Reason
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    value={customReason}
+                    onChange={(e) => setCustomReason(e.target.value)}
+                    placeholder="Enter reason e.g. High course fees, timing clash, parent consultation..."
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#142B52]/20 font-medium placeholder:text-slate-400"
+                  />
                 </div>
               </div>
 

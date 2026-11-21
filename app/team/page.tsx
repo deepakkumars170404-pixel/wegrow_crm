@@ -25,6 +25,11 @@ export default function TeamPerformancePage() {
   // Sorted by rank or admissions
   const sortedCallers = [...telecallers].sort((a, b) => a.rank - b.rank);
 
+  // Dynamic calling target metrics (0 / 240 when starting fresh)
+  const totalCallsDone = telecallers.reduce((acc, t) => acc + (t.callsCompleted || 0), 0);
+  const totalDailyTarget = telecallers.reduce((acc, t) => acc + (t.dailyTarget || 0), 0) || 240;
+  const targetPct = totalDailyTarget > 0 ? ((totalCallsDone / totalDailyTarget) * 100).toFixed(1) : "0.0";
+
   return (
     <div className="space-y-6 pb-12">
       {/* Top Banner */}
@@ -36,7 +41,7 @@ export default function TeamPerformancePage() {
             </h2>
             <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#D5A52B]/15 text-[#B88A1B] flex items-center gap-1">
               <Trophy className="w-3.5 h-3.5" />
-              October 2026 Season
+              Live Calling Season
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
@@ -46,7 +51,7 @@ export default function TeamPerformancePage() {
 
         <div className="text-right">
           <p className="text-xs text-slate-500">Team Daily Calling Target</p>
-          <p className="text-lg font-bold text-[#142B52]">237 / 260 Calls Done (91.1%)</p>
+          <p className="text-lg font-bold text-[#142B52]">{totalCallsDone} / {totalDailyTarget} Calls Done ({targetPct}%)</p>
         </div>
       </div>
 

@@ -43,12 +43,27 @@ export default function WhatsAppPage() {
     );
   });
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!messageInput.trim() || !activeChat) return;
 
-    sendWhatsAppMessage(activeChat.id, messageInput.trim());
+    const msg = messageInput.trim();
+    sendWhatsAppMessage(activeChat.id, msg);
     setMessageInput("");
+
+    // Trigger Official MyDreamsTechnology Gateway API in background
+    try {
+      fetch("/api/whatsapp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone: activeChat.phone,
+          template: selectedTemplate?.title || "wegrow_course_info",
+          param: `${activeChat.studentName},${activeChat.course}`,
+          name: activeChat.studentName,
+        }),
+      }).catch(() => {});
+    } catch {}
   };
 
   const handleApplyTemplate = (tpl: WhatsAppTemplate) => {
@@ -73,7 +88,7 @@ export default function WhatsAppPage() {
             </h2>
             <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              WeGrow Official WhatsApp Business API (Simulated Demo)
+              Official WhatsApp Gateway (License: 90093749600 • wa.mydreamstechnology.in)
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">

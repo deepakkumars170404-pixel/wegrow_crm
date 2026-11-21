@@ -90,6 +90,7 @@ interface CRMContextType {
   
   // Leads & Data Actions
   addLead: (lead: Omit<Lead, "id" | "callCount">) => void;
+  batchAddLeads: (leads: Omit<Lead, "id" | "callCount">[]) => void;
   updateLead: (id: string, updated: Partial<Lead>) => void;
   updateLeadStatus: (id: string, status: LeadStatus, stage?: PipelineStage) => void;
   assignCaller: (leadId: string, callerName: string) => void;
@@ -1008,6 +1009,27 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
+  const batchAddLeads = (newLeadsData: Omit<Lead, "id" | "callCount">[]) => {
+    if (!Array.isArray(newLeadsData) || newLeadsData.length === 0) return;
+    const now = Date.now();
+    const formatted: Lead[] = newLeadsData.map((data, idx) => ({
+      ...data,
+      id: `LD-${now}-${idx + 1}`,
+      callCount: 0,
+      notes: data.notes || [],
+      callHistory: [],
+    }));
+    const updated = [...formatted, ...leads];
+    setLeads(updated);
+    if (formatted[0]) setActiveCallLead(formatted[0]);
+    persistLeads(updated);
+    showToast({
+      type: "success",
+      title: "Batch Import Completed",
+      message: `Successfully imported ${formatted.length} student leads into WeGrow CRM and Telecaller Queue!`,
+    });
+  };
+
   const updateLead = (id: string, updated: Partial<Lead>) => {
     const newLeads = leads.map((lead) => (lead.id === id ? { ...lead, ...updated } : lead));
     setLeads(newLeads);
@@ -1483,6 +1505,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         refreshTelephonyStatus,
         reconnectTelephony,
                 addLead,
+        batchAddLeads,
         updateLead,
         updateLeadStatus,
         assignCaller,
