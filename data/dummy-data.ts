@@ -59,7 +59,7 @@ export const initialTelecallers: Telecaller[] = [
     phone: "+91 98431 73678",
     avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80",
     role: "Senior Telecaller",
-    assignedLeads: 45,
+    assignedLeads: 0,
     dailyTarget: 60,
     callsCompleted: 35,
     connectedCalls: 28,
@@ -76,7 +76,7 @@ export const initialTelecallers: Telecaller[] = [
     phone: "+91 99438 77948",
     avatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80",
     role: "Senior Telecaller",
-    assignedLeads: 40,
+    assignedLeads: 0,
     dailyTarget: 55,
     callsCompleted: 32,
     connectedCalls: 26,
@@ -93,7 +93,7 @@ export const initialTelecallers: Telecaller[] = [
     phone: "+91 90923 22803",
     avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
     role: "Senior Telecaller",
-    assignedLeads: 38,
+    assignedLeads: 0,
     dailyTarget: 50,
     callsCompleted: 30,
     connectedCalls: 24,
@@ -110,7 +110,7 @@ export const initialTelecallers: Telecaller[] = [
     phone: "+91 98431 73678",
     avatar: "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=150&auto=format&fit=crop&q=80",
     role: "Admissions Counsellor",
-    assignedLeads: 35,
+    assignedLeads: 0,
     dailyTarget: 45,
     callsCompleted: 28,
     connectedCalls: 22,
@@ -127,7 +127,7 @@ export const initialTelecallers: Telecaller[] = [
     phone: "+91 99438 77948",
     avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80",
     role: "Telecalling Executive",
-    assignedLeads: 30,
+    assignedLeads: 0,
     dailyTarget: 40,
     callsCompleted: 24,
     connectedCalls: 18,
@@ -140,106 +140,13 @@ export const initialTelecallers: Telecaller[] = [
 ];
 
 // 3. ONLY Real Lead: Rahul (Dummy leads eliminated as requested)
-export const initialLeads: Lead[] = [
-  {
-    id: "LD-1794395338111",
-    studentName: "Rahul",
-    phone: "+91 7010619201",
-    email: "rahul.marketing@wegrow.local",
-    courseInterested: "19. Digital Marketing - Social Media (2 Months)",
-    leadSource: "Phone",
-    assignedCaller: "MuthuSelvi",
-    priority: "Hot",
-    status: "Interested",
-    enquiryDate: "2026-11-11",
-    nextFollowUpDate: "2026-11-21",
-    nextFollowUpTime: "03:00 PM",
-    city: "Tamil Nadu",
-    education: "B.Com (General), 2024",
-    qualification: "B.Com (General)",
-    passedOutYear: "2024",
-    collegeName: "Ayya Nadar Janaki Ammal College (ANJAC), Sivakasi",
-    callCount: 1,
-    lastCallDate: "2026-11-11",
-    lastCallOutcome: "Visit to Institute",
-    stage: "Interested",
-    notes: [
-      {
-        id: "nt-rahul-1",
-        author: "MuthuSelvi",
-        timestamp: "2026-11-11 04:38 PM",
-        content: "Rahul inquired about 19. Digital Marketing - Social Media (2 Months). Qualification: B.Com (General), Ayya Nadar Janaki Ammal College (ANJAC), Sivakasi. Agreed to visit institute.",
-      },
-    ],
-    callHistory: [
-      {
-        id: "cr-mob-1794395415756",
-        callDate: "2026-11-11",
-        callTime: "04:37:37 pm",
-        callerName: "MuthuSelvi",
-        duration: "01:05",
-        durationFormatted: "1 minute 5 seconds",
-        fromTime: "04:37:37 pm",
-        endTime: "04:38:42 pm",
-        outcome: "Attended Call",
-        mindset: "Visit to Institute",
-        courseInterested: "19. Digital Marketing - Social Media (2 Months)",
-        qualification: "B.Com (General)",
-        passedOutYear: "2024",
-        collegeName: "Ayya Nadar Janaki Ammal College (ANJAC), Sivakasi",
-        studentName: "Rahul",
-        remarks: "Rahul ask the details (Course: 19. Digital Marketing - Social Media (2 Months) • Qualification: B.Com (General) • Passed Out: 2024 • College: Ayya Nadar Janaki Ammal College (ANJAC), Sivakasi)",
-      },
-    ],
-  },
-];
+export const initialLeads: Lead[] = [];
 
 // 4. Follow-up for Rahul
-export const initialFollowUps: FollowUpTask[] = [
-  {
-    id: "fu-rahul-1",
-    leadId: "LD-1794395338111",
-    studentName: "Rahul",
-    phone: "+91 7010619201",
-    course: "19. Digital Marketing - Social Media (2 Months)",
-    assignedCaller: "MuthuSelvi",
-    lastContacted: "2026-11-11 04:37:37 pm",
-    followUpDate: "2026-11-21",
-    followUpTime: "03:00 PM",
-    status: "Upcoming",
-    priority: "Hot",
-    remarks: "Follow up scheduled by MuthuSelvi: Rahul ask the details (Visit to Institute)",
-  },
-];
+export const initialFollowUps: FollowUpTask[] = [];
 
 // 5. WhatsApp Chats
-export const initialWhatsAppChats: WhatsAppChat[] = [
-  {
-    id: "chat-rahul",
-    leadId: "LD-1794395338111",
-    studentName: "Rahul",
-    phone: "+91 7010619201",
-    course: "19. Digital Marketing - Social Media (2 Months)",
-    unreadCount: 0,
-    lastMessage: "Yes ma'am, I will visit WeGrow Institute campus for direct admission discussion.",
-    lastMessageTime: "04:40 PM",
-    messages: [
-      {
-        id: "m-r1",
-        sender: "caller",
-        text: "Hi Rahul! Greetings from WeGrow Skill Campus. Thank you for your inquiry regarding our 19. Digital Marketing - Social Media (2 Months) program.",
-        timestamp: "Today, 04:38 PM",
-        status: "read",
-      },
-      {
-        id: "m-r2",
-        sender: "student",
-        text: "Yes ma'am, I will visit WeGrow Institute campus for direct admission discussion.",
-        timestamp: "Today, 04:40 PM",
-      },
-    ],
-  },
-];
+export const initialWhatsAppChats: WhatsAppChat[] = [];
 
 // 6. WhatsApp Templates
 export const initialWhatsAppTemplates: WhatsAppTemplate[] = [
@@ -289,7 +196,7 @@ export const initialUsers: AppUser[] = [
     email: "lakshmipriya.gm@wegrow.edu",
     phone: "+91 98431 73678",
     role: "Admin",
-    assignedLeads: 35,
+    assignedLeads: 0,
     status: "Active",
     joinedDate: "15 Jan 2023",
     avatar: "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=150&auto=format&fit=crop&q=80",
@@ -313,7 +220,7 @@ export const initialUsers: AppUser[] = [
     email: "muthumeena@wegrow.edu",
     phone: "+91 98431 73678",
     role: "Telecaller",
-    assignedLeads: 45,
+    assignedLeads: 0,
     status: "Active",
     joinedDate: "01 Mar 2023",
     avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80",
@@ -325,7 +232,7 @@ export const initialUsers: AppUser[] = [
     email: "muthuselvi@wegrow.edu",
     phone: "+91 99438 77948",
     role: "Telecaller",
-    assignedLeads: 40,
+    assignedLeads: 0,
     status: "Active",
     joinedDate: "01 Mar 2023",
     avatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80",
@@ -337,7 +244,7 @@ export const initialUsers: AppUser[] = [
     email: "devipriya@wegrow.edu",
     phone: "+91 90923 22803",
     role: "Telecaller",
-    assignedLeads: 38,
+    assignedLeads: 0,
     status: "Active",
     joinedDate: "15 Mar 2023",
     avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
@@ -349,7 +256,7 @@ export const initialUsers: AppUser[] = [
     email: "subhashini@wegrow.edu",
     phone: "+91 99438 77948",
     role: "Telecaller",
-    assignedLeads: 30,
+    assignedLeads: 0,
     status: "Active",
     joinedDate: "01 Apr 2023",
     avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80",
@@ -358,44 +265,32 @@ export const initialUsers: AppUser[] = [
 ];
 
 export const dashboardStats = {
-  totalLeads: 1,
-  activeEnquiries: 1,
+  totalLeads: 0,
+  activeEnquiries: 0,
   admissionsClosed: 0,
-  conversionRate: "100%",
-  callsMadeToday: 1,
-  pendingFollowUps: 1,
-  averageCallDuration: "01:05",
+  conversionRate: "0%",
+  callsMadeToday: 0,
+  pendingFollowUps: 0,
+  averageCallDuration: "00:00",
   revenueGenerated: "₹0",
 };
 
 export const leadGrowthChartData = [
   { name: "Week 1", leads: 0 },
-  { name: "Week 2", leads: 1 },
+  { name: "Week 2", leads: 0 },
 ];
 
 export const monthlyGrowthChartData = [
-  { month: "Nov 2026", leads: 1, admissions: 0 },
+  { month: "Nov 2026", leads: 0, admissions: 0 },
 ];
 
-export const leadSourceDistribution = [
-  { name: "Phone", value: 1, color: "#10b981" },
-];
+export const leadSourceDistribution: any[] = [];
 
 export const admissionFunnelData = [
-  { stage: "Enquiry", count: 1, percentage: 100, color: "#6366f1" },
-  { stage: "Connected", count: 1, percentage: 100, color: "#0ea5e9" },
-  { stage: "Interested", count: 1, percentage: 100, color: "#f59e0b" },
-  { stage: "Visit", count: 1, percentage: 100, color: "#10b981" },
+  { stage: "Enquiry", count: 0, percentage: 0, color: "#6366f1" },
+  { stage: "Connected", count: 0, percentage: 0, color: "#0ea5e9" },
+  { stage: "Interested", count: 0, percentage: 0, color: "#f59e0b" },
+  { stage: "Visit", count: 0, percentage: 0, color: "#10b981" },
 ];
 
-export const recentActivityTimeline = [
-  {
-    id: "act-1",
-    type: "call",
-    title: "Call Attended: Rahul",
-    description: "MuthuSelvi spoke with Rahul for 1m 5s. Mindset: Visit to Institute.",
-    desc: "MuthuSelvi spoke with Rahul for 1m 5s. Mindset: Visit to Institute.",
-    user: "MuthuSelvi",
-    time: "Today 04:38 PM",
-  },
-];
+export const recentActivityTimeline: any[] = [];
