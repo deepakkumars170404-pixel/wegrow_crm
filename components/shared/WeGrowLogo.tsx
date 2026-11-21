@@ -21,7 +21,7 @@ export const WeGrowLogo: React.FC<WeGrowLogoProps> = ({
         <img
           src="/wegrow-logo.png"
           alt="WeGrow Telecalling App Logo"
-          className="w-full h-full object-cover rounded-[10px]"
+          className="w-full h-full object-contain rounded-[10px]"
         />
         <span className="absolute -top-0.5 -right-0.5 flex h-3 w-3">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
