@@ -21,6 +21,7 @@ import {
   UserCheck,
   Sparkles,
   Users,
+  KeyRound,
 } from "lucide-react";
 import { WeGrowLogo } from "@/components/shared/WeGrowLogo";
 import { StaffAvatar } from "@/components/shared/StaffAvatar";
@@ -60,6 +61,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     currentStaff,
     logoutStaff,
     openLoginModal,
+    openChangePinModal,
   } = useCRM();
 
   const currentUserName =
@@ -397,6 +399,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
             {!collapsed && (
               <div className="flex items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={openChangePinModal}
+                  title="Change Security PIN"
+                  className="text-slate-400 hover:text-[#D5A52B] p-1.5 rounded-lg hover:bg-[#1E3B6E] transition-colors cursor-pointer"
+                >
+                  <KeyRound className="w-3.5 h-3.5" />
+                </button>
                 <button
                   type="button"
                   onClick={openLoginModal}

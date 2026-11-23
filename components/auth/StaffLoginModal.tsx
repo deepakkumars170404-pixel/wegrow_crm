@@ -48,10 +48,14 @@ export const StaffLoginModal: React.FC = () => {
     if (e) e.preventDefault();
     setErrorMsg("");
 
-    if (usePinMode && pinInput.trim()) {
+    if (usePinMode) {
+      if (!pinInput.trim()) {
+        setErrorMsg("Please enter your 4-digit PIN (default: 1234 or your custom PIN).");
+        return;
+      }
       const ok = loginStaff(selectedUserId, pinInput.trim());
       if (!ok) {
-        setErrorMsg("Incorrect PIN. Default PIN is 1234.");
+        setErrorMsg("Incorrect PIN. If you forgot your PIN, please contact Admin or Owner to reset it.");
         return;
       }
     } else {
@@ -322,7 +326,7 @@ export const StaffLoginModal: React.FC = () => {
                 {usePinMode ? (
                   <div className="space-y-2">
                     <label className="block text-xs font-semibold text-slate-700">
-                      Enter 4-Digit PIN (Default: 1234)
+                      Enter 4-Digit PIN (Default: 1234 or your custom PIN)
                     </label>
                     <div className="relative">
                       <KeyRound className="w-4 h-4 text-slate-400 absolute left-3 top-3" />

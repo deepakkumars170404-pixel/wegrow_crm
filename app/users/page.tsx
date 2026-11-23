@@ -17,6 +17,7 @@ import {
   Camera,
   Upload,
   RotateCcw,
+  KeyRound,
 } from "lucide-react";
 import { useCRM } from "@/context/CRMContext";
 import { StaffAvatar } from "@/components/shared/StaffAvatar";
@@ -29,6 +30,7 @@ export default function UsersRolesPage() {
     updateUserRole,
     toggleUserStatus,
     updateUserAvatar,
+    adminResetStaffPin,
     activeUserRole,
     setActiveUserRole,
   } = useCRM();
@@ -329,13 +331,30 @@ export default function UsersRolesPage() {
                   <td className="py-3.5 px-4 text-right">
                     <div className="flex items-center justify-end gap-1.5">
                       {canManageStaff ? (
-                        <button
-                          onClick={() => setEditingUser(u)}
-                          title="Edit User Role"
-                          className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 cursor-pointer"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
+                        <>
+                          <button
+                            onClick={() => {
+                              const confirmed = window.confirm(
+                                `Reset security PIN for ${u.name} back to default (1234)?`
+                              );
+                              if (confirmed) {
+                                adminResetStaffPin(u.id);
+                              }
+                            }}
+                            title={`Reset PIN for ${u.name} to 1234`}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-colors cursor-pointer"
+                          >
+                            <KeyRound className="w-3.5 h-3.5 text-amber-600" />
+                            <span>Reset PIN</span>
+                          </button>
+                          <button
+                            onClick={() => setEditingUser(u)}
+                            title="Edit User Role"
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 cursor-pointer"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                        </>
                       ) : (
                         <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
                           <Lock className="w-3 h-3 text-slate-300" />

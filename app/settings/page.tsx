@@ -17,11 +17,15 @@ import {
   X,
   Trash2,
   Plus,
+  KeyRound,
+  ShieldCheck,
+  Lock,
 } from "lucide-react";
 import { useCRM } from "@/context/CRMContext";
+import { StaffAvatar } from "@/components/shared/StaffAvatar";
 
 export default function SettingsPage() {
-  const { showToast, telephonyMode, setTelephonyMode } = useCRM();
+  const { showToast, telephonyMode, setTelephonyMode, currentStaff, openChangePinModal } = useCRM();
 
   const [activeTab, setActiveTab] = useState<
     | "company"
@@ -31,7 +35,8 @@ export default function SettingsPage() {
     | "notifications"
     | "calling"
     | "whatsapp"
-      >("company");
+    | "security"
+  >("company");
 
   // Company Profile State
     // Physical Campuses State with real WeGrow locations
@@ -151,7 +156,8 @@ export default function SettingsPage() {
             { id: "notifications", label: "Notification Preferences", icon: Bell },
             { id: "calling", label: "Telecalling Dialer Settings", icon: PhoneCall },
             { id: "whatsapp", label: "WhatsApp Template Settings", icon: MessageSquare },
-                      ].map((item) => {
+            { id: "security", label: "My Account & Security PIN", icon: KeyRound },
+          ].map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
             return (
@@ -881,6 +887,64 @@ export default function SettingsPage() {
                 >
                   Save WhatsApp Gateway Settings
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 8: SECURITY & PIN SETTINGS */}
+          {activeTab === "security" && (
+            <div className="space-y-6 text-xs">
+              <div className="pb-3 border-b border-slate-100 flex items-center justify-between">
+                <div>
+                  <h3 className="font-bold text-base text-slate-900">
+                    My Account & 4-Digit Security PIN
+                  </h3>
+                  <p className="text-slate-500 text-[11px] mt-0.5">
+                    Manage your personal login credentials and desk access authentication
+                  </p>
+                </div>
+                <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                  PIN Protection Active
+                </span>
+              </div>
+
+              {/* Current User Card */}
+              {currentStaff && (
+                <div className="p-5 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <StaffAvatar name={currentStaff.name} avatar={currentStaff.avatar} size="lg" />
+                    <div>
+                      <h4 className="font-black text-sm text-slate-900">{currentStaff.name}</h4>
+                      <p className="text-xs text-slate-500 font-medium">{currentStaff.email}</p>
+                      <span className="inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#142B52]/10 text-[#142B52]">
+                        {currentStaff.role}
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={openChangePinModal}
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#142B52] hover:bg-[#1E3B6E] text-white rounded-xl font-bold text-xs shadow-sm transition-all cursor-pointer"
+                  >
+                    <KeyRound className="w-4 h-4 text-[#D5A52B]" />
+                    <span>Change My 4-Digit PIN</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Info Box */}
+              <div className="p-4 bg-amber-50/60 border border-amber-200/80 rounded-2xl space-y-2">
+                <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
+                  <Lock className="w-4 h-4 text-amber-700" />
+                  <span>How WeGrow Staff PINs Work</span>
+                </div>
+                <ul className="text-slate-600 text-[11px] space-y-1.5 list-disc list-inside">
+                  <li>Your default PIN is <strong className="text-slate-900">1234</strong> unless you change it.</li>
+                  <li>Click <strong className="text-[#142B52]">"Change My 4-Digit PIN"</strong> to set your private password.</li>
+                  <li>In case you forget your PIN, your Admin or Owner (Thavabalan / LakshmiPriya) can reset it back to 1234 from the Users Management screen.</li>
+                </ul>
               </div>
             </div>
           )}

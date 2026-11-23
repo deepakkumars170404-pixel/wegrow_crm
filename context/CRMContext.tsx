@@ -68,6 +68,11 @@ interface CRMContextType {
   isLoginModalOpen: boolean;
   openLoginModal: () => void;
   closeLoginModal: () => void;
+  changeStaffPin: (userId: string, oldPin: string, newPin: string) => { success: boolean; message: string };
+  adminResetStaffPin: (userId: string) => { success: boolean; message: string };
+  isChangePinModalOpen: boolean;
+  openChangePinModal: () => void;
+  closeChangePinModal: () => void;
   toasts: ToastMessage[];
   showToast: (toast: Omit<ToastMessage, "id">) => void;
   addToast: (title: string, type?: "success" | "info" | "warning" | "error") => void;
@@ -1580,14 +1585,89 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
+  const [isChangePinModalOpen, setIsChangePinModalOpen] = useState<boolean>(false);
+  const openChangePinModal = useCallback(() => setIsChangePinModalOpen(true), []);
+  const closeChangePinModal = useCallback(() => setIsChangePinModalOpen(false), []);
+
+  const changeStaffPin = useCallback(
+    (userId: string, oldPin: string, newPin: string): { success: boolean; message: string } => {
+      const user = users.find((u) => u.id === userId);
+      if (!user) {
+        return { success: false, message: "User account not found." };
+      }
+      const currentPin = user.pin || "1234";
+      if (oldPin.trim() !== currentPin) {
+        return { success: false, message: "Current PIN is incorrect. Default is 1234." };
+      }
+      const cleanNewPin = newPin.trim();
+      if (!/^\d{4}$/.test(cleanNewPin)) {
+        return { success: false, message: "New PIN must be exactly 4 numeric digits." };
+      }
+
+      setUsers((prev) => {
+        const updated = prev.map((u) => (u.id === userId ? { ...u, pin: cleanNewPin } : u));
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.setItem("wegrow_crm_users_v2", JSON.stringify(updated));
+          } catch {}
+        }
+        return updated;
+      });
+
+      if (currentStaff?.id === userId) {
+        setCurrentStaff((prev) => (prev ? { ...prev, pin: cleanNewPin } : null));
+      }
+
+      showToast({
+        type: "success",
+        title: "Security PIN Updated",
+        message: `Your new 4-digit PIN has been saved successfully.`,
+      });
+      return { success: true, message: "PIN updated successfully!" };
+    },
+    [users, currentStaff, showToast]
+  );
+
+  const adminResetStaffPin = useCallback(
+    (userId: string): { success: boolean; message: string } => {
+      const user = users.find((u) => u.id === userId);
+      if (!user) {
+        return { success: false, message: "User account not found." };
+      }
+
+      setUsers((prev) => {
+        const updated = prev.map((u) => (u.id === userId ? { ...u, pin: "1234" } : u));
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.setItem("wegrow_crm_users_v2", JSON.stringify(updated));
+          } catch {}
+        }
+        return updated;
+      });
+
+      if (currentStaff?.id === userId) {
+        setCurrentStaff((prev) => (prev ? { ...prev, pin: "1234" } : null));
+      }
+
+      showToast({
+        type: "info",
+        title: "PIN Reset to Default",
+        message: `${user.name}'s security PIN has been reset to default (1234).`,
+      });
+      return { success: true, message: `PIN reset to 1234 for ${user.name}` };
+    },
+    [users, currentStaff, showToast]
+  );
+
   const loginStaff = useCallback((userId: string, pin?: string): boolean => {
     const user = users.find((u) => u.id === userId || u.name.toLowerCase() === userId.toLowerCase());
     if (!user) return false;
-    if (pin && user.pin && pin !== user.pin && pin !== "1234") {
+    const expectedPin = user.pin || "1234";
+    if (pin && pin !== expectedPin) {
       showToast({
         type: "error",
         title: "Incorrect PIN",
-        message: "The entered PIN is incorrect. Default PIN is 1234.",
+        message: "The entered PIN is incorrect. Please try again or ask Admin to reset.",
       });
       return false;
     }
@@ -1655,6 +1735,11 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isLoginModalOpen,
         openLoginModal,
         closeLoginModal,
+        changeStaffPin,
+        adminResetStaffPin,
+        isChangePinModalOpen,
+        openChangePinModal,
+        closeChangePinModal,
         toasts,
         showToast,
         addToast,

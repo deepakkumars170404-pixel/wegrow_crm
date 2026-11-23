@@ -30,10 +30,12 @@ import {
   Camera,
   LogOut,
   Users,
+  KeyRound,
 } from "lucide-react";
 import { useCRM } from "@/context/CRMContext";
 import { recentActivityTimeline } from "@/data/dummy-data";
 import { StaffAvatar } from "@/components/shared/StaffAvatar";
+import { ChangePinModal } from "@/components/auth/ChangePinModal";
 
 interface HeaderProps {
   onMobileMenuToggle: () => void;
@@ -57,6 +59,7 @@ export const Header: React.FC<HeaderProps> = ({
     currentStaff,
     logoutStaff,
     openLoginModal,
+    openChangePinModal,
   } = useCRM();
 
   const activeUser = currentStaff || users?.find((u) => {
@@ -644,6 +647,23 @@ export const Header: React.FC<HeaderProps> = ({
                   type="button"
                   onClick={() => {
                     setIsProfileOpen(false);
+                    openChangePinModal();
+                  }}
+                  className="w-full flex items-center justify-between px-4 py-2 text-xs text-slate-700 hover:bg-slate-50 font-bold transition-colors cursor-pointer text-left"
+                >
+                  <span className="flex items-center gap-2">
+                    <KeyRound className="w-4 h-4 text-[#D5A52B]" />
+                    Change My PIN / Password
+                  </span>
+                  <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-bold">
+                    Security
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsProfileOpen(false);
                     openLoginModal();
                   }}
                   className="w-full flex items-center justify-between px-4 py-2 text-xs text-[#142B52] hover:bg-slate-50 font-bold transition-colors cursor-pointer text-left"
@@ -677,6 +697,9 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </div>
       </div>
+
+      {/* Global Staff PIN Change Modal */}
+      <ChangePinModal />
     </header>
   );
 };
