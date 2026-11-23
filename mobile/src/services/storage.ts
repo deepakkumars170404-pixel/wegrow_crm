@@ -3,7 +3,7 @@ import { AppSettings, CallRecord, Lead } from "../types";
 
 const KEYS = {
   SETTINGS: "@wegrow_settings",
-  LEADS_CACHE: "@wegrow_leads_cache",
+  LEADS_CACHE: "@wegrow_leads_cache_v3",
   PENDING_CALLS: "@wegrow_pending_calls",
   CALL_HISTORY: "@wegrow_call_history",
 };
@@ -34,7 +34,12 @@ export const StorageService = {
   async getCachedLeads(): Promise<Lead[]> {
     try {
       const data = await AsyncStorage.getItem(KEYS.LEADS_CACHE);
-      if (data) return JSON.parse(data);
+      if (data) {
+        const parsed = JSON.parse(data);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((l: any) => !l.assignedCaller?.toLowerCase().includes("muthumeena"));
+        }
+      }
     } catch {}
     return [];
   },

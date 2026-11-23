@@ -29,7 +29,7 @@ export const ApiService = {
           if (fuData) dbFollowUps = fuData;
         } catch {}
 
-        if (!error && dbLeads && dbLeads.length > 0) {
+        if (!error && dbLeads) {
           const leads: Lead[] = dbLeads.map((l: any) => {
             const clean = (l.phone || "").replace(/\D/g, "").slice(-10);
             const matchingFu = dbFollowUps.find(
