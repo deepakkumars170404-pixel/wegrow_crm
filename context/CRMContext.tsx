@@ -119,6 +119,7 @@ interface CRMContextType {
   addUser: (user: Omit<AppUser, "id" | "assignedLeads" | "joinedDate" | "lastActive">) => void;
   updateUserRole: (id: string, newRole: AppUser["role"]) => void;
   toggleUserStatus: (id: string) => void;
+  updateUserAvatar: (userId: string, avatarUrl: string) => void;
 }
 
 const CRMContext = createContext<CRMContextType | undefined>(undefined);
@@ -306,6 +307,20 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const parsedFu = JSON.parse(localFu);
           if (Array.isArray(parsedFu) && parsedFu.length > 0) {
             setFollowUps(parsedFu);
+          }
+        }
+        const localUsers = localStorage.getItem("wegrow_crm_users_v1");
+        if (localUsers) {
+          const parsedU = JSON.parse(localUsers);
+          if (Array.isArray(parsedU) && parsedU.length > 0) {
+            setUsers(parsedU);
+          }
+        }
+        const localCallers = localStorage.getItem("wegrow_crm_telecallers_v1");
+        if (localCallers) {
+          const parsedC = JSON.parse(localCallers);
+          if (Array.isArray(parsedC) && parsedC.length > 0) {
+            setTelecallers(parsedC);
           }
         }
       }
@@ -1469,6 +1484,48 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
+  const updateUserAvatar = (userId: string, avatarUrl: string) => {
+    let targetName = "";
+    setUsers((prev) => {
+      const updated = prev.map((u) => {
+        if (u.id === userId) {
+          targetName = u.name;
+          return { ...u, avatar: avatarUrl };
+        }
+        return u;
+      });
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem("wegrow_crm_users_v1", JSON.stringify(updated));
+        } catch {}
+      }
+      return updated;
+    });
+
+    setTelecallers((prev) => {
+      const updated = prev.map((t) => {
+        if (t.id === userId || (targetName && t.name.toLowerCase() === targetName.toLowerCase())) {
+          return { ...t, avatar: avatarUrl };
+        }
+        return t;
+      });
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem("wegrow_crm_telecallers_v1", JSON.stringify(updated));
+        } catch {}
+      }
+      return updated;
+    });
+
+    showToast({
+      type: "success",
+      title: avatarUrl ? "Profile Photo Updated" : "Reset to Initial Letter",
+      message: avatarUrl
+        ? "Staff profile photo has been updated."
+        : "Reset to initial letter avatar.",
+    });
+  };
+
   return (
     <CRMContext.Provider
       value={{
@@ -1519,6 +1576,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addUser,
         updateUserRole,
         toggleUserStatus,
+        updateUserAvatar,
       }}
     >
       {children}

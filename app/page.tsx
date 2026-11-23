@@ -313,7 +313,7 @@ export default function DashboardPage() {
         name: selectedTelecallerName || "MuthuSelvi",
         email: "muthuselvi@wegrow.edu",
         phone: "+91 99438 77948",
-        avatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80",
+        avatar: "",
         role: "Senior Telecaller",
         assignedLeads: 0,
         dailyTarget: 60,

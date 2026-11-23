@@ -22,6 +22,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { WeGrowLogo } from "@/components/shared/WeGrowLogo";
+import { StaffAvatar } from "@/components/shared/StaffAvatar";
 import { useCRM } from "@/context/CRMContext";
 import { cn } from "@/lib/utils";
 
@@ -49,7 +50,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
       setInternalCollapsed(!internalCollapsed);
     }
   };
-  const { followUps, whatsappChats, activeUserRole, setActiveUserRole } = useCRM();
+  const { followUps, whatsappChats, activeUserRole, setActiveUserRole, users } = useCRM();
+
+  const currentUserName =
+    activeUserRole === "Owner" || activeUserRole === "Owner / MD"
+      ? "Thavabalan"
+      : activeUserRole === "Admin"
+      ? "LakshmiPriya (GM)"
+      : "MuthuSelvi";
+
+  const currentUser = users.find((u) => u.name.toLowerCase().includes(currentUserName.toLowerCase().split(" ")[0])) || {
+    name: currentUserName,
+    avatar: "",
+  };
 
   // Badges calculation
   const pendingFollowUpCount = followUps.filter(
@@ -352,10 +365,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
             )}
           >
             <div className="relative">
-              <img
-                src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80"
-                alt="Active User Profile"
-                className="w-9 h-9 rounded-full object-cover ring-2 ring-[#D5A52B]/80 flex-shrink-0"
+              <StaffAvatar
+                name={currentUser.name}
+                avatar={currentUser.avatar}
+                size="sm"
+                ringColor="ring-2 ring-[#D5A52B]/80"
               />
               <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-[#142B52]" />
             </div>

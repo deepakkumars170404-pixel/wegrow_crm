@@ -14,8 +14,12 @@ import {
   Sparkles,
   Users,
   Lock,
+  Camera,
+  Upload,
+  RotateCcw,
 } from "lucide-react";
 import { useCRM } from "@/context/CRMContext";
+import { StaffAvatar } from "@/components/shared/StaffAvatar";
 import { AppUser } from "@/types";
 
 export default function UsersRolesPage() {
@@ -24,6 +28,7 @@ export default function UsersRolesPage() {
     addUser,
     updateUserRole,
     toggleUserStatus,
+    updateUserAvatar,
     activeUserRole,
     setActiveUserRole,
   } = useCRM();
@@ -42,6 +47,7 @@ export default function UsersRolesPage() {
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserPhone, setNewUserPhone] = useState("");
   const [newUserRole, setNewUserRole] = useState<AppUser["role"]>("Telecaller");
+  const [newUserAvatar, setNewUserAvatar] = useState("");
 
   const handleCreateUser = (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,12 +63,13 @@ export default function UsersRolesPage() {
       phone: newUserPhone.trim() || "+91 98000 00000",
       role: newUserRole,
       status: "Active",
-      avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+      avatar: newUserAvatar || "",
     });
 
     setNewUserName("");
     setNewUserEmail("");
     setNewUserPhone("");
+    setNewUserAvatar("");
     setIsAddUserModalOpen(false);
   };
 
@@ -244,10 +251,13 @@ export default function UsersRolesPage() {
                 <tr key={u.id} className="hover:bg-slate-50/80 transition-colors">
                   <td className="py-3.5 px-4">
                     <div className="flex items-center gap-3">
-                      <img
-                        src={u.avatar}
-                        alt={u.name}
-                        className="w-8 h-8 rounded-full object-cover ring-2 ring-slate-100"
+                      <StaffAvatar
+                        name={u.name}
+                        avatar={u.avatar}
+                        size="sm"
+                        editable={canManageStaff}
+                        onUpload={(url) => updateUserAvatar(u.id, url)}
+                        onRemove={() => updateUserAvatar(u.id, "")}
                       />
                       <div>
                         <p className="font-bold text-slate-900">{u.name}</p>
@@ -356,6 +366,57 @@ export default function UsersRolesPage() {
             </div>
 
             <form onSubmit={handleCreateUser} className="p-6 space-y-4 text-xs">
+              {/* Avatar Initial Preview & Photo Upload */}
+              <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                <StaffAvatar
+                  name={newUserName || "Staff"}
+                  avatar={newUserAvatar}
+                  size="lg"
+                />
+                <div className="flex-1">
+                  <p className="text-xs font-bold text-slate-800">
+                    {newUserName ? newUserName : "Staff Avatar Preview"}
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    Initial letter is automatically created. You can also upload a photo.
+                  </p>
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <label className="inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-[10px] font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs">
+                      <Camera className="w-3 h-3 text-[#142B52]" />
+                      <span>{newUserAvatar ? "Change Photo" : "Upload Photo"}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          if (file.size > 3 * 1024 * 1024) {
+                            alert("Image size should be less than 3MB.");
+                            return;
+                          }
+                          const reader = new FileReader();
+                          reader.onload = (ev) => {
+                            if (ev.target?.result) setNewUserAvatar(ev.target.result as string);
+                          };
+                          reader.readAsDataURL(file);
+                        }}
+                      />
+                    </label>
+                    {newUserAvatar && (
+                      <button
+                        type="button"
+                        onClick={() => setNewUserAvatar("")}
+                        className="inline-flex items-center gap-1 px-2 py-1 bg-white border border-rose-200 rounded-lg text-[10px] font-medium text-rose-600 hover:bg-rose-50"
+                      >
+                        <RotateCcw className="w-2.5 h-2.5" />
+                        <span>Reset Initial</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
                   Full Name *
@@ -447,8 +508,68 @@ export default function UsersRolesPage() {
             </div>
 
             <form onSubmit={handleSaveEditUser} className="p-6 space-y-4 text-xs">
-              <p className="font-bold text-slate-900 text-sm">{editingUser.name}</p>
-              <p className="text-slate-500 font-mono">{editingUser.email}</p>
+              {/* Photo & Initial Avatar Controls */}
+              <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                <StaffAvatar
+                  name={editingUser.name}
+                  avatar={editingUser.avatar}
+                  size="lg"
+                  editable={true}
+                  onUpload={(url) => {
+                    updateUserAvatar(editingUser.id, url);
+                    setEditingUser({ ...editingUser, avatar: url });
+                  }}
+                  onRemove={() => {
+                    updateUserAvatar(editingUser.id, "");
+                    setEditingUser({ ...editingUser, avatar: "" });
+                  }}
+                />
+                <div className="flex-1">
+                  <p className="font-bold text-slate-900 text-sm">{editingUser.name}</p>
+                  <p className="text-slate-500 font-mono text-[11px]">{editingUser.email}</p>
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <label className="inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-[10px] font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs">
+                      <Camera className="w-3 h-3 text-[#142B52]" />
+                      <span>{editingUser.avatar ? "Change Photo" : "Upload Photo"}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          if (file.size > 3 * 1024 * 1024) {
+                            alert("Image size should be less than 3MB.");
+                            return;
+                          }
+                          const reader = new FileReader();
+                          reader.onload = (ev) => {
+                            const url = ev.target?.result as string;
+                            if (url) {
+                              updateUserAvatar(editingUser.id, url);
+                              setEditingUser({ ...editingUser, avatar: url });
+                            }
+                          };
+                          reader.readAsDataURL(file);
+                        }}
+                      />
+                    </label>
+                    {editingUser.avatar && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          updateUserAvatar(editingUser.id, "");
+                          setEditingUser({ ...editingUser, avatar: "" });
+                        }}
+                        className="inline-flex items-center gap-1 px-2 py-1 bg-white border border-rose-200 rounded-lg text-[10px] font-medium text-rose-600 hover:bg-rose-50"
+                      >
+                        <RotateCcw className="w-2.5 h-2.5" />
+                        <span>Reset Initial</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
 
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">

@@ -31,6 +31,7 @@ import {
   Legend,
 } from "recharts";
 import { useCRM } from "@/context/CRMContext";
+import { StaffAvatar } from "@/components/shared/StaffAvatar";
 import { formatINR } from "@/lib/utils";
 
 const courseWiseEnquiriesData = [
@@ -378,10 +379,10 @@ export default function ReportsPage() {
                   <tr key={t.id} className="hover:bg-slate-50">
                     <td className="py-3 px-3">
                       <div className="flex items-center gap-2">
-                        <img
-                          src={t.avatar}
-                          alt={t.name}
-                          className="w-7 h-7 rounded-full object-cover"
+                        <StaffAvatar
+                          name={t.name}
+                          avatar={t.avatar}
+                          size="xs"
                         />
                         <span className="font-bold text-slate-900">{t.name}</span>
                       </div>

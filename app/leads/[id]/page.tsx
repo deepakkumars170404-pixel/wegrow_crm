@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { useCRM } from "@/context/CRMContext";
 import { StatusBadge } from "@/components/shared/StatusBadge";
+import { StaffAvatar } from "@/components/shared/StaffAvatar";
 import { LeadPriority, LeadStatus, PipelineStage } from "@/types";
 
 export default function LeadDetailPage() {
@@ -827,10 +828,10 @@ export default function LeadDetailPage() {
               Assigned Telecaller
             </span>
             <div className="flex items-center gap-3">
-              <img
-                src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80"
-                alt={lead.assignedCaller}
-                className="w-10 h-10 rounded-full object-cover ring-2 ring-[#D5A52B]"
+              <StaffAvatar
+                name={lead.assignedCaller || "MuthuSelvi"}
+                size="md"
+                ringColor="ring-2 ring-[#D5A52B]"
               />
               <div>
                 <p className="text-xs font-bold text-white">{lead.assignedCaller}</p>

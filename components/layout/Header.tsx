@@ -27,9 +27,11 @@ import {
   Wifi,
   WifiOff,
   RefreshCw,
+  Camera,
 } from "lucide-react";
 import { useCRM } from "@/context/CRMContext";
 import { recentActivityTimeline } from "@/data/dummy-data";
+import { StaffAvatar } from "@/components/shared/StaffAvatar";
 
 interface HeaderProps {
   onMobileMenuToggle: () => void;
@@ -42,7 +44,28 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const pathname = usePathname();
   const router = useRouter();
-  const { leads, activeUserRole, addToast, telephonyStatus, reconnectTelephony } = useCRM();
+  const {
+    leads,
+    activeUserRole,
+    addToast,
+    telephonyStatus,
+    reconnectTelephony,
+    users,
+    updateUserAvatar,
+  } = useCRM();
+
+  const activeUser = users?.find((u) => {
+    if (activeUserRole === "Owner" || activeUserRole === "Owner / MD") return u.role === "Owner" || u.role === "Owner / MD";
+    if (activeUserRole === "Admin") return u.name.includes("LakshmiPriya") || u.role === "Admin";
+    if (activeUserRole === "Telecaller") return u.role === "Telecaller";
+    return u.role === activeUserRole;
+  }) || users?.[0] || {
+    id: "usr-thavabalan",
+    name: "Thavabalan",
+    email: "thavabalan@wegrow.edu",
+    role: "Owner",
+    avatar: "",
+  };
 
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -492,41 +515,71 @@ export const Header: React.FC<HeaderProps> = ({
             }}
             className="flex items-center gap-1.5 p-1 rounded-xl hover:bg-slate-100 transition-colors"
           >
-            <img
-              src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80"
-              alt="User Avatar"
-              className="w-8 h-8 rounded-full object-cover ring-2 ring-slate-200"
+            <StaffAvatar
+              name={activeUser.name}
+              avatar={activeUser.avatar}
+              size="sm"
             />
             <ChevronDown className="w-3.5 h-3.5 text-slate-500 hidden sm:block" />
           </button>
 
           {isProfileOpen && (
-            <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-2xl shadow-dropdown border border-slate-200/90 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
-              <div className="px-4 py-2 border-b border-slate-100">
-                <p className="text-xs font-bold text-slate-900">
-                  {activeUserRole === "Owner" || activeUserRole === "Owner / MD"
-                    ? "Thavabalan"
-                    : activeUserRole === "Admin"
-                    ? "LakshmiPriya (GM)"
-                    : activeUserRole === "HR"
-                    ? "Gopi (HR)"
-                    : "Muthumeena (Head Telecaller)"}
-                </p>
-                <p className="text-[11px] text-slate-500">
-                  {activeUserRole === "Owner" || activeUserRole === "Owner / MD"
-                    ? "thavabalan@wegrow.edu"
-                    : activeUserRole === "Admin"
-                    ? "lakshmipriya@wegrow.edu"
-                    : activeUserRole === "HR"
-                    ? "gopi@wegrow.edu"
-                    : "muthumeena@wegrow.edu"}
-                </p>
-                <div className="flex items-center gap-1.5 mt-1">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#D5A52B]/15 text-[#B88A1B]">
-                    Role: {activeUserRole}
-                  </span>
-                  <span className="text-[10px] text-slate-400">Enterprise RBAC</span>
+            <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl shadow-dropdown border border-slate-200/90 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+              <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-3">
+                <StaffAvatar
+                  name={activeUser.name}
+                  avatar={activeUser.avatar}
+                  size="md"
+                  editable={true}
+                  onUpload={(newUrl) => updateUserAvatar(activeUser.id, newUrl)}
+                  onRemove={() => updateUserAvatar(activeUser.id, "")}
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-slate-900 truncate">
+                    {activeUser.name}
+                  </p>
+                  <p className="text-[11px] text-slate-500 truncate">
+                    {activeUser.email}
+                  </p>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#D5A52B]/15 text-[#B88A1B]">
+                      Role: {activeUserRole}
+                    </span>
+                  </div>
                 </div>
+              </div>
+
+              {/* Upload or Reset Picture Quick Controls */}
+              <div className="px-4 py-2 bg-slate-50/80 border-b border-slate-100 flex items-center justify-between text-[11px]">
+                <label className="font-bold text-[#142B52] hover:text-[#1E3B6E] flex items-center gap-1.5 cursor-pointer">
+                  <Camera className="w-3.5 h-3.5 text-[#D5A52B]" />
+                  <span>Upload / Change Photo</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = (ev) => {
+                        const url = ev.target?.result as string;
+                        if (url) updateUserAvatar(activeUser.id, url);
+                      };
+                      reader.readAsDataURL(file);
+                    }}
+                  />
+                </label>
+                {activeUser.avatar && (
+                  <button
+                    type="button"
+                    onClick={() => updateUserAvatar(activeUser.id, "")}
+                    className="text-[10px] text-rose-600 hover:text-rose-800 font-semibold cursor-pointer"
+                    title="Remove custom photo and use name initial letter"
+                  >
+                    Reset Initial
+                  </button>
+                )}
               </div>
 
               <div className="py-1">

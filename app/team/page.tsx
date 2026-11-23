@@ -14,12 +14,16 @@ import {
   Target,
   Clock,
   CheckCircle2,
+  Camera,
+  Upload,
+  RotateCcw,
 } from "lucide-react";
 import { useCRM } from "@/context/CRMContext";
+import { StaffAvatar } from "@/components/shared/StaffAvatar";
 import { Telecaller } from "@/types";
 
 export default function TeamPerformancePage() {
-  const { telecallers } = useCRM();
+  const { telecallers, updateUserAvatar } = useCRM();
   const [selectedCaller, setSelectedCaller] = useState<Telecaller | null>(null);
 
   // Sorted by rank or admissions
@@ -89,10 +93,11 @@ export default function TeamPerformancePage() {
                 </div>
 
                 <div className="flex items-center gap-3 mb-4">
-                  <img
-                    src={caller.avatar}
-                    alt={caller.name}
-                    className={`w-14 h-14 rounded-full object-cover ring-4 ${ringColor}`}
+                  <StaffAvatar
+                    name={caller.name}
+                    avatar={caller.avatar}
+                    size="xl"
+                    ringColor={ringColor}
                   />
                   <div>
                     <h3 className="font-bold text-slate-900 group-hover:text-[#244B7A] transition-colors">
@@ -188,10 +193,10 @@ export default function TeamPerformancePage() {
                         >
                           {c.rank}
                         </span>
-                        <img
-                          src={c.avatar}
-                          alt={c.name}
-                          className="w-8 h-8 rounded-full object-cover"
+                        <StaffAvatar
+                          name={c.name}
+                          avatar={c.avatar}
+                          size="sm"
                         />
                         <div>
                           <p className="font-bold text-slate-900">{c.name}</p>
@@ -265,12 +270,22 @@ export default function TeamPerformancePage() {
               </button>
 
               <div className="flex items-center gap-4">
-                <img
-                  src={selectedCaller.avatar}
-                  alt={selectedCaller.name}
-                  className="w-16 h-16 rounded-full object-cover ring-4 ring-[#D5A52B]"
+                <StaffAvatar
+                  name={selectedCaller.name}
+                  avatar={selectedCaller.avatar}
+                  size="2xl"
+                  editable={true}
+                  onUpload={(url) => {
+                    updateUserAvatar(selectedCaller.id, url);
+                    setSelectedCaller({ ...selectedCaller, avatar: url });
+                  }}
+                  onRemove={() => {
+                    updateUserAvatar(selectedCaller.id, "");
+                    setSelectedCaller({ ...selectedCaller, avatar: "" });
+                  }}
+                  ringColor="ring-4 ring-[#D5A52B]"
                 />
-                <div>
+                <div className="flex-1">
                   <div className="flex items-center gap-2">
                     <h3 className="text-lg font-bold text-white">
                       {selectedCaller.name}
@@ -283,6 +298,49 @@ export default function TeamPerformancePage() {
                   <p className="text-[11px] text-slate-400 font-mono mt-0.5">
                     {selectedCaller.email} • {selectedCaller.phone}
                   </p>
+
+                  {/* Photo Action Buttons */}
+                  <div className="flex items-center gap-2 mt-2">
+                    <label className="inline-flex items-center gap-1 px-2.5 py-1 bg-white/10 hover:bg-white/20 text-[#D5A52B] border border-white/20 rounded-lg text-[10px] font-bold cursor-pointer transition-colors">
+                      <Camera className="w-3 h-3" />
+                      <span>Upload Photo</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          if (file.size > 3 * 1024 * 1024) {
+                            alert("Image size should be less than 3MB.");
+                            return;
+                          }
+                          const reader = new FileReader();
+                          reader.onload = (event) => {
+                            const url = event.target?.result as string;
+                            if (url) {
+                              updateUserAvatar(selectedCaller.id, url);
+                              setSelectedCaller({ ...selectedCaller, avatar: url });
+                            }
+                          };
+                          reader.readAsDataURL(file);
+                        }}
+                      />
+                    </label>
+                    {selectedCaller.avatar && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          updateUserAvatar(selectedCaller.id, "");
+                          setSelectedCaller({ ...selectedCaller, avatar: "" });
+                        }}
+                        className="inline-flex items-center gap-1 px-2 py-1 bg-white/5 hover:bg-rose-500/20 text-rose-300 border border-rose-400/30 rounded-lg text-[10px] font-medium transition-colors"
+                      >
+                        <RotateCcw className="w-2.5 h-2.5" />
+                        <span>Reset Initial</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
