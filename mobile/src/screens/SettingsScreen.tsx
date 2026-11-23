@@ -17,7 +17,7 @@ import { TelephonyService } from "../services/telephony";
 import { AppSettings, WEGROW_STAFF_MEMBERS } from "../types";
 
 export const SettingsScreen: React.FC = () => {
-  const [serverUrl, setServerUrl] = useState("http://192.168.29.60:3000");
+  const [serverUrl, setServerUrl] = useState("https://wegrowcrm.vercel.app");
   const [callerName, setCallerName] = useState("MuthuSelvi");
   const [testing, setTesting] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
@@ -111,7 +111,7 @@ export const SettingsScreen: React.FC = () => {
         <Text style={styles.label}>WEGROW CRM SERVER URL</Text>
         <TextInput
           style={styles.input}
-          placeholder="e.g. http://192.168.29.60:3000"
+          placeholder="e.g. https://wegrowcrm.vercel.app"
           placeholderTextColor={THEME.colors.textMuted}
           value={serverUrl}
           onChangeText={setServerUrl}

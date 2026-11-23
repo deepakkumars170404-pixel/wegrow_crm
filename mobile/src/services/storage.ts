@@ -2,14 +2,14 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AppSettings, CallRecord, Lead } from "../types";
 
 const KEYS = {
-  SETTINGS: "@wegrow_settings",
+  SETTINGS: "@wegrow_settings_v3",
   LEADS_CACHE: "@wegrow_leads_cache_v3",
   PENDING_CALLS: "@wegrow_pending_calls",
   CALL_HISTORY: "@wegrow_call_history",
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  crmServerUrl: "http://192.168.29.60:3000",
+  crmServerUrl: "https://wegrowcrm.vercel.app",
   callerName: "MuthuSelvi",
   autoPopupDisposition: true,
   strictSafetyBlock: true,
