@@ -44,6 +44,7 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({ onOpenCallModal }) => 
   const [priorityFilter, setPriorityFilter] = useState<"All" | "Hot" | "Warm" | "Follow-up">("All");
   const [selectedStaff, setSelectedStaff] = useState<string>("All");
   const [sortBy, setSortBy] = useState<"upcoming" | "newest" | "oldest">("upcoming");
+  const [isDefaultDialer, setIsDefaultDialer] = useState<boolean>(true);
 
   const loadQueue = useCallback(async () => {
     setErrorMsg(null);
@@ -60,7 +61,16 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({ onOpenCallModal }) => 
 
   useEffect(() => {
     loadQueue();
+    TelephonyService.checkIsDefaultDialer().then(setIsDefaultDialer);
   }, [loadQueue]);
+
+  const handlePromptDefaultDialer = async () => {
+    await TelephonyService.promptSetAsDefaultDialer();
+    setTimeout(async () => {
+      const isDef = await TelephonyService.checkIsDefaultDialer();
+      setIsDefaultDialer(isDef);
+    }, 1500);
+  };
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -369,6 +379,28 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({ onOpenCallModal }) => 
         <View style={styles.noticeBar}>
           <Text style={styles.noticeText}>Offline Mode: Showing cached student queue</Text>
         </View>
+      )}
+
+      {/* Default Dialer Prompt Banner if Wegrow is not default phone app */}
+      {!isDefaultDialer && (
+        <TouchableOpacity
+          style={styles.defaultDialerBanner}
+          onPress={handlePromptDefaultDialer}
+          activeOpacity={0.8}
+        >
+          <View style={styles.defaultDialerIconBox}>
+            <Phone size={15} color="#FFFFFF" strokeWidth={2.4} />
+          </View>
+          <View style={{ flex: 1, marginLeft: 10 }}>
+            <Text style={styles.defaultDialerTitle}>Set Wegrow as Default Phone App</Text>
+            <Text style={styles.defaultDialerSubtitle}>
+              Bypass Google Dialer • 1-tap call controls & live timer
+            </Text>
+          </View>
+          <View style={styles.defaultDialerActionBadge}>
+            <Text style={styles.defaultDialerActionText}>Set Now</Text>
+          </View>
+        </TouchableOpacity>
       )}
 
       {/* 2. Staff Filter Horizontal Chips */}
@@ -1040,5 +1072,47 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     textAlign: "center",
     marginTop: 4,
+  },
+  defaultDialerBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 6,
+  },
+  defaultDialerIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#2563EB",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  defaultDialerTitle: {
+    fontSize: 12.5,
+    fontWeight: "800",
+    color: "#1E40AF",
+  },
+  defaultDialerSubtitle: {
+    fontSize: 11,
+    color: "#3B82F6",
+    marginTop: 1,
+  },
+  defaultDialerActionBadge: {
+    backgroundColor: "#2563EB",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  defaultDialerActionText: {
+    fontSize: 11.5,
+    fontWeight: "800",
+    color: "#FFFFFF",
   },
 });

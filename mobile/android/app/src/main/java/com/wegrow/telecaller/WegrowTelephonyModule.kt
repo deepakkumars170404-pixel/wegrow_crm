@@ -117,54 +117,71 @@ class WegrowTelephonyModule(private val reactContext: ReactApplicationContext) :
                 return
             }
 
-            WegrowInCallService.currentPhoneNumber = cleanDigits
-            WegrowInCallService.isIncomingCall = false
-            WegrowInCallService.contactName = WegrowInCallService.resolveContactName(reactContext, cleanDigits)
-            WegrowInCallService.callDialStartTimeMs = System.currentTimeMillis()
-            WegrowInCallService.callActiveTimeMs = 0L
-            WegrowInCallService.callEndTimeMs = 0L
-            WegrowInCallService.notifyUpdate("DIALING", 1)
-
-            // PRIORITY 1: Use TelecomManager.placeCall (the native way for InCallService to place calls without UI collisions)
             val telecomManager = reactContext.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
+            val defaultDialer = telecomManager?.defaultDialerPackage
+            val isDefault = defaultDialer == reactContext.packageName
+
             val callUri = Uri.fromParts("tel", cleanDigits, null)
-            val extras = Bundle().apply {
-                putBoolean(TelecomManager.EXTRA_START_CALL_WITH_SPEAKERPHONE, false)
-            }
 
-            var placed = false
-            if (telecomManager != null &&
-                androidx.core.content.ContextCompat.checkSelfPermission(reactContext, android.Manifest.permission.CALL_PHONE) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                try {
-                    telecomManager.placeCall(callUri, extras)
-                    placed = true
-                } catch (e: Exception) {
-                    Log.w(TAG, "telecomManager.placeCall fallback to ACTION_CALL: ${e.message}")
+            if (isDefault) {
+                // Wegrow IS Default Dialer: use native InCallService and show In-App overlay
+                WegrowInCallService.currentPhoneNumber = cleanDigits
+                WegrowInCallService.isIncomingCall = false
+                WegrowInCallService.contactName = WegrowInCallService.resolveContactName(reactContext, cleanDigits)
+                WegrowInCallService.callDialStartTimeMs = System.currentTimeMillis()
+                WegrowInCallService.callActiveTimeMs = 0L
+                WegrowInCallService.callEndTimeMs = 0L
+                WegrowInCallService.notifyUpdate("DIALING", 1)
+
+                val extras = Bundle().apply {
+                    putBoolean(TelecomManager.EXTRA_START_CALL_WITH_SPEAKERPHONE, false)
                 }
-            }
 
-            if (!placed) {
+                var placed = false
+                if (telecomManager != null &&
+                    androidx.core.content.ContextCompat.checkSelfPermission(reactContext, android.Manifest.permission.CALL_PHONE) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    try {
+                        telecomManager.placeCall(callUri, extras)
+                        placed = true
+                    } catch (e: Exception) {
+                        Log.w(TAG, "telecomManager.placeCall fallback to ACTION_CALL: ${e.message}")
+                    }
+                }
+
+                if (!placed) {
+                    val intent = Intent(Intent.ACTION_CALL).apply {
+                        data = callUri
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    reactContext.startActivity(intent)
+                }
+
+                // Re-assert Wegrow Telecaller to foreground only when Wegrow IS default dialer
+                val bringBackIntent = Intent(reactContext, MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    putExtra("call_action", "ACTIVE_CALL")
+                    putExtra("phone_number", cleanDigits)
+                    putExtra("contact_name", WegrowInCallService.contactName)
+                }
+                Handler(Looper.getMainLooper()).postDelayed({
+                    try {
+                        reactContext.startActivity(bringBackIntent)
+                    } catch (e: Exception) {}
+                }, 500)
+
+                promise.resolve(true)
+            } else {
+                // Wegrow is NOT Default Dialer:
+                // Google Dialer or System Dialer owns the call.
+                // Do NOT emit DIALING (prevents overlay getting stuck!).
+                // Do NOT bring Wegrow to foreground (prevents covering Google Dialer!).
                 val intent = Intent(Intent.ACTION_CALL).apply {
                     data = callUri
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
                 }
                 reactContext.startActivity(intent)
+                promise.resolve(true)
             }
-
-            // Re-assert Wegrow Telecaller to foreground so dialer UI is immediately visible
-            val bringBackIntent = Intent(reactContext, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                putExtra("call_action", "ACTIVE_CALL")
-                putExtra("phone_number", cleanDigits)
-                putExtra("contact_name", WegrowInCallService.contactName)
-            }
-            Handler(Looper.getMainLooper()).postDelayed({
-                try {
-                    reactContext.startActivity(bringBackIntent)
-                } catch (e: Exception) {}
-            }, 500)
-
-            promise.resolve(true)
         } catch (e: Exception) {
             // Fallback to ACTION_DIAL if ACTION_CALL encounters any issue
             try {
@@ -196,23 +213,32 @@ class WegrowTelephonyModule(private val reactContext: ReactApplicationContext) :
         try {
             val disconnected = WegrowInCallService.disconnectCurrentCall()
             if (disconnected) {
+                WegrowInCallService.notifyUpdate("DISCONNECTED", 7)
                 promise.resolve(true)
                 return
             }
             val telecomManager = reactContext.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                val ended = telecomManager?.endCall() ?: false
-                promise.resolve(ended)
-                return
+                try {
+                    val ended = telecomManager?.endCall() ?: false
+                    WegrowInCallService.notifyUpdate("DISCONNECTED", 7)
+                    promise.resolve(ended)
+                    return
+                } catch (e: Exception) {
+                    Log.w(TAG, "telecomManager.endCall error: ${e.message}")
+                }
             }
             Runtime.getRuntime().exec("input keyevent 6") // KEYCODE_ENDCALL
+            WegrowInCallService.notifyUpdate("DISCONNECTED", 7)
             promise.resolve(true)
         } catch (e: Exception) {
             try {
                 Runtime.getRuntime().exec("input keyevent 6")
+                WegrowInCallService.notifyUpdate("DISCONNECTED", 7)
                 promise.resolve(true)
             } catch (err: Exception) {
-                promise.reject("END_CALL_FAILED", e.message)
+                WegrowInCallService.notifyUpdate("DISCONNECTED", 7)
+                promise.resolve(true)
             }
         }
     }

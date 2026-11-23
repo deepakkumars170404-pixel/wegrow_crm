@@ -12,6 +12,8 @@ import {
   Alert,
   ScrollView,
   Platform,
+  AppState,
+  AppStateStatus,
 } from "react-native";
 import { THEME } from "../constants/theme";
 import {
@@ -265,6 +267,45 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({ onCallEnde
     return () => sub.remove();
   }, [callState, contactName, matchedLead, hasHeldCall, heldCallBackup]);
 
+  // Failsafe auto-dismiss overlay if Wegrow is NOT default dialer and user switches back to app
+  useEffect(() => {
+    const handleAppState = async (nextState: AppStateStatus) => {
+      if (nextState === "active") {
+        const isDef = await TelephonyService.checkIsDefaultDialer();
+        if (!isDef && (callState === "DIALING" || callState === "RINGING")) {
+          forceEndCall();
+        }
+      }
+    };
+    const sub = AppState.addEventListener("change", handleAppState);
+    return () => sub.remove();
+  }, [callState, contactName, matchedLead, phoneNumber]);
+
+  const forceEndCall = () => {
+    const finalSecs = activeCallStartRef.current
+      ? Math.max(1, Math.round((Date.now() - activeCallStartRef.current) / 1000))
+      : liveDurationSec;
+
+    const resolvedName = contactName || matchedLead?.studentName || "Student Enquiry";
+    const currentPhone = phoneNumber || currentPhoneNumberRef.current;
+
+    setCallState("IDLE");
+    activeCallStartRef.current = null;
+    setShowKeypad(false);
+    setHeldCallBackup(null);
+    setHasHeldCall(false);
+    setIsConference(false);
+
+    if (currentPhone) {
+      onCallEnded({
+        phoneNumber: currentPhone,
+        studentName: resolvedName,
+        durationSeconds: finalSecs,
+        lead: matchedLead,
+      });
+    }
+  };
+
   const handleAnswer = async () => {
     try {
       Vibration.vibrate(70);
@@ -279,7 +320,19 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({ onCallEnde
     try {
       Vibration.vibrate(70);
       await TelephonyService.endCall();
-    } catch {}
+    } catch (e) {
+      console.warn("endCall native warning:", e);
+    } finally {
+      // Immediate failsafe: always force-dismiss UI so user is NEVER stuck on screen
+      setTimeout(() => {
+        setCallState((prevState) => {
+          if (prevState !== "IDLE") {
+            forceEndCall();
+          }
+          return "IDLE";
+        });
+      }, 250);
+    }
   };
 
   const handleToggleSpeaker = async () => {
@@ -417,12 +470,25 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({ onCallEnde
       <SafeAreaView style={styles.container}>
         {/* Top Header */}
         <View style={styles.topHeader}>
-          <View style={styles.staffDutyBadge}>
-            <User size={13} color="#2563EB" style={{ marginRight: 5 }} />
-            <Text style={styles.staffDutyText}>
-              Staff on Duty: <Text style={{ color: "#2563EB", fontWeight: "800" }}>{activeStaff}</Text>
-            </Text>
+          <View style={styles.topHeaderRow}>
+            <View style={styles.staffDutyBadge}>
+              <User size={13} color="#2563EB" style={{ marginRight: 5 }} />
+              <Text style={styles.staffDutyText}>
+                Staff on Duty: <Text style={{ color: "#2563EB", fontWeight: "800" }}>{activeStaff}</Text>
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.forceDismissBtn}
+              onPress={forceEndCall}
+              activeOpacity={0.7}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <X size={14} color="#64748B" strokeWidth={2.5} style={{ marginRight: 3 }} />
+              <Text style={styles.forceDismissText}>Dismiss</Text>
+            </TouchableOpacity>
           </View>
+
           {matchedLead?.courseInterested ? (
             <View style={styles.courseBadge}>
               <GraduationCap size={13} color="#065F46" style={{ marginRight: 5 }} />
@@ -727,6 +793,27 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingHorizontal: 20,
     gap: 8,
+  },
+  topHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    width: "100%",
+  },
+  forceDismissBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F1F5F9",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  forceDismissText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#64748B",
   },
   staffDutyBadge: {
     flexDirection: "row",
