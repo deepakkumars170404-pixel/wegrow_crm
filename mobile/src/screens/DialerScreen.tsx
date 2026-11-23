@@ -25,7 +25,7 @@ const KEYS = [
 export const DialerScreen: React.FC = () => {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [leads, setLeads] = useState<Lead[]>([]);
-  const [currentStaff, setCurrentStaff] = useState<string>("Muthumeena");
+  const [currentStaff, setCurrentStaff] = useState<string>("MuthuSelvi");
 
   // Load registered leads from cache & CRM server and saved staff
   useEffect(() => {

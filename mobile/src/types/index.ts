@@ -22,11 +22,10 @@ export interface Lead {
 }
 
 export const WEGROW_STAFF_MEMBERS = [
+  "MuthuSelvi",
   "Devi Priya",
   "Subhashini",
-  "MuthuSelvi",
   "LakshmiPriya",
-  "Muthumeena",
 ] as const;
 
 export type StaffMember = (typeof WEGROW_STAFF_MEMBERS)[number];

@@ -18,7 +18,7 @@ import { AppSettings, WEGROW_STAFF_MEMBERS } from "../types";
 
 export const SettingsScreen: React.FC = () => {
   const [serverUrl, setServerUrl] = useState("http://192.168.29.60:3000");
-  const [callerName, setCallerName] = useState("Muthumeena");
+  const [callerName, setCallerName] = useState("MuthuSelvi");
   const [testing, setTesting] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [isDefaultDialer, setIsDefaultDialer] = useState(false);
@@ -177,7 +177,7 @@ export const SettingsScreen: React.FC = () => {
                     color: isSel ? "#FFFFFF" : "#0F172A",
                   }}
                 >
-                  {staff === "Muthumeena" ? "Muthumeena" : staff}
+                  {staff}
                 </Text>
               </TouchableOpacity>
             );
@@ -185,7 +185,7 @@ export const SettingsScreen: React.FC = () => {
         </View>
         <TextInput
           style={styles.input}
-          placeholder="e.g. Muthumeena"
+          placeholder="e.g. MuthuSelvi"
           placeholderTextColor={THEME.colors.textMuted}
           value={callerName}
           onChangeText={setCallerName}

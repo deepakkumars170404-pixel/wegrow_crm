@@ -378,13 +378,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
                   <p className="text-sm font-semibold text-white truncate leading-tight">
-                    {activeUserRole === "Owner" || activeUserRole === "Owner / MD"
-                      ? "Thavabalan"
-                      : activeUserRole === "Admin"
-                      ? "LakshmiPriya (GM)"
-                      : activeUserRole === "HR"
-                      ? "Gopi (HR)"
-                      : "Muthumeena (Head)"}
+                    {currentUser.name}
                   </p>
                   <Sparkles className="w-3 h-3 text-[#D5A52B] flex-shrink-0" />
                 </div>

@@ -309,18 +309,38 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             setFollowUps(parsedFu);
           }
         }
-        const localUsers = localStorage.getItem("wegrow_crm_users_v1");
+        const localUsers = localStorage.getItem("wegrow_crm_users_v2");
         if (localUsers) {
           const parsedU = JSON.parse(localUsers);
           if (Array.isArray(parsedU) && parsedU.length > 0) {
-            setUsers(parsedU);
+            setUsers(parsedU.filter((u: any) => !u.name?.toLowerCase().includes("muthumeena")));
+          }
+        } else {
+          const oldU = localStorage.getItem("wegrow_crm_users_v1");
+          if (oldU) {
+            try {
+              const cleanedU = JSON.parse(oldU).filter((u: any) => !u.name?.toLowerCase().includes("muthumeena"));
+              setUsers(cleanedU);
+              localStorage.setItem("wegrow_crm_users_v2", JSON.stringify(cleanedU));
+              localStorage.removeItem("wegrow_crm_users_v1");
+            } catch {}
           }
         }
-        const localCallers = localStorage.getItem("wegrow_crm_telecallers_v1");
+        const localCallers = localStorage.getItem("wegrow_crm_telecallers_v2");
         if (localCallers) {
           const parsedC = JSON.parse(localCallers);
           if (Array.isArray(parsedC) && parsedC.length > 0) {
-            setTelecallers(parsedC);
+            setTelecallers(parsedC.filter((c: any) => !c.name?.toLowerCase().includes("muthumeena")));
+          }
+        } else {
+          const oldC = localStorage.getItem("wegrow_crm_telecallers_v1");
+          if (oldC) {
+            try {
+              const cleanedC = JSON.parse(oldC).filter((c: any) => !c.name?.toLowerCase().includes("muthumeena"));
+              setTelecallers(cleanedC);
+              localStorage.setItem("wegrow_crm_telecallers_v2", JSON.stringify(cleanedC));
+              localStorage.removeItem("wegrow_crm_telecallers_v1");
+            } catch {}
           }
         }
       }
@@ -703,7 +723,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 id: "ch-" + Date.now(),
                 callDate: dateStr,
                 callTime: timeStr,
-                callerName: currentLead.assignedCaller || telecallers?.[0]?.name || "Muthumeena",
+                callerName: currentLead.assignedCaller || telecallers?.[0]?.name || "MuthuSelvi",
                 duration: formatted,
                 durationFormatted: durationLong,
                 fromTime: fromTime,
@@ -1496,7 +1516,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
       if (typeof window !== "undefined") {
         try {
-          localStorage.setItem("wegrow_crm_users_v1", JSON.stringify(updated));
+          localStorage.setItem("wegrow_crm_users_v2", JSON.stringify(updated));
         } catch {}
       }
       return updated;
@@ -1511,7 +1531,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
       if (typeof window !== "undefined") {
         try {
-          localStorage.setItem("wegrow_crm_telecallers_v1", JSON.stringify(updated));
+          localStorage.setItem("wegrow_crm_telecallers_v2", JSON.stringify(updated));
         } catch {}
       }
       return updated;
