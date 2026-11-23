@@ -10,6 +10,7 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Platform,
 } from "react-native";
 import {
   PhoneCall,
@@ -31,6 +32,7 @@ import { THEME } from "../constants/theme";
 import { CallRecord, WEGROW_STAFF_MEMBERS } from "../types";
 import { ApiService } from "../services/api";
 import { TelephonyService } from "../services/telephony";
+import { StorageService } from "../services/storage";
 
 export const DashboardScreen: React.FC = () => {
   const [allCalls, setAllCalls] = useState<CallRecord[]>([]);
@@ -104,8 +106,15 @@ export const DashboardScreen: React.FC = () => {
 
   const loadData = useCallback(async () => {
     try {
+      // 1. INSTANT CACHE LOAD: 0ms latency, displays feed immediately!
+      const cached = await StorageService.getCallHistory();
+      if (cached && cached.length > 0) {
+        setAllCalls(cached);
+      }
+
+      // 2. Background fresh fetch from cloud (updates silently without blocking UI)
       const result = await ApiService.fetchAllCalls();
-      if (result.calls) {
+      if (result.calls && result.calls.length > 0) {
         setAllCalls(result.calls);
       }
     } catch (e) {
@@ -389,6 +398,10 @@ export const DashboardScreen: React.FC = () => {
         renderItem={renderCallCard}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        windowSize={7}
+        removeClippedSubviews={Platform.OS === "android"}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

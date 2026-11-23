@@ -150,13 +150,14 @@ export const ApiService = {
       }
     };
 
-    // 1. First fetch directly from Supabase Cloud `calls` table
+    // 1. First fetch directly from Supabase Cloud `calls` table (Limited to latest 100 for blazing speed)
     if (isSupabaseReady() && supabaseMobile) {
       try {
         const { data: dbCalls, error: cErr } = await supabaseMobile
           .from("calls")
           .select("*")
-          .order("created_at", { ascending: false });
+          .order("created_at", { ascending: false })
+          .limit(100);
 
         if (!cErr && dbCalls && dbCalls.length > 0) {
           dbCalls.forEach((c: any) => {
@@ -203,113 +204,122 @@ export const ApiService = {
         console.warn("Supabase fetch calls error:", sbCallsErr);
       }
 
-      // Also fetch leads with calls to catch any calls embedded in lead call history
-      try {
-        const { data: dbLeads, error: lErr } = await supabaseMobile
-          .from("leads")
-          .select("*, calls(*)")
-          .order("created_at", { ascending: false });
+      // Only perform secondary join query if calls table is completely empty
+      if (collectedCalls.length === 0) {
+        try {
+          const { data: dbLeads, error: lErr } = await supabaseMobile
+            .from("leads")
+            .select("*, calls(*)")
+            .order("created_at", { ascending: false })
+            .limit(50);
 
-        if (!lErr && dbLeads && dbLeads.length > 0) {
-          dbLeads.forEach((lead: any) => {
-            if (Array.isArray(lead.calls)) {
-              lead.calls.forEach((c: any) => {
-                const rawDur = c.duration_seconds ?? c.durationSeconds;
-                const parsedDur = typeof rawDur === "number" ? rawDur : 0;
-                const formatted = c.duration || "00:00";
-                addUniqueCall({
-                  id: c.id,
-                  leadId: lead.id,
-                  studentName: c.student_name || lead.student_name || "Student",
-                  phone: c.phone || lead.phone || "",
-                  studentPhone: lead.phone || c.phone || "",
-                  callerName: c.caller_name || lead.assigned_caller || "Staff",
-                  disposition: c.mindset || c.outcome || "Interested",
-                  outcome: c.outcome || (parsedDur > 0 ? "Attended Call" : "Not Attended Call"),
-                  mindset: c.mindset || c.outcome || "",
-                  durationSeconds: parsedDur,
-                  duration_seconds: parsedDur,
-                  formattedDuration: formatted,
-                  duration: formatted,
-                  qualification: c.qualification || lead.qualification || "",
-                  passedOutYear: c.passed_out_year || lead.passed_out_year || "",
-                  collegeName: c.college_name || lead.college_name || "",
-                  courseInterested: c.course_interested || lead.course_interested || "",
-                  studentCourse: lead.course_interested || "",
-                  callDate: c.call_date || "",
-                  callTime: c.call_time || "",
-                  fromTime: c.from_time || "",
-                  endTime: c.end_time || "",
-                  notes: c.remarks || "",
-                  remarks: c.remarks || "",
-                  timestamp: c.created_at ? new Date(c.created_at).getTime() : Date.now(),
-                  syncedToCrm: true,
+          if (!lErr && dbLeads && dbLeads.length > 0) {
+            dbLeads.forEach((lead: any) => {
+              if (Array.isArray(lead.calls)) {
+                lead.calls.forEach((c: any) => {
+                  const rawDur = c.duration_seconds ?? c.durationSeconds;
+                  const parsedDur = typeof rawDur === "number" ? rawDur : 0;
+                  const formatted = c.duration || "00:00";
+                  addUniqueCall({
+                    id: c.id,
+                    leadId: lead.id,
+                    studentName: c.student_name || lead.student_name || "Student",
+                    phone: c.phone || lead.phone || "",
+                    studentPhone: lead.phone || c.phone || "",
+                    callerName: c.caller_name || lead.assigned_caller || "Staff",
+                    disposition: c.mindset || c.outcome || "Interested",
+                    outcome: c.outcome || (parsedDur > 0 ? "Attended Call" : "Not Attended Call"),
+                    mindset: c.mindset || c.outcome || "",
+                    durationSeconds: parsedDur,
+                    duration_seconds: parsedDur,
+                    formattedDuration: formatted,
+                    duration: formatted,
+                    qualification: c.qualification || lead.qualification || "",
+                    passedOutYear: c.passed_out_year || lead.passed_out_year || "",
+                    collegeName: c.college_name || lead.college_name || "",
+                    courseInterested: c.course_interested || lead.course_interested || "",
+                    studentCourse: lead.course_interested || "",
+                    callDate: c.call_date || "",
+                    callTime: c.call_time || "",
+                    fromTime: c.from_time || "",
+                    endTime: c.end_time || "",
+                    notes: c.remarks || "",
+                    remarks: c.remarks || "",
+                    timestamp: c.created_at ? new Date(c.created_at).getTime() : Date.now(),
+                    syncedToCrm: true,
+                  });
                 });
-              });
-            }
-          });
+              }
+            });
+          }
+        } catch (sbLeadsErr) {
+          console.warn("Supabase fetch leads calls error:", sbLeadsErr);
         }
-      } catch (sbLeadsErr) {
-        console.warn("Supabase fetch leads calls error:", sbLeadsErr);
       }
     }
 
-    // 2. Fallback / Merge with CRM Server API (/api/leads)
-    try {
-      const baseUrl = await this.getBaseUrl();
-      if (baseUrl && baseUrl.startsWith("http")) {
-        const res = await fetch(`${baseUrl}/api/leads`, {
-          method: "GET",
-          headers: { "Content-Type": "application/json" },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          const rawLeads = Array.isArray(data) ? data : data.leads || [];
-          rawLeads.forEach((lead: any) => {
-            if (Array.isArray(lead.callHistory)) {
-              lead.callHistory.forEach((c: any) => {
-                const rawDur = String(c.duration || "").replace(/[^\d:]/g, "");
-                let durSec = 0;
-                if (rawDur.includes(":")) {
-                  const parts = rawDur.split(":").map(Number);
-                  durSec = (parts[0] || 0) * 60 + (parts[1] || 0);
-                } else {
-                  durSec = parseInt(rawDur, 10) || 0;
-                }
-                addUniqueCall({
-                  id: c.id || `cr-${Date.now()}-${Math.random()}`,
-                  leadId: lead.id,
-                  studentName: c.studentName || lead.studentName || "Student",
-                  phone: lead.phone || c.studentPhone || "",
-                  studentPhone: lead.phone || "",
-                  callerName: c.callerName || lead.assignedCaller || "Staff",
-                  disposition: c.mindset || c.outcome || "Interested",
-                  outcome: c.outcome || (durSec > 0 ? "Attended Call" : "Not Attended Call"),
-                  mindset: c.mindset || c.outcome || "",
-                  durationSeconds: durSec,
-                  duration_seconds: durSec,
-                  formattedDuration: c.duration || "00:00",
-                  duration: c.duration || "00:00",
-                  qualification: c.qualification || lead.qualification || "",
-                  passedOutYear: c.passedOutYear || lead.passedOutYear || "",
-                  collegeName: c.collegeName || lead.collegeName || "",
-                  courseInterested: c.courseInterested || lead.courseInterested || "",
-                  studentCourse: lead.courseInterested || "",
-                  callDate: c.callDate || "",
-                  callTime: c.callTime || "",
-                  fromTime: c.fromTime || "",
-                  endTime: c.endTime || "",
-                  notes: c.remarks || "",
-                  remarks: c.remarks || "",
-                  timestamp: c.id && c.id.replace(/\D/g, "") ? parseInt(c.id.replace(/\D/g, ""), 10) : Date.now(),
-                  syncedToCrm: true,
-                });
-              });
-            }
+    // 2. Fallback to CRM Server API only if still 0 calls (with 2.5s timeout)
+    if (collectedCalls.length === 0) {
+      try {
+        const baseUrl = await this.getBaseUrl();
+        if (baseUrl && baseUrl.startsWith("http")) {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 2500);
+          const res = await fetch(`${baseUrl}/api/leads`, {
+            method: "GET",
+            headers: { "Content-Type": "application/json" },
+            signal: controller.signal,
           });
+          clearTimeout(timeoutId);
+          if (res.ok) {
+            const data = await res.json();
+            const rawLeads = Array.isArray(data) ? data : data.leads || [];
+            rawLeads.forEach((lead: any) => {
+              if (Array.isArray(lead.callHistory)) {
+                lead.callHistory.forEach((c: any) => {
+                  const rawDur = String(c.duration || "").replace(/[^\d:]/g, "");
+                  let durSec = 0;
+                  if (rawDur.includes(":")) {
+                    const parts = rawDur.split(":").map(Number);
+                    durSec = (parts[0] || 0) * 60 + (parts[1] || 0);
+                  } else {
+                    durSec = parseInt(rawDur, 10) || 0;
+                  }
+                  addUniqueCall({
+                    id: c.id || `cr-${Date.now()}-${Math.random()}`,
+                    leadId: lead.id,
+                    studentName: c.studentName || lead.studentName || "Student",
+                    phone: lead.phone || c.studentPhone || "",
+                    studentPhone: lead.phone || "",
+                    callerName: c.callerName || lead.assignedCaller || "Staff",
+                    disposition: c.mindset || c.outcome || "Interested",
+                    outcome: c.outcome || (durSec > 0 ? "Attended Call" : "Not Attended Call"),
+                    mindset: c.mindset || c.outcome || "",
+                    durationSeconds: durSec,
+                    duration_seconds: durSec,
+                    formattedDuration: c.duration || "00:00",
+                    duration: c.duration || "00:00",
+                    qualification: c.qualification || lead.qualification || "",
+                    passedOutYear: c.passedOutYear || lead.passedOutYear || "",
+                    collegeName: c.collegeName || lead.collegeName || "",
+                    courseInterested: c.courseInterested || lead.courseInterested || "",
+                    studentCourse: lead.courseInterested || "",
+                    callDate: c.callDate || "",
+                    callTime: c.callTime || "",
+                    fromTime: c.fromTime || "",
+                    endTime: c.endTime || "",
+                    notes: c.remarks || "",
+                    remarks: c.remarks || "",
+                    timestamp: c.id && c.id.replace(/\D/g, "") ? parseInt(c.id.replace(/\D/g, ""), 10) : Date.now(),
+                    syncedToCrm: true,
+                  });
+                });
+              }
+            });
+          }
         }
-      }
-    } catch {}
+      } catch {}
+    }
 
     // 3. Merge with local offline calls so unsynced calls also show up immediately
     try {
