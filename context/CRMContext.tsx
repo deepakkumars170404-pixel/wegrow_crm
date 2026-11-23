@@ -335,7 +335,16 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (localUsers) {
           const parsedU = JSON.parse(localUsers);
           if (Array.isArray(parsedU) && parsedU.length > 0) {
-            setUsers(parsedU.filter((u: any) => !u.name?.toLowerCase().includes("muthumeena")));
+            const sanitizedUsers = parsedU
+              .filter((u: any) => !u.name?.toLowerCase().includes("muthumeena"))
+              .map((u: any) => {
+                if (u.id === "usr-devipriya" || u.name?.toLowerCase().includes("devi")) {
+                  return { ...u, pin: "1234" };
+                }
+                return u;
+              });
+            setUsers(sanitizedUsers);
+            localStorage.setItem("wegrow_crm_users_v2", JSON.stringify(sanitizedUsers));
           }
         } else {
           const oldU = localStorage.getItem("wegrow_crm_users_v1");
@@ -377,6 +386,9 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const userList = (localUsers ? JSON.parse(localUsers) : initialUsers) as AppUser[];
           const found = userList.find((u) => u.id === savedStaffId);
           if (found) {
+            if (found.id === "usr-devipriya" || found.name?.toLowerCase().includes("devi")) {
+              found.pin = "1234";
+            }
             setCurrentStaff(found);
             setIsStaffLoggedIn(true);
             setActiveUserRole(found.role);
