@@ -20,6 +20,7 @@ import {
   LogOut,
   UserCheck,
   Sparkles,
+  Users,
 } from "lucide-react";
 import { WeGrowLogo } from "@/components/shared/WeGrowLogo";
 import { StaffAvatar } from "@/components/shared/StaffAvatar";
@@ -50,7 +51,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
       setInternalCollapsed(!internalCollapsed);
     }
   };
-  const { followUps, whatsappChats, activeUserRole, setActiveUserRole, users } = useCRM();
+  const {
+    followUps,
+    whatsappChats,
+    activeUserRole,
+    setActiveUserRole,
+    users,
+    currentStaff,
+    logoutStaff,
+    openLoginModal,
+  } = useCRM();
 
   const currentUserName =
     activeUserRole === "Owner" || activeUserRole === "Owner / MD"
@@ -59,10 +69,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ? "LakshmiPriya (GM)"
       : "MuthuSelvi";
 
-  const currentUser = users.find((u) => u.name.toLowerCase().includes(currentUserName.toLowerCase().split(" ")[0])) || {
-    name: currentUserName,
-    avatar: "",
-  };
+  const currentUser = currentStaff || users.find((u) => u.name.toLowerCase().includes(currentUserName.toLowerCase().split(" ")[0])) || users[0];
 
   // Badges calculation
   const pendingFollowUpCount = followUps.filter(
@@ -389,13 +396,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
             )}
 
             {!collapsed && (
-              <Link
-                href="/settings"
-                title="Account Settings"
-                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-[#244B7A]"
-              >
-                <Settings className="w-4 h-4" />
-              </Link>
+              <div className="flex items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={openLoginModal}
+                  title="Switch Caller / Staff"
+                  className="text-slate-400 hover:text-[#D5A52B] p-1.5 rounded-lg hover:bg-[#1E3B6E] transition-colors cursor-pointer"
+                >
+                  <Users className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={logoutStaff}
+                  title={`Log Out ${currentUser.name}`}
+                  className="text-slate-400 hover:text-rose-400 p-1.5 rounded-lg hover:bg-[#1E3B6E] transition-colors cursor-pointer"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              </div>
             )}
           </div>
         </div>

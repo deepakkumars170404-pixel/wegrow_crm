@@ -28,6 +28,8 @@ import {
   WifiOff,
   RefreshCw,
   Camera,
+  LogOut,
+  Users,
 } from "lucide-react";
 import { useCRM } from "@/context/CRMContext";
 import { recentActivityTimeline } from "@/data/dummy-data";
@@ -52,9 +54,12 @@ export const Header: React.FC<HeaderProps> = ({
     reconnectTelephony,
     users,
     updateUserAvatar,
+    currentStaff,
+    logoutStaff,
+    openLoginModal,
   } = useCRM();
 
-  const activeUser = users?.find((u) => {
+  const activeUser = currentStaff || users?.find((u) => {
     if (activeUserRole === "Owner" || activeUserRole === "Owner / MD") return u.role === "Owner" || u.role === "Owner / MD";
     if (activeUserRole === "Admin") return u.name.includes("LakshmiPriya") || u.role === "Admin";
     if (activeUserRole === "Telecaller") return u.role === "Telecaller";
@@ -504,6 +509,20 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </div>
 
+        {/* Quick Switch Staff Pill */}
+        <button
+          type="button"
+          onClick={() => {
+            setIsProfileOpen(false);
+            openLoginModal();
+          }}
+          className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold shadow-xs transition-all active:scale-95 cursor-pointer"
+          title="Switch active telecaller or staff profile"
+        >
+          <Users className="w-3.5 h-3.5 text-[#142B52]" />
+          <span>Switch Caller</span>
+        </button>
+
         {/* User Profile Menu */}
         <div className="relative">
           <button
@@ -617,6 +636,38 @@ export const Header: React.FC<HeaderProps> = ({
                     <span className="text-[9px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">Locked</span>
                   </div>
                 )}
+              </div>
+
+              {/* Staff Switch & Logout Actions */}
+              <div className="border-t border-slate-100 py-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsProfileOpen(false);
+                    openLoginModal();
+                  }}
+                  className="w-full flex items-center justify-between px-4 py-2 text-xs text-[#142B52] hover:bg-slate-50 font-bold transition-colors cursor-pointer text-left"
+                >
+                  <span className="flex items-center gap-2">
+                    <Users className="w-4 h-4 text-[#D5A52B]" />
+                    Switch Staff / Caller
+                  </span>
+                  <span className="text-[10px] bg-[#142B52]/10 text-[#142B52] px-1.5 py-0.5 rounded font-bold">
+                    Shift Change
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsProfileOpen(false);
+                    logoutStaff();
+                  }}
+                  className="w-full flex items-center gap-2 px-4 py-2 text-xs text-rose-600 hover:bg-rose-50 font-bold transition-colors cursor-pointer text-left"
+                >
+                  <LogOut className="w-4 h-4 text-rose-500" />
+                  Log Out ({activeUser.name})
+                </button>
               </div>
 
               <div className="border-t border-slate-100 pt-1.5 px-4 py-1 text-slate-400 text-[11px]">

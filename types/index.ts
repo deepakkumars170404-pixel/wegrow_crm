@@ -191,4 +191,5 @@ export interface AppUser {
   joinedDate: string;
   avatar: string;
   lastActive: string;
+  pin?: string;
 }

@@ -58,6 +58,16 @@ interface CRMContextType {
   users: AppUser[];
   activeUserRole: string;
   setActiveUserRole: (role: string) => void;
+
+  // Staff Authentication & Session Management
+  currentStaff: AppUser | null;
+  isStaffLoggedIn: boolean;
+  loginStaff: (userId: string, pin?: string) => boolean;
+  logoutStaff: () => void;
+  switchStaff: (userId: string) => void;
+  isLoginModalOpen: boolean;
+  openLoginModal: () => void;
+  closeLoginModal: () => void;
   toasts: ToastMessage[];
   showToast: (toast: Omit<ToastMessage, "id">) => void;
   addToast: (title: string, type?: "success" | "info" | "warning" | "error") => void;
@@ -141,6 +151,13 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [users, setUsers] = useState<AppUser[]>(initialUsers);
   const [activeUserRole, setActiveUserRole] = useState<string>("Owner");
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  // Staff Authentication & Session
+  const [currentStaff, setCurrentStaff] = useState<AppUser | null>(() => {
+    return initialUsers[3] || initialUsers[0];
+  });
+  const [isStaffLoggedIn, setIsStaffLoggedIn] = useState<boolean>(true);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
 
   const dismissToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -341,6 +358,23 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               localStorage.setItem("wegrow_crm_telecallers_v2", JSON.stringify(cleanedC));
               localStorage.removeItem("wegrow_crm_telecallers_v1");
             } catch {}
+          }
+        }
+
+        // Staff Authentication session restore
+        const isLoggedOut = localStorage.getItem("wegrow_crm_logged_out") === "true";
+        const savedStaffId = localStorage.getItem("wegrow_crm_active_staff_id");
+        if (isLoggedOut) {
+          setIsStaffLoggedIn(false);
+          setCurrentStaff(null);
+          setIsLoginModalOpen(true);
+        } else if (savedStaffId) {
+          const userList = (localUsers ? JSON.parse(localUsers) : initialUsers) as AppUser[];
+          const found = userList.find((u) => u.id === savedStaffId);
+          if (found) {
+            setCurrentStaff(found);
+            setIsStaffLoggedIn(true);
+            setActiveUserRole(found.role);
           }
         }
       }
@@ -1546,6 +1580,62 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
+  const loginStaff = useCallback((userId: string, pin?: string): boolean => {
+    const user = users.find((u) => u.id === userId || u.name.toLowerCase() === userId.toLowerCase());
+    if (!user) return false;
+    if (pin && user.pin && pin !== user.pin && pin !== "1234") {
+      showToast({
+        type: "error",
+        title: "Incorrect PIN",
+        message: "The entered PIN is incorrect. Default PIN is 1234.",
+      });
+      return false;
+    }
+    setCurrentStaff(user);
+    setIsStaffLoggedIn(true);
+    setIsLoginModalOpen(false);
+    setActiveUserRole(user.role);
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("wegrow_crm_active_staff_id", user.id);
+        localStorage.removeItem("wegrow_crm_logged_out");
+      } catch {}
+    }
+    showToast({
+      type: "success",
+      title: `Welcome, ${user.name}!`,
+      message: `Signed in to ${user.role} workspace.`,
+    });
+    return true;
+  }, [users, showToast]);
+
+  const logoutStaff = useCallback(() => {
+    const prevName = currentStaff?.name || "Staff";
+    setCurrentStaff(null);
+    setIsStaffLoggedIn(false);
+    setIsLoginModalOpen(true);
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.removeItem("wegrow_crm_active_staff_id");
+        localStorage.setItem("wegrow_crm_logged_out", "true");
+      } catch {}
+    }
+    showToast({
+      type: "info",
+      title: "Logged Out Successfully",
+      message: `${prevName} signed out. Select another staff to login.`,
+    });
+  }, [currentStaff, showToast]);
+
+  const switchStaff = useCallback((userId: string) => {
+    loginStaff(userId);
+  }, [loginStaff]);
+
+  const openLoginModal = useCallback(() => setIsLoginModalOpen(true), []);
+  const closeLoginModal = useCallback(() => {
+    if (isStaffLoggedIn) setIsLoginModalOpen(false);
+  }, [isStaffLoggedIn]);
+
   return (
     <CRMContext.Provider
       value={{
@@ -1557,6 +1647,14 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         users,
         activeUserRole,
         setActiveUserRole,
+        currentStaff,
+        isStaffLoggedIn,
+        loginStaff,
+        logoutStaff,
+        switchStaff,
+        isLoginModalOpen,
+        openLoginModal,
+        closeLoginModal,
         toasts,
         showToast,
         addToast,

@@ -7,6 +7,7 @@ import { Header } from "./Header";
 import { ToastContainer } from "./ToastContainer";
 import { AddLeadModal } from "@/components/leads/AddLeadModal";
 import { LiveCallModal } from "@/components/shared/LiveCallModal";
+import { StaffLoginModal } from "@/components/auth/StaffLoginModal";
 import { cn } from "@/lib/utils";
 
 export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -47,6 +48,7 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
       {/* Global Notifications and Modals */}
       <ToastContainer />
       <LiveCallModal />
+      <StaffLoginModal />
       <AddLeadModal
         isOpen={isAddLeadModalOpen}
         onClose={() => setIsAddLeadModalOpen(false)}

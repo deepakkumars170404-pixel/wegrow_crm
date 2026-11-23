@@ -72,6 +72,8 @@ export default function DashboardPage() {
     followUps,
     telecallers,
     users,
+    currentStaff,
+    switchStaff,
     activeUserRole,
     setActiveUserRole,
     addCallRecord,
@@ -299,7 +301,15 @@ export default function DashboardPage() {
   const recentEnquiries = (leads || []).slice(0, 5);
 
   // Selected counselor persona for Telecaller view
-  const [selectedTelecallerName, setSelectedTelecallerName] = useState<string>("MuthuSelvi");
+  const [selectedTelecallerName, setSelectedTelecallerName] = useState<string>(
+    currentStaff?.name || "MuthuSelvi"
+  );
+
+  useEffect(() => {
+    if (currentStaff?.name) {
+      setSelectedTelecallerName(currentStaff.name);
+    }
+  }, [currentStaff]);
 
   // Current telecaller data for Telecaller view
   const myCallerData = useMemo(() => {
@@ -378,7 +388,12 @@ export default function DashboardPage() {
                   <span className="text-slate-300 font-medium">Active Counselor:</span>
                   <select
                     value={selectedTelecallerName}
-                    onChange={(e) => setSelectedTelecallerName(e.target.value)}
+                    onChange={(e) => {
+                      const newName = e.target.value;
+                      setSelectedTelecallerName(newName);
+                      const targetUser = users.find((u) => u.name.toLowerCase() === newName.toLowerCase());
+                      if (targetUser) switchStaff(targetUser.id);
+                    }}
                     className="bg-[#0E1E38] text-[#D5A52B] font-bold rounded px-2 py-0.5 border border-white/20 focus:outline-none cursor-pointer"
                   >
                     {WEGROW_STAFF_MEMBERS.map((staff) => (

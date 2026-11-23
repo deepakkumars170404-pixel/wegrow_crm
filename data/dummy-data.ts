@@ -172,6 +172,7 @@ export const initialUsers: AppUser[] = [
     joinedDate: "01 Jan 2023",
     avatar: "",
     lastActive: "Active now",
+    pin: "1234",
   },
   {
     id: "usr-lakshmipriya-gm",
@@ -184,6 +185,7 @@ export const initialUsers: AppUser[] = [
     joinedDate: "15 Jan 2023",
     avatar: "",
     lastActive: "Active now",
+    pin: "1234",
   },
   {
     id: "usr-gopinath-hr",
@@ -196,6 +198,7 @@ export const initialUsers: AppUser[] = [
     joinedDate: "01 Feb 2023",
     avatar: "",
     lastActive: "Active now",
+    pin: "1234",
   },
   {
     id: "usr-muthuselvi",
@@ -208,6 +211,7 @@ export const initialUsers: AppUser[] = [
     joinedDate: "01 Mar 2023",
     avatar: "",
     lastActive: "Active now",
+    pin: "1234",
   },
   {
     id: "usr-devipriya",
@@ -220,6 +224,7 @@ export const initialUsers: AppUser[] = [
     joinedDate: "15 Mar 2023",
     avatar: "",
     lastActive: "Active now",
+    pin: "1234",
   },
   {
     id: "usr-subhashini",
@@ -232,6 +237,7 @@ export const initialUsers: AppUser[] = [
     joinedDate: "01 Apr 2023",
     avatar: "",
     lastActive: "Active now",
+    pin: "1234",
   },
   {
     id: "usr-lakshmipriya-caller",
@@ -244,6 +250,7 @@ export const initialUsers: AppUser[] = [
     joinedDate: "15 Apr 2023",
     avatar: "",
     lastActive: "Active now",
+    pin: "1234",
   },
 ];
 
