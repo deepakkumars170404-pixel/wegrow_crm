@@ -1663,11 +1663,11 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const user = users.find((u) => u.id === userId || u.name.toLowerCase() === userId.toLowerCase());
     if (!user) return false;
     const expectedPin = user.pin || "1234";
-    if (pin && pin !== expectedPin) {
+    if (!pin || pin.trim() !== expectedPin) {
       showToast({
         type: "error",
         title: "Incorrect PIN",
-        message: "The entered PIN is incorrect. Please try again or ask Admin to reset.",
+        message: "Please enter your correct 4-digit security PIN (Default: 1234 or your custom PIN).",
       });
       return false;
     }
@@ -1707,14 +1707,14 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   }, [currentStaff, showToast]);
 
-  const switchStaff = useCallback((userId: string) => {
-    loginStaff(userId);
-  }, [loginStaff]);
-
   const openLoginModal = useCallback(() => setIsLoginModalOpen(true), []);
   const closeLoginModal = useCallback(() => {
     if (isStaffLoggedIn) setIsLoginModalOpen(false);
   }, [isStaffLoggedIn]);
+
+  const switchStaff = useCallback((userId: string) => {
+    openLoginModal();
+  }, [openLoginModal]);
 
   return (
     <CRMContext.Provider

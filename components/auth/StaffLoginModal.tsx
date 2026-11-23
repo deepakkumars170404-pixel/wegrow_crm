@@ -13,6 +13,9 @@ import {
   X,
   LogOut,
   Users,
+  Eye,
+  EyeOff,
+  AlertCircle,
 } from "lucide-react";
 import { useCRM } from "@/context/CRMContext";
 import { StaffAvatar } from "@/components/shared/StaffAvatar";
@@ -39,7 +42,7 @@ export const StaffLoginModal: React.FC = () => {
     currentStaff?.id || users[3]?.id || users[0]?.id || ""
   );
   const [pinInput, setPinInput] = useState<string>("");
-  const [usePinMode, setUsePinMode] = useState<boolean>(false);
+  const [showPin, setShowPin] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string>("");
 
   const selectedUser = users.find((u) => u.id === selectedUserId) || users[0];
@@ -48,19 +51,15 @@ export const StaffLoginModal: React.FC = () => {
     if (e) e.preventDefault();
     setErrorMsg("");
 
-    if (usePinMode) {
-      if (!pinInput.trim()) {
-        setErrorMsg("Please enter your 4-digit PIN (default: 1234 or your custom PIN).");
-        return;
-      }
-      const ok = loginStaff(selectedUserId, pinInput.trim());
-      if (!ok) {
-        setErrorMsg("Incorrect PIN. If you forgot your PIN, please contact Admin or Owner to reset it.");
-        return;
-      }
-    } else {
-      // 1-Click Fast Login
-      loginStaff(selectedUserId);
+    if (!pinInput.trim()) {
+      setErrorMsg("Please enter your 4-digit security PIN (Default: 1234 or your custom PIN).");
+      return;
+    }
+
+    const ok = loginStaff(selectedUserId, pinInput.trim());
+    if (!ok) {
+      setErrorMsg("Incorrect PIN. Please try again or ask Admin/Owner to reset your PIN to 1234.");
+      return;
     }
   };
 
@@ -138,6 +137,7 @@ export const StaffLoginModal: React.FC = () => {
                       type="button"
                       onClick={() => {
                         setSelectedUserId(staff.id);
+                        setPinInput("");
                         setErrorMsg("");
                       }}
                       className={`flex items-center gap-3 p-3 rounded-2xl border text-left transition-all cursor-pointer ${
@@ -192,6 +192,7 @@ export const StaffLoginModal: React.FC = () => {
                       type="button"
                       onClick={() => {
                         setSelectedUserId(staff.id);
+                        setPinInput("");
                         setErrorMsg("");
                       }}
                       className={`flex items-center gap-3 p-3 rounded-2xl border text-left transition-all cursor-pointer ${
@@ -246,6 +247,7 @@ export const StaffLoginModal: React.FC = () => {
                       type="button"
                       onClick={() => {
                         setSelectedUserId(staff.id);
+                        setPinInput("");
                         setErrorMsg("");
                       }}
                       className={`flex items-center gap-3 p-3 rounded-2xl border text-left transition-all cursor-pointer ${
@@ -284,7 +286,10 @@ export const StaffLoginModal: React.FC = () => {
           </div>
 
           {/* Right: Selected Staff Login Action Card (5 cols) */}
-          <div className="lg:col-span-5 bg-slate-50 rounded-3xl p-6 border border-slate-200 flex flex-col justify-between">
+          <form
+            onSubmit={handleLogin}
+            className="lg:col-span-5 bg-slate-50 rounded-3xl p-6 border border-slate-200 flex flex-col justify-between"
+          >
             <div>
               <div className="text-center pb-5 border-b border-slate-200">
                 <div className="inline-block relative mb-3">
@@ -307,58 +312,49 @@ export const StaffLoginModal: React.FC = () => {
                 </div>
               </div>
 
-              {/* Login Options: 1-Click vs PIN */}
-              <div className="mt-5 space-y-4">
+              {/* Mandatory 4-Digit Security PIN Section */}
+              <div className="mt-5 space-y-3">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-slate-700">Security Option:</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setUsePinMode(!usePinMode);
+                  <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                    <Lock className="w-3.5 h-3.5 text-[#142B52]" />
+                    <span>Enter 4-Digit Security PIN</span>
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    Default: 1234
+                  </span>
+                </div>
+
+                <div className="relative">
+                  <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type={showPin ? "text" : "password"}
+                    maxLength={4}
+                    autoFocus
+                    placeholder="••••"
+                    value={pinInput}
+                    onChange={(e) => {
+                      setPinInput(e.target.value.replace(/\D/g, ""));
                       setErrorMsg("");
                     }}
-                    className="text-[#142B52] hover:underline font-bold text-xs"
+                    className="w-full pl-10 pr-10 py-3 bg-white border border-slate-300 rounded-xl text-center font-mono text-xl tracking-[0.3em] font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#142B52] shadow-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPin(!showPin)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
                   >
-                    {usePinMode ? "Switch to 1-Click Login" : "Require 4-Digit PIN"}
+                    {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
 
-                {usePinMode ? (
-                  <div className="space-y-2">
-                    <label className="block text-xs font-semibold text-slate-700">
-                      Enter 4-Digit PIN (Default: 1234 or your custom PIN)
-                    </label>
-                    <div className="relative">
-                      <KeyRound className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                      <input
-                        type="password"
-                        maxLength={6}
-                        autoFocus
-                        placeholder="••••"
-                        value={pinInput}
-                        onChange={(e) => {
-                          setPinInput(e.target.value);
-                          setErrorMsg("");
-                        }}
-                        className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-xl text-center font-mono text-lg tracking-widest focus:outline-none focus:ring-2 focus:ring-[#142B52]"
-                      />
-                    </div>
+                {errorMsg ? (
+                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2 text-rose-700 text-xs font-medium animate-in fade-in">
+                    <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                    <span>{errorMsg}</span>
                   </div>
                 ) : (
-                  <div className="p-3 bg-white rounded-xl border border-slate-200 text-xs text-slate-600 space-y-1">
-                    <p className="font-bold text-slate-800 flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-[#D5A52B]" />
-                      <span>One-Click Fast Desk Login</span>
-                    </p>
-                    <p className="text-[11px] text-slate-500 leading-relaxed">
-                      Instant shift switch for frontline callers. Click below to open your queue immediately.
-                    </p>
-                  </div>
-                )}
-
-                {errorMsg && (
-                  <p className="text-xs text-rose-600 bg-rose-50 border border-rose-200 p-2.5 rounded-xl font-medium">
-                    {errorMsg}
+                  <p className="text-[11px] text-slate-500 text-center leading-relaxed">
+                    Enter your PIN to verify identity and unlock your calling desk.
                   </p>
                 )}
               </div>
@@ -366,19 +362,18 @@ export const StaffLoginModal: React.FC = () => {
 
             <div className="mt-6 pt-5 border-t border-slate-200 space-y-2">
               <button
-                type="button"
-                onClick={() => handleLogin()}
-                className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-[#142B52] hover:bg-[#1E3B6E] text-white rounded-2xl font-bold text-sm shadow-md transition-all active:scale-[0.98] cursor-pointer"
+                type="submit"
+                className="w-full flex items-center justify-center gap-2 py-3.5 px-5 bg-[#142B52] hover:bg-[#1E3B6E] text-white rounded-2xl font-bold text-sm shadow-md transition-all active:scale-[0.98] cursor-pointer"
               >
-                <span>Enter Workspace as {selectedUser?.name}</span>
+                <span>Unlock & Enter as {selectedUser?.name}</span>
                 <ArrowRight className="w-4 h-4 text-[#D5A52B]" />
               </button>
 
               <p className="text-[10px] text-slate-400 text-center">
-                WeGrow Skill Campus • Shift & Caller Desk Switching System
+                WeGrow Skill Campus • Dedicated Desk PIN Authentication
               </p>
             </div>
-          </div>
+          </form>
         </div>
       </div>
     </div>
